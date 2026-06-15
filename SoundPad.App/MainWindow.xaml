@@ -39,7 +39,7 @@
         </UniformGrid>
 
         <Button x:Name="StopButton"
-                Content="Stop"
+                Content="Stop All"
                 Height="40"
                 Background="#5A2020" Foreground="White" BorderBrush="#7A3030"
                 FontSize="14" Cursor="Hand"

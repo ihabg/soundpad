@@ -17,7 +17,10 @@ public class AudioPlaybackEngine : IDisposable
     // so calling RemoveMixerInput on an already-finished one is harmless.
     private readonly List<CachedSoundSampleProvider> _active = new();
 
-    public AudioPlaybackEngine()
+    // deviceNumber: which Windows output device to use.
+    //   -1  = WAVE_MAPPER (always follows the Windows default device)
+    //    0+ = specific device index from WaveOut.GetCapabilities()
+    public AudioPlaybackEngine(int deviceNumber = AudioDevice.DefaultDeviceNumber)
     {
         // ReadFully = true makes the mixer output silence when no sounds
         // are active, which keeps the output device from stopping on its own.
@@ -26,9 +29,10 @@ public class AudioPlaybackEngine : IDisposable
             ReadFully = true
         };
 
-        _outputDevice = new WaveOutEvent();
+        // DeviceNumber must be set before Init() is called.
+        _outputDevice = new WaveOutEvent { DeviceNumber = deviceNumber };
         _outputDevice.Init(_mixer);
-        _outputDevice.Play(); // starts once; stays running for the app's lifetime
+        _outputDevice.Play(); // starts once; stays running until Dispose()
     }
 
     // Starts playing a cached sound immediately by adding a new provider

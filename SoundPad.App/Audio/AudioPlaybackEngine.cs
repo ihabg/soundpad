@@ -45,12 +45,28 @@ public class AudioPlaybackEngine : IDisposable
     }
 
     // Removes every active provider from the mixer, silencing all sounds.
+    // Does NOT affect persistent inputs added via AddMixerInput (e.g. mic passthrough).
     public void StopAll()
     {
         foreach (var provider in _active)
             _mixer.RemoveMixerInput(provider);
 
         _active.Clear();
+    }
+
+    // Adds a persistent ISampleProvider directly to the mixer, outside of the
+    // _active tracking list.  Used by MicPassthrough so StopAll() does not
+    // silence the microphone feed.
+    public void AddMixerInput(ISampleProvider provider)
+    {
+        _mixer.AddMixerInput(provider);
+    }
+
+    // Removes a previously added persistent input.
+    // Safe to call even if the provider was never added (List.Remove is a no-op).
+    public void RemoveMixerInput(ISampleProvider provider)
+    {
+        _mixer.RemoveMixerInput(provider);
     }
 
     public void Dispose()

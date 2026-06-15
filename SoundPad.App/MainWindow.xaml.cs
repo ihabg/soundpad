@@ -13,7 +13,8 @@ public partial class MainWindow : Window
     private AudioPlaybackEngine?                      _monitorEngine;
     private AudioPlaybackEngine?                      _virtualEngine;
     private readonly Dictionary<string, CachedSound> _sounds = new();
-    private HotkeyManager? _hotkeys;
+    private HotkeyManager?  _hotkeys;
+    private MicPassthrough? _micPassthrough;
 
     private const int HotkeyId1 = 9001;
     private const int HotkeyId2 = 9002;
@@ -31,6 +32,7 @@ public partial class MainWindow : Window
         {
             LoadSounds();
             PopulateDeviceLists();
+            PopulateMicList();
             RegisterHotkeys();
         }
         catch (Exception ex)
@@ -98,6 +100,29 @@ public partial class MainWindow : Window
         }
     }
 
+    // ── Microphone device population ──────────────────────────────────────────
+
+    private void PopulateMicList()
+    {
+        try
+        {
+            var mics = MicDevice.GetAll();
+
+            // MicPassthroughCheckBox is unchecked at startup, so even if
+            // SelectionChanged fires during ItemsSource assignment it will exit early.
+            MicComboBox.ItemsSource = mics;
+
+            if (mics.Count > 0)
+                MicComboBox.SelectedIndex = 0;
+            else
+                StatusText.Text = "No microphone devices found.";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Mic list error: {ex.Message}";
+        }
+    }
+
     // ── Monitor selection changed ─────────────────────────────────────────────
 
     private void MonitorComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -127,6 +152,10 @@ public partial class MainWindow : Window
         if (VirtualComboBox.SelectedItem is not AudioDevice device)
             return;
 
+        // Stop mic passthrough before disposing the engine it is connected to.
+        // We will reconnect it to the new engine further down if it was enabled.
+        StopMicPassthrough();
+
         _virtualEngine?.StopAll();
         _virtualEngine?.Dispose();
         _virtualEngine = null;
@@ -140,7 +169,13 @@ public partial class MainWindow : Window
         CreateVirtualEngine(device.Number);
 
         if (_virtualEngine is not null)
+        {
             StatusText.Text = $"Virtual: {device.Name}";
+
+            // If the checkbox is still checked, reconnect mic passthrough to the new engine.
+            if (MicPassthroughCheckBox.IsChecked == true)
+                StartMicPassthrough();
+        }
     }
 
     // ── Engine creation helpers ───────────────────────────────────────────────
@@ -169,6 +204,76 @@ public partial class MainWindow : Window
             _virtualEngine = null;
             StatusText.Text = $"Virtual device error: {ex.Message}";
         }
+    }
+
+    // ── Microphone passthrough ────────────────────────────────────────────────
+
+    private void MicComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // Restart with the newly selected mic only if passthrough was already running.
+        if (MicPassthroughCheckBox.IsChecked == true)
+            RestartMicPassthrough();
+    }
+
+    private void MicPassthroughCheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        StartMicPassthrough();
+    }
+
+    private void MicPassthroughCheckBox_Unchecked(object sender, RoutedEventArgs e)
+    {
+        StopMicPassthrough();
+    }
+
+    private void MicVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        // _micPassthrough is null until the checkbox is checked — that is fine.
+        _micPassthrough?.SetVolume((float)(MicVolumeSlider.Value / 100.0));
+    }
+
+    private void StartMicPassthrough()
+    {
+        if (_virtualEngine is null)
+        {
+            StatusText.Text = "Select a Virtual Output before enabling mic passthrough.";
+            MicPassthroughCheckBox.IsChecked = false; // revert checkbox; fires Unchecked → StopMicPassthrough (no-op)
+            return;
+        }
+
+        if (MicComboBox.SelectedItem is not MicDevice mic)
+        {
+            StatusText.Text = "No microphone selected.";
+            MicPassthroughCheckBox.IsChecked = false;
+            return;
+        }
+
+        StopMicPassthrough(); // ensure any lingering instance is cleaned up
+
+        try
+        {
+            _micPassthrough = new MicPassthrough(_virtualEngine);
+            _micPassthrough.SetVolume((float)(MicVolumeSlider.Value / 100.0));
+            _micPassthrough.Start(mic.Number);
+            StatusText.Text = $"Mic active: {mic.Name} → Virtual Output";
+        }
+        catch (Exception ex)
+        {
+            _micPassthrough = null;
+            StatusText.Text = $"Mic error: {ex.Message}";
+            MicPassthroughCheckBox.IsChecked = false;
+        }
+    }
+
+    private void StopMicPassthrough()
+    {
+        _micPassthrough?.Stop();
+        _micPassthrough = null;
+    }
+
+    private void RestartMicPassthrough()
+    {
+        StopMicPassthrough();
+        StartMicPassthrough();
     }
 
     // ── Hotkey registration ───────────────────────────────────────────────────
@@ -227,6 +332,7 @@ public partial class MainWindow : Window
 
     private void StopButton_Click(object sender, RoutedEventArgs e)
     {
+        // Stops sound-effect playback only.  Mic passthrough intentionally keeps running.
         _monitorEngine?.StopAll();
         _virtualEngine?.StopAll();
         StatusText.Text = "Stopped";
@@ -235,6 +341,7 @@ public partial class MainWindow : Window
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
         _hotkeys?.Dispose();
+        _micPassthrough?.Dispose();
         _monitorEngine?.Dispose();
         _virtualEngine?.Dispose();
     }

@@ -1,10 +1,10 @@
-﻿<Window x:Class="SoundPad.App.MainWindow"
+<Window x:Class="SoundPad.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="SoundPad" Height="540" Width="420"
+        Title="SoundPad" Height="720" Width="420"
         Background="#1E1E1E"
         ResizeMode="CanMinimize"
         Loaded="MainWindow_Loaded"
@@ -36,8 +36,35 @@
                    Margin="4,0,4,4" />
         <ComboBox x:Name="VirtualComboBox"
                   Height="28"
-                  Margin="4,0,4,20"
+                  Margin="4,0,4,12"
                   SelectionChanged="VirtualComboBox_SelectionChanged" />
+
+        <!-- Microphone Input: captures mic audio and feeds it to the Virtual Output
+             so Discord hears both the microphone and SoundPad sounds at the same time. -->
+        <TextBlock Text="Microphone Input"
+                   Foreground="#AAAAAA"
+                   FontSize="12"
+                   Margin="4,0,4,4" />
+        <ComboBox x:Name="MicComboBox"
+                  Height="28"
+                  Margin="4,0,4,8"
+                  SelectionChanged="MicComboBox_SelectionChanged" />
+
+        <CheckBox x:Name="MicPassthroughCheckBox"
+                  Content="Send microphone to virtual output"
+                  Foreground="White"
+                  Margin="4,0,4,8"
+                  Checked="MicPassthroughCheckBox_Checked"
+                  Unchecked="MicPassthroughCheckBox_Unchecked" />
+
+        <TextBlock Text="Mic Volume"
+                   Foreground="#AAAAAA"
+                   FontSize="12"
+                   Margin="4,0,4,4" />
+        <Slider x:Name="MicVolumeSlider"
+                Minimum="0" Maximum="100" Value="80"
+                Margin="4,0,4,20"
+                ValueChanged="MicVolumeSlider_ValueChanged" />
 
         <!-- 2x2 grid of sound buttons. UniformGrid divides its space equally across all cells. -->
         <UniformGrid Rows="2" Columns="2" Margin="0,0,0,12">

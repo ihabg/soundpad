@@ -13,9 +13,10 @@ public class AudioPlaybackEngine : IDisposable
     private readonly MixingSampleProvider  _mixer;
 
     // Tracks every provider we added so StopAll() can remove them.
+    // Stored as ISampleProvider so both plain and volume-wrapped providers fit.
     // MixingSampleProvider auto-removes providers that finish naturally,
     // so calling RemoveMixerInput on an already-finished one is harmless.
-    private readonly List<CachedSoundSampleProvider> _active = new();
+    private readonly List<ISampleProvider> _active = new List<ISampleProvider>();
 
     // deviceNumber: which Windows output device to use.
     //   -1  = WAVE_MAPPER (always follows the Windows default device)
@@ -40,6 +41,17 @@ public class AudioPlaybackEngine : IDisposable
     public void Play(CachedSound sound)
     {
         var provider = new CachedSoundSampleProvider(sound);
+        _active.Add(provider);
+        _mixer.AddMixerInput(provider);
+    }
+
+    // Overload that applies a per-sound volume (0.0 – 1.0).
+    // When volume is effectively 1.0 no wrapper is created.
+    public void Play(CachedSound sound, float volume)
+    {
+        ISampleProvider provider = new CachedSoundSampleProvider(sound);
+        if (volume < 0.999f)
+            provider = new VolumeSampleProvider(provider) { Volume = Math.Clamp(volume, 0f, 1f) };
         _active.Add(provider);
         _mixer.AddMixerInput(provider);
     }

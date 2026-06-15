@@ -4,18 +4,83 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="SoundPad" Height="720" Width="440"
-        MinHeight="480"
+        Title="SoundPad" Height="700" Width="500"
+        MinWidth="440" MinHeight="480"
         Background="#1A1A1A"
         ResizeMode="CanResize"
         Loaded="MainWindow_Loaded"
         Closing="Window_Closing">
 
+    <Window.Resources>
+
+        <!-- Flat button template used for sound card play / action buttons. -->
+        <!-- Replaces the default WPF blue-highlight template with a subtle dark hover. -->
+        <Style x:Key="CardPlayButton" TargetType="Button">
+            <Setter Property="Background"              Value="Transparent"/>
+            <Setter Property="BorderThickness"         Value="0"/>
+            <Setter Property="Foreground"              Value="White"/>
+            <Setter Property="FontSize"                Value="13"/>
+            <Setter Property="FontWeight"              Value="SemiBold"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding"                 Value="12,10,12,8"/>
+            <Setter Property="Cursor"                  Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#383838"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#424242"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Small flat button for Edit / Remove inside cards -->
+        <Style x:Key="CardActionButton" TargetType="Button">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize"        Value="11"/>
+            <Setter Property="Padding"         Value="10,5"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#3A3A3A"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#464646"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Window.Resources>
+
     <ScrollViewer VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="20,16,20,20">
 
-            <!-- ── Header ──────────────────────────────────────────────── -->
+            <!-- ── Header ──────────────────────────────────────────────────── -->
             <TextBlock Text="SoundPad"
                        FontSize="26"
                        FontWeight="Bold"
@@ -23,76 +88,96 @@
                        HorizontalAlignment="Center"
                        Margin="0,0,0,16" />
 
-            <!-- ── Audio Routing Card ──────────────────────────────────── -->
+            <!-- ── Audio Routing Card ──────────────────────────────────────── -->
             <Border Background="#242424"
-                    BorderBrush="#333333"
+                    BorderBrush="#303030"
                     BorderThickness="1"
                     CornerRadius="8"
                     Margin="0,0,0,10"
                     Padding="16">
                 <StackPanel>
                     <TextBlock Text="AUDIO ROUTING"
-                               Foreground="#888888"
-                               FontSize="11"
+                               Foreground="#666666"
+                               FontSize="10"
                                FontWeight="SemiBold"
-                               Margin="0,0,0,10" />
+                               Margin="0,0,0,12" />
 
-                    <TextBlock Text="Monitor Output"
-                               Foreground="#BBBBBB"
-                               FontSize="12"
-                               Margin="0,0,0,4" />
-                    <ComboBox x:Name="MonitorComboBox"
-                              Height="30"
-                              Margin="0,0,0,10"
-                              SelectionChanged="MonitorComboBox_SelectionChanged" />
-
-                    <TextBlock Text="Virtual Output"
-                               Foreground="#BBBBBB"
-                               FontSize="12"
-                               Margin="0,0,0,4" />
-                    <ComboBox x:Name="VirtualComboBox"
-                              Height="30"
-                              SelectionChanged="VirtualComboBox_SelectionChanged" />
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Monitor Output"
+                                       Foreground="#AAAAAA"
+                                       FontSize="11"
+                                       Margin="0,0,0,4" />
+                            <ComboBox x:Name="MonitorComboBox"
+                                      Height="30"
+                                      SelectionChanged="MonitorComboBox_SelectionChanged" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Virtual Output"
+                                       Foreground="#AAAAAA"
+                                       FontSize="11"
+                                       Margin="0,0,0,4" />
+                            <ComboBox x:Name="VirtualComboBox"
+                                      Height="30"
+                                      SelectionChanged="VirtualComboBox_SelectionChanged" />
+                        </StackPanel>
+                    </Grid>
                 </StackPanel>
             </Border>
 
-            <!-- ── Microphone Card ────────────────────────────────────── -->
+            <!-- ── Microphone Card ────────────────────────────────────────── -->
             <Border Background="#242424"
-                    BorderBrush="#333333"
+                    BorderBrush="#303030"
                     BorderThickness="1"
                     CornerRadius="8"
                     Margin="0,0,0,10"
                     Padding="16">
                 <StackPanel>
                     <TextBlock Text="MICROPHONE"
-                               Foreground="#888888"
-                               FontSize="11"
+                               Foreground="#666666"
+                               FontSize="10"
                                FontWeight="SemiBold"
-                               Margin="0,0,0,10" />
+                               Margin="0,0,0,12" />
 
                     <TextBlock Text="Microphone Input"
-                               Foreground="#BBBBBB"
-                               FontSize="12"
+                               Foreground="#AAAAAA"
+                               FontSize="11"
                                Margin="0,0,0,4" />
                     <ComboBox x:Name="MicComboBox"
                               Height="30"
                               Margin="0,0,0,10"
                               SelectionChanged="MicComboBox_SelectionChanged" />
 
-                    <CheckBox x:Name="MicPassthroughCheckBox"
-                              Content="Send microphone to virtual output"
-                              Foreground="White"
-                              Margin="0,0,0,10"
-                              Checked="MicPassthroughCheckBox_Checked"
-                              Unchecked="MicPassthroughCheckBox_Unchecked" />
+                    <DockPanel Margin="0,0,0,10">
+                        <CheckBox x:Name="MicPassthroughCheckBox"
+                                  DockPanel.Dock="Left"
+                                  Content="Send microphone to virtual output"
+                                  Foreground="#CCCCCC"
+                                  VerticalAlignment="Center"
+                                  Checked="MicPassthroughCheckBox_Checked"
+                                  Unchecked="MicPassthroughCheckBox_Unchecked" />
+                    </DockPanel>
 
                     <DockPanel>
                         <TextBlock Text="Mic Volume"
-                                   Foreground="#BBBBBB"
-                                   FontSize="12"
+                                   Foreground="#AAAAAA"
+                                   FontSize="11"
                                    DockPanel.Dock="Left"
                                    VerticalAlignment="Center"
-                                   Margin="0,0,10,0" />
+                                   Width="72" />
+                        <TextBlock x:Name="MicVolumeLabel"
+                                   Text="80%"
+                                   Foreground="#888888"
+                                   FontSize="11"
+                                   DockPanel.Dock="Right"
+                                   VerticalAlignment="Center"
+                                   Width="36"
+                                   TextAlignment="Right" />
                         <Slider x:Name="MicVolumeSlider"
                                 Minimum="0" Maximum="100" Value="80"
                                 VerticalAlignment="Center"
@@ -101,18 +186,20 @@
                 </StackPanel>
             </Border>
 
-            <!-- ── Sound Library Card ─────────────────────────────────── -->
+            <!-- ── Sound Library Card ─────────────────────────────────────── -->
             <Border Background="#242424"
-                    BorderBrush="#333333"
+                    BorderBrush="#303030"
                     BorderThickness="1"
                     CornerRadius="8"
                     Margin="0,0,0,10"
                     Padding="16">
                 <StackPanel>
+
+                    <!-- Header row: section label + Add button -->
                     <DockPanel Margin="0,0,0,12">
                         <TextBlock Text="SOUND LIBRARY"
-                                   Foreground="#888888"
-                                   FontSize="11"
+                                   Foreground="#666666"
+                                   FontSize="10"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"
                                    DockPanel.Dock="Left" />
@@ -121,43 +208,69 @@
                                 HorizontalAlignment="Right"
                                 Height="26"
                                 Padding="12,0"
-                                Background="#2A5C2A"
-                                Foreground="White"
-                                BorderBrush="#3A7A3A"
+                                Background="#1E4620"
+                                Foreground="#66BB6A"
+                                BorderBrush="#2E6B31"
                                 FontSize="12"
+                                FontWeight="SemiBold"
                                 Cursor="Hand"
                                 Click="AddSound_Click" />
                     </DockPanel>
 
-                    <!-- Dynamic sound buttons go here -->
+                    <!-- Search + category filter row -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="148" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="SearchBox"
+                                 Grid.Column="0"
+                                 Height="28"
+                                 Padding="8,0"
+                                 Background="#2E2E2E"
+                                 Foreground="#CCCCCC"
+                                 BorderBrush="#444444"
+                                 CaretBrush="White"
+                                 VerticalContentAlignment="Center"
+                                 TextChanged="SearchBox_TextChanged" />
+                        <ComboBox x:Name="CategoryFilter"
+                                  Grid.Column="2"
+                                  Height="28"
+                                  SelectionChanged="CategoryFilter_SelectionChanged" />
+                    </Grid>
+
+                    <!-- Dynamic sound buttons rendered here by code-behind -->
                     <WrapPanel x:Name="SoundsPanel" />
 
+                    <!-- Shown when the panel is empty (no sounds or no search match) -->
                     <TextBlock x:Name="EmptyLibraryText"
-                               Text="No sounds yet. Click &quot;+ Add Sound&quot; to import an audio file."
-                               Foreground="#555555"
+                               Foreground="#444444"
                                FontSize="12"
                                TextWrapping="Wrap"
-                               Margin="0,8,0,0"
+                               Margin="0,6,0,0"
                                Visibility="Collapsed" />
+
                 </StackPanel>
             </Border>
 
-            <!-- ── Stop All ───────────────────────────────────────────── -->
-            <Button Content="Stop All"
-                    Height="40"
-                    Background="#5A2020"
-                    Foreground="White"
-                    BorderBrush="#7A3030"
-                    FontSize="14"
+            <!-- ── Stop All ───────────────────────────────────────────────── -->
+            <Button Content="⏹  Stop All"
+                    Height="38"
+                    Background="#3B1414"
+                    Foreground="#EF5350"
+                    BorderBrush="#5C2222"
+                    FontSize="13"
+                    FontWeight="SemiBold"
                     Cursor="Hand"
                     Margin="0,0,0,10"
                     Click="StopButton_Click" />
 
-            <!-- ── Status ─────────────────────────────────────────────── -->
+            <!-- ── Status bar ─────────────────────────────────────────────── -->
             <TextBlock x:Name="StatusText"
                        Text="Ready"
-                       Foreground="#666666"
-                       FontSize="12"
+                       Foreground="#555555"
+                       FontSize="11"
                        HorizontalAlignment="Center"
                        TextWrapping="Wrap" />
 

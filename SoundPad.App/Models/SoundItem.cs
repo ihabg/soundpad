@@ -7,4 +7,6 @@ public class SoundItem
     public string   FilePath    { get; set; } = "";
     public DateTime CreatedAt   { get; set; } = DateTime.UtcNow;
     public string?  HotkeyText  { get; set; }
+    public string   Category    { get; set; } = "General";
+    public float    Volume      { get; set; } = 1.0f;
 }

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using SoundPad.App.Models;
@@ -22,8 +23,13 @@ public static class SoundLibraryService
             return JsonSerializer.Deserialize<List<SoundItem>>(text, _json)
                    ?? new List<SoundItem>();
         }
-        catch
+        catch (Exception ex)
         {
+            // Rename the broken file so we don't lose it, then start fresh.
+            var stamp  = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var backup = AppPaths.SoundsJsonPath + $".bak_{stamp}";
+            try { File.Move(AppPaths.SoundsJsonPath, backup); } catch { }
+            Debug.WriteLine($"[Library] sounds.json was invalid ({ex.Message}); backed up to {backup}");
             return new List<SoundItem>();
         }
     }

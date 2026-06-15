@@ -4,101 +4,163 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="SoundPad" Height="720" Width="420"
-        Background="#1E1E1E"
-        ResizeMode="CanMinimize"
+        Title="SoundPad" Height="720" Width="440"
+        MinHeight="480"
+        Background="#1A1A1A"
+        ResizeMode="CanResize"
         Loaded="MainWindow_Loaded"
         Closing="Window_Closing">
 
-    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="340">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="20,16,20,20">
 
-        <TextBlock Text="SoundPad"
-                   FontSize="28"
-                   FontWeight="Bold"
-                   Foreground="White"
-                   HorizontalAlignment="Center"
-                   Margin="0,0,0,20" />
+            <!-- ── Header ──────────────────────────────────────────────── -->
+            <TextBlock Text="SoundPad"
+                       FontSize="26"
+                       FontWeight="Bold"
+                       Foreground="White"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,16" />
 
-        <!-- Monitor Output: your headphones/speakers -->
-        <TextBlock Text="Monitor Output"
-                   Foreground="#AAAAAA"
-                   FontSize="12"
-                   Margin="4,0,4,4" />
-        <ComboBox x:Name="MonitorComboBox"
-                  Height="28"
-                  Margin="4,0,4,12"
-                  SelectionChanged="MonitorComboBox_SelectionChanged" />
+            <!-- ── Audio Routing Card ──────────────────────────────────── -->
+            <Border Background="#242424"
+                    BorderBrush="#333333"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Margin="0,0,0,10"
+                    Padding="16">
+                <StackPanel>
+                    <TextBlock Text="AUDIO ROUTING"
+                               Foreground="#888888"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,10" />
 
-        <!-- Virtual Output: VB-CABLE or Voicemeeter for Discord routing, or None -->
-        <TextBlock Text="Virtual Output"
-                   Foreground="#AAAAAA"
-                   FontSize="12"
-                   Margin="4,0,4,4" />
-        <ComboBox x:Name="VirtualComboBox"
-                  Height="28"
-                  Margin="4,0,4,12"
-                  SelectionChanged="VirtualComboBox_SelectionChanged" />
+                    <TextBlock Text="Monitor Output"
+                               Foreground="#BBBBBB"
+                               FontSize="12"
+                               Margin="0,0,0,4" />
+                    <ComboBox x:Name="MonitorComboBox"
+                              Height="30"
+                              Margin="0,0,0,10"
+                              SelectionChanged="MonitorComboBox_SelectionChanged" />
 
-        <!-- Microphone Input: captures mic audio and feeds it to the Virtual Output
-             so Discord hears both the microphone and SoundPad sounds at the same time. -->
-        <TextBlock Text="Microphone Input"
-                   Foreground="#AAAAAA"
-                   FontSize="12"
-                   Margin="4,0,4,4" />
-        <ComboBox x:Name="MicComboBox"
-                  Height="28"
-                  Margin="4,0,4,8"
-                  SelectionChanged="MicComboBox_SelectionChanged" />
+                    <TextBlock Text="Virtual Output"
+                               Foreground="#BBBBBB"
+                               FontSize="12"
+                               Margin="0,0,0,4" />
+                    <ComboBox x:Name="VirtualComboBox"
+                              Height="30"
+                              SelectionChanged="VirtualComboBox_SelectionChanged" />
+                </StackPanel>
+            </Border>
 
-        <CheckBox x:Name="MicPassthroughCheckBox"
-                  Content="Send microphone to virtual output"
-                  Foreground="White"
-                  Margin="4,0,4,8"
-                  Checked="MicPassthroughCheckBox_Checked"
-                  Unchecked="MicPassthroughCheckBox_Unchecked" />
+            <!-- ── Microphone Card ────────────────────────────────────── -->
+            <Border Background="#242424"
+                    BorderBrush="#333333"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Margin="0,0,0,10"
+                    Padding="16">
+                <StackPanel>
+                    <TextBlock Text="MICROPHONE"
+                               Foreground="#888888"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,10" />
 
-        <TextBlock Text="Mic Volume"
-                   Foreground="#AAAAAA"
-                   FontSize="12"
-                   Margin="4,0,4,4" />
-        <Slider x:Name="MicVolumeSlider"
-                Minimum="0" Maximum="100" Value="80"
-                Margin="4,0,4,20"
-                ValueChanged="MicVolumeSlider_ValueChanged" />
+                    <TextBlock Text="Microphone Input"
+                               Foreground="#BBBBBB"
+                               FontSize="12"
+                               Margin="0,0,0,4" />
+                    <ComboBox x:Name="MicComboBox"
+                              Height="30"
+                              Margin="0,0,0,10"
+                              SelectionChanged="MicComboBox_SelectionChanged" />
 
-        <!-- 2x2 grid of sound buttons. UniformGrid divides its space equally across all cells. -->
-        <UniformGrid Rows="2" Columns="2" Margin="0,0,0,12">
-            <Button Content="Sound 1" Height="60"
-                    Background="#3C3C3C" Foreground="White" BorderBrush="#555555"
-                    FontSize="14" Cursor="Hand" Margin="4"
-                    Click="Sound1_Click" />
-            <Button Content="Sound 2" Height="60"
-                    Background="#3C3C3C" Foreground="White" BorderBrush="#555555"
-                    FontSize="14" Cursor="Hand" Margin="4"
-                    Click="Sound2_Click" />
-            <Button Content="Sound 3" Height="60"
-                    Background="#3C3C3C" Foreground="White" BorderBrush="#555555"
-                    FontSize="14" Cursor="Hand" Margin="4"
-                    Click="Sound3_Click" />
-            <Button Content="Sound 4" Height="60"
-                    Background="#3C3C3C" Foreground="White" BorderBrush="#555555"
-                    FontSize="14" Cursor="Hand" Margin="4"
-                    Click="Sound4_Click" />
-        </UniformGrid>
+                    <CheckBox x:Name="MicPassthroughCheckBox"
+                              Content="Send microphone to virtual output"
+                              Foreground="White"
+                              Margin="0,0,0,10"
+                              Checked="MicPassthroughCheckBox_Checked"
+                              Unchecked="MicPassthroughCheckBox_Unchecked" />
 
-        <Button x:Name="StopButton"
-                Content="Stop All"
-                Height="40"
-                Background="#5A2020" Foreground="White" BorderBrush="#7A3030"
-                FontSize="14" Cursor="Hand"
-                Margin="4,0,4,16"
-                Click="StopButton_Click" />
+                    <DockPanel>
+                        <TextBlock Text="Mic Volume"
+                                   Foreground="#BBBBBB"
+                                   FontSize="12"
+                                   DockPanel.Dock="Left"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0" />
+                        <Slider x:Name="MicVolumeSlider"
+                                Minimum="0" Maximum="100" Value="80"
+                                VerticalAlignment="Center"
+                                ValueChanged="MicVolumeSlider_ValueChanged" />
+                    </DockPanel>
+                </StackPanel>
+            </Border>
 
-        <TextBlock x:Name="StatusText"
-                   Text="Ready"
-                   Foreground="#AAAAAA"
-                   FontSize="13"
-                   HorizontalAlignment="Center" />
+            <!-- ── Sound Library Card ─────────────────────────────────── -->
+            <Border Background="#242424"
+                    BorderBrush="#333333"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Margin="0,0,0,10"
+                    Padding="16">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,12">
+                        <TextBlock Text="SOUND LIBRARY"
+                                   Foreground="#888888"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   DockPanel.Dock="Left" />
+                        <Button Content="+ Add Sound"
+                                DockPanel.Dock="Right"
+                                HorizontalAlignment="Right"
+                                Height="26"
+                                Padding="12,0"
+                                Background="#2A5C2A"
+                                Foreground="White"
+                                BorderBrush="#3A7A3A"
+                                FontSize="12"
+                                Cursor="Hand"
+                                Click="AddSound_Click" />
+                    </DockPanel>
 
-    </StackPanel>
+                    <!-- Dynamic sound buttons go here -->
+                    <WrapPanel x:Name="SoundsPanel" />
+
+                    <TextBlock x:Name="EmptyLibraryText"
+                               Text="No sounds yet. Click &quot;+ Add Sound&quot; to import an audio file."
+                               Foreground="#555555"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Margin="0,8,0,0"
+                               Visibility="Collapsed" />
+                </StackPanel>
+            </Border>
+
+            <!-- ── Stop All ───────────────────────────────────────────── -->
+            <Button Content="Stop All"
+                    Height="40"
+                    Background="#5A2020"
+                    Foreground="White"
+                    BorderBrush="#7A3030"
+                    FontSize="14"
+                    Cursor="Hand"
+                    Margin="0,0,0,10"
+                    Click="StopButton_Click" />
+
+            <!-- ── Status ─────────────────────────────────────────────── -->
+            <TextBlock x:Name="StatusText"
+                       Text="Ready"
+                       Foreground="#666666"
+                       FontSize="12"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap" />
+
+        </StackPanel>
+    </ScrollViewer>
 </Window>

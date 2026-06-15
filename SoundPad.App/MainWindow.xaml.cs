@@ -1,5 +1,6 @@
 using SoundPad.App.Audio;
 using SoundPad.App.Hotkeys;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,16 +17,53 @@ public partial class MainWindow : Window
     private HotkeyManager?  _hotkeys;
     private MicPassthrough? _micPassthrough;
 
+    // ── Hotkey IDs ────────────────────────────────────────────────────────────
+    //
+    // Primary set: Ctrl + Alt + 1..4
+    // On keyboards with an AltGr key (most non-US layouts), AltGr is identical
+    // to Ctrl+Alt at the Win32 level.  This means AltGr+1..4 may already be
+    // claimed by the keyboard driver for special characters (€, @, ¹, etc.),
+    // so RegisterHotKey returns false even though no other app is "using" them.
+    //
+    // Fallback set: Ctrl + Shift + F1..F4
+    // These are almost never claimed, so at least one set should always work.
     private const int HotkeyId1 = 9001;
     private const int HotkeyId2 = 9002;
     private const int HotkeyId3 = 9003;
     private const int HotkeyId4 = 9004;
+
+    private const int HotkeyIdFallback1 = 9011;  // Ctrl+Shift+F1
+    private const int HotkeyIdFallback2 = 9012;  // Ctrl+Shift+F2
+    private const int HotkeyIdFallback3 = 9013;  // Ctrl+Shift+F3
+    private const int HotkeyIdFallback4 = 9014;  // Ctrl+Shift+F4
 
     public MainWindow()
     {
         InitializeComponent();
     }
 
+    // ── SourceInitialized: earliest safe point for hotkey setup ───────────────
+    //
+    // WPF fires OnSourceInitialized immediately after creating the Win32 HWND
+    // and its HwndSource.  This is the correct — and earliest — place to:
+    //   • read the window handle (Handle is guaranteed non-zero here)
+    //   • call HwndSource.AddHook (the source object exists now)
+    //   • call RegisterHotKey (valid handle to register against)
+    //
+    // Using Loaded instead can work, but SourceInitialized is more reliable
+    // because Loaded can be delayed by heavy UI work and the HWND lifecycle is
+    // explicitly tied to SourceInitialized, not Loaded.
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        RegisterHotkeys();
+    }
+
+    // ── Loaded: sound loading, device population, mic list ───────────────────
+    //
+    // Hotkeys are NOT registered here — they were already set up in
+    // OnSourceInitialized above.  Sound loading and device enumeration happen
+    // here because they do not depend on the HWND.
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         try
@@ -33,12 +71,19 @@ public partial class MainWindow : Window
             LoadSounds();
             PopulateDeviceLists();
             PopulateMicList();
-            RegisterHotkeys();
         }
         catch (Exception ex)
         {
+            // Safety net for any unexpected exception escaping the inner try/catch.
+            Debug.WriteLine($"[Startup] Unexpected error: {ex.Message}");
             StatusText.Text = $"Startup error: {ex.Message}";
         }
+
+        // Show a final "Ready" message only when everything is working.
+        // If hotkeys had an error, _hotkeys will be null and we leave the
+        // hotkey error visible in StatusText.
+        if (_hotkeys is not null && _sounds.Count == 4 && _monitorEngine is not null)
+            StatusText.Text = "Ready — Ctrl+Alt+1..4 or Ctrl+Shift+F1..F4 active";
     }
 
     // ── Sound loading ─────────────────────────────────────────────────────────
@@ -277,7 +322,17 @@ public partial class MainWindow : Window
     }
 
     // ── Hotkey registration ───────────────────────────────────────────────────
-
+    //
+    // Called from OnSourceInitialized so the HWND and HwndSource are guaranteed
+    // to exist.  Two sets are registered in parallel:
+    //
+    //   Primary:  Ctrl+Alt+1..4    (VK 0x31..0x34, IDs 9001..9004)
+    //   Fallback: Ctrl+Shift+F1..4 (VK 0x70..0x73, IDs 9011..9014)
+    //
+    // Both sets call the same OnHotkeyPressed handler, which plays the correct
+    // sound based on the ID.  Registering both means a keyboard-layout conflict
+    // on the Ctrl+Alt set (very common with AltGr keyboards) still leaves the
+    // Ctrl+Shift+F set working so the user can confirm the hook itself is fine.
     private void RegisterHotkeys()
     {
         try
@@ -285,7 +340,11 @@ public partial class MainWindow : Window
             _hotkeys = new HotkeyManager(this);
             _hotkeys.HotkeyPressed += OnHotkeyPressed;
 
-            var registrations = new (int Id, uint Vk, string Label)[]
+            Debug.WriteLine("[Hotkeys] HotkeyManager created — HWND and HwndSource OK");
+
+            // ── Primary: Ctrl + Alt + 1 / 2 / 3 / 4 ─────────────────────────
+            // Virtual-key codes for the number row: 0x31='1', 0x32='2', etc.
+            var primary = new (int Id, uint Vk, string Label)[]
             {
                 (HotkeyId1, 0x31, "Ctrl+Alt+1"),
                 (HotkeyId2, 0x32, "Ctrl+Alt+2"),
@@ -293,33 +352,109 @@ public partial class MainWindow : Window
                 (HotkeyId4, 0x34, "Ctrl+Alt+4"),
             };
 
-            foreach (var (Id, Vk, Label) in registrations)
+            int primaryOk = 0;
+            foreach (var (Id, Vk, Label) in primary)
             {
-                if (!_hotkeys.Register(Id, HotkeyManager.CtrlAlt, Vk))
+                bool ok = _hotkeys.Register(Id, HotkeyManager.CtrlAlt, Vk);
+                if (ok)
                 {
-                    StatusText.Text = $"Could not register {Label} — already in use by another app";
-                    return;
+                    primaryOk++;
+                    Debug.WriteLine($"[Hotkeys] Registered: {Label} (ID={Id})");
+                    StatusText.Text = $"Hotkey registered: {Label}";
+                }
+                else
+                {
+                    Debug.WriteLine($"[Hotkeys] FAILED: {Label} (ID={Id}) — AltGr conflict or another app owns it");
+                    StatusText.Text = $"Hotkey failed: {Label}";
                 }
             }
 
-            // Only show "Ready" when sounds loaded AND monitor device is working.
-            if (_sounds.Count == 4 && _monitorEngine is not null)
-                StatusText.Text = "Ready — Ctrl+Alt+1..4 active";
+            // ── Fallback: Ctrl + Shift + F1 / F2 / F3 / F4 ──────────────────
+            // Virtual-key codes for function keys: 0x70=F1, 0x71=F2, etc.
+            // These are almost never claimed by keyboard drivers or other apps.
+            var fallback = new (int Id, uint Vk, string Label)[]
+            {
+                (HotkeyIdFallback1, 0x70, "Ctrl+Shift+F1"),
+                (HotkeyIdFallback2, 0x71, "Ctrl+Shift+F2"),
+                (HotkeyIdFallback3, 0x72, "Ctrl+Shift+F3"),
+                (HotkeyIdFallback4, 0x73, "Ctrl+Shift+F4"),
+            };
+
+            int fallbackOk = 0;
+            foreach (var (Id, Vk, Label) in fallback)
+            {
+                bool ok = _hotkeys.Register(Id, HotkeyManager.CtrlShift, Vk);
+                if (ok)
+                {
+                    fallbackOk++;
+                    Debug.WriteLine($"[Hotkeys] Registered fallback: {Label} (ID={Id})");
+                }
+                else
+                {
+                    Debug.WriteLine($"[Hotkeys] FAILED fallback: {Label} (ID={Id})");
+                }
+            }
+
+            // Log the final summary so the Output window tells the whole story.
+            Debug.WriteLine($"[Hotkeys] Summary: primary={primaryOk}/4 registered, fallback={fallbackOk}/4 registered");
+
+            if (primaryOk == 0 && fallbackOk == 0)
+                StatusText.Text = "Hotkey error: all registrations failed — check Debug Output";
+            else if (primaryOk < 4)
+                StatusText.Text = $"Hotkeys: {primaryOk}/4 Ctrl+Alt registered — use Ctrl+Shift+F1..F4 as fallback";
+            else
+                StatusText.Text = "Hotkeys registered: Ctrl+Alt+1..4 and Ctrl+Shift+F1..F4 active";
         }
         catch (Exception ex)
         {
+            // If HotkeyManager construction itself threw (HWND or HwndSource failure),
+            // _hotkeys stays null and we show a clear error.
+            _hotkeys = null;
+            Debug.WriteLine($"[Hotkeys] Exception during setup: {ex.Message}");
             StatusText.Text = $"Hotkey error: {ex.Message}";
         }
     }
 
+    // Called by the HotkeyManager on the UI thread when any registered key is pressed.
     private void OnHotkeyPressed(int id)
     {
+        // Log to the Debug Output window — this appears in Visual Studio Output pane
+        // even when StatusText is overwritten by PlayCachedSound immediately after.
+        Debug.WriteLine($"[Hotkeys] WM_HOTKEY received: ID={id}");
+
         switch (id)
         {
-            case HotkeyId1: PlayCachedSound("sound1.mp3"); break;
-            case HotkeyId2: PlayCachedSound("sound2.mp3"); break;
-            case HotkeyId3: PlayCachedSound("sound3.mp3"); break;
-            case HotkeyId4: PlayCachedSound("sound4.mp3"); break;
+            case HotkeyId1:
+            case HotkeyIdFallback1:
+                Debug.WriteLine("[Hotkeys] → Sound 1");
+                StatusText.Text = "Hotkey received: 1";
+                PlayCachedSound("sound1.mp3");
+                break;
+
+            case HotkeyId2:
+            case HotkeyIdFallback2:
+                Debug.WriteLine("[Hotkeys] → Sound 2");
+                StatusText.Text = "Hotkey received: 2";
+                PlayCachedSound("sound2.mp3");
+                break;
+
+            case HotkeyId3:
+            case HotkeyIdFallback3:
+                Debug.WriteLine("[Hotkeys] → Sound 3");
+                StatusText.Text = "Hotkey received: 3";
+                PlayCachedSound("sound3.mp3");
+                break;
+
+            case HotkeyId4:
+            case HotkeyIdFallback4:
+                Debug.WriteLine("[Hotkeys] → Sound 4");
+                StatusText.Text = "Hotkey received: 4";
+                PlayCachedSound("sound4.mp3");
+                break;
+
+            default:
+                Debug.WriteLine($"[Hotkeys] Unknown ID: {id} — no sound mapped");
+                break;
         }
     }
 

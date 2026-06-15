@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="SoundPad" Height="480" Width="420"
+        Title="SoundPad" Height="540" Width="420"
         Background="#1E1E1E"
         ResizeMode="CanMinimize"
         Loaded="MainWindow_Loaded"
@@ -19,15 +19,25 @@
                    HorizontalAlignment="Center"
                    Margin="0,0,0,20" />
 
-        <!-- Output device selector -->
-        <TextBlock Text="Output Device"
+        <!-- Monitor Output: your headphones/speakers -->
+        <TextBlock Text="Monitor Output"
                    Foreground="#AAAAAA"
                    FontSize="12"
                    Margin="4,0,4,4" />
-        <ComboBox x:Name="DeviceComboBox"
+        <ComboBox x:Name="MonitorComboBox"
+                  Height="28"
+                  Margin="4,0,4,12"
+                  SelectionChanged="MonitorComboBox_SelectionChanged" />
+
+        <!-- Virtual Output: VB-CABLE or Voicemeeter for Discord routing, or None -->
+        <TextBlock Text="Virtual Output"
+                   Foreground="#AAAAAA"
+                   FontSize="12"
+                   Margin="4,0,4,4" />
+        <ComboBox x:Name="VirtualComboBox"
                   Height="28"
                   Margin="4,0,4,20"
-                  SelectionChanged="DeviceComboBox_SelectionChanged" />
+                  SelectionChanged="VirtualComboBox_SelectionChanged" />
 
         <!-- 2x2 grid of sound buttons. UniformGrid divides its space equally across all cells. -->
         <UniformGrid Rows="2" Columns="2" Margin="0,0,0,12">

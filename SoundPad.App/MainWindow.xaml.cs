@@ -8,7 +8,10 @@ namespace SoundPad.App;
 
 public partial class MainWindow : Window
 {
-    private AudioPlaybackEngine?                      _engine;
+    // Two independent engines: one per physical output device.
+    // _virtualEngine is null when "None" is selected for Virtual Output.
+    private AudioPlaybackEngine?                      _monitorEngine;
+    private AudioPlaybackEngine?                      _virtualEngine;
     private readonly Dictionary<string, CachedSound> _sounds = new();
     private HotkeyManager? _hotkeys;
 
@@ -19,28 +22,19 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        // InitializeComponent is the ONLY call allowed here.
-        // It creates the visual tree from XAML and cannot fail for valid markup.
-        // Everything else — NAudio, device enumeration, hotkeys — goes in Loaded
-        // so the window always appears before any startup logic runs.
         InitializeComponent();
     }
 
-    // Loaded fires after the window's HWND is created and layout is complete,
-    // but the app will not crash if something here throws — our try/catch shows
-    // the error in StatusText and the window stays open.
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         try
         {
             LoadSounds();
-            PopulateDeviceList();
+            PopulateDeviceLists();
             RegisterHotkeys();
         }
         catch (Exception ex)
         {
-            // Safety net: any exception that escapes the methods above lands here
-            // instead of crashing the process.
             StatusText.Text = $"Startup error: {ex.Message}";
         }
     }
@@ -76,21 +70,27 @@ public partial class MainWindow : Window
 
     // ── Output device selection ───────────────────────────────────────────────
 
-    private void PopulateDeviceList()
+    private void PopulateDeviceLists()
     {
         try
         {
-            // Unhook while populating so setting SelectedIndex = 0 below
-            // does not trigger SelectionChanged during initialisation.
-            DeviceComboBox.SelectionChanged -= DeviceComboBox_SelectionChanged;
+            // ── Monitor ──
+            // Unhook while setting SelectedIndex so we don't trigger SelectionChanged
+            // during initialisation, which would create a second engine unnecessarily.
+            MonitorComboBox.SelectionChanged -= MonitorComboBox_SelectionChanged;
+            MonitorComboBox.ItemsSource       = AudioDevice.GetAll();
+            MonitorComboBox.SelectedIndex     = 0; // Default Output Device
+            MonitorComboBox.SelectionChanged += MonitorComboBox_SelectionChanged;
 
-            DeviceComboBox.ItemsSource  = AudioDevice.GetAll();
-            DeviceComboBox.SelectedIndex = 0;
+            CreateMonitorEngine(AudioDevice.DefaultDeviceNumber);
 
-            DeviceComboBox.SelectionChanged += DeviceComboBox_SelectionChanged;
+            // ── Virtual ──
+            VirtualComboBox.SelectionChanged -= VirtualComboBox_SelectionChanged;
+            VirtualComboBox.ItemsSource       = AudioDevice.GetAllWithNone();
+            VirtualComboBox.SelectedIndex     = 0; // None — no virtual output at startup
+            VirtualComboBox.SelectionChanged += VirtualComboBox_SelectionChanged;
 
-            // Create the audio engine once, pointed at the default device.
-            CreateEngine(AudioDevice.DefaultDeviceNumber);
+            // _virtualEngine stays null until the user picks a real device.
         }
         catch (Exception ex)
         {
@@ -98,36 +98,76 @@ public partial class MainWindow : Window
         }
     }
 
-    private void DeviceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    // ── Monitor selection changed ─────────────────────────────────────────────
+
+    private void MonitorComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (DeviceComboBox.SelectedItem is not AudioDevice device)
+        if (MonitorComboBox.SelectedItem is not AudioDevice device)
             return;
 
-        SwitchOutputDevice(device);
+        _monitorEngine?.StopAll();
+        _monitorEngine?.Dispose();
+        _monitorEngine = null;
+
+        // Monitor never has a "None" entry, so IsNone is always false here,
+        // but we guard anyway so the pattern is consistent with Virtual.
+        if (!device.IsNone)
+        {
+            CreateMonitorEngine(device.Number);
+
+            if (_monitorEngine is not null)
+                StatusText.Text = $"Monitor: {device.Name}";
+        }
     }
 
-    private void SwitchOutputDevice(AudioDevice device)
+    // ── Virtual selection changed ─────────────────────────────────────────────
+
+    private void VirtualComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        _engine?.StopAll();
-        _engine?.Dispose();
-        _engine = null;
+        if (VirtualComboBox.SelectedItem is not AudioDevice device)
+            return;
 
-        CreateEngine(device.Number);
+        _virtualEngine?.StopAll();
+        _virtualEngine?.Dispose();
+        _virtualEngine = null;
 
-        if (_engine is not null)
-            StatusText.Text = $"Output: {device.Name}";
+        if (device.IsNone)
+        {
+            StatusText.Text = "Virtual output: None";
+            return;
+        }
+
+        CreateVirtualEngine(device.Number);
+
+        if (_virtualEngine is not null)
+            StatusText.Text = $"Virtual: {device.Name}";
     }
 
-    private void CreateEngine(int deviceNumber)
+    // ── Engine creation helpers ───────────────────────────────────────────────
+
+    private void CreateMonitorEngine(int deviceNumber)
     {
         try
         {
-            _engine = new AudioPlaybackEngine(deviceNumber);
+            _monitorEngine = new AudioPlaybackEngine(deviceNumber);
         }
         catch (Exception ex)
         {
-            _engine = null;
-            StatusText.Text = $"Device error: {ex.Message}";
+            _monitorEngine = null;
+            StatusText.Text = $"Monitor device error: {ex.Message}";
+        }
+    }
+
+    private void CreateVirtualEngine(int deviceNumber)
+    {
+        try
+        {
+            _virtualEngine = new AudioPlaybackEngine(deviceNumber);
+        }
+        catch (Exception ex)
+        {
+            _virtualEngine = null;
+            StatusText.Text = $"Virtual device error: {ex.Message}";
         }
     }
 
@@ -157,7 +197,8 @@ public partial class MainWindow : Window
                 }
             }
 
-            if (_sounds.Count == 4)
+            // Only show "Ready" when sounds loaded AND monitor device is working.
+            if (_sounds.Count == 4 && _monitorEngine is not null)
                 StatusText.Text = "Ready — Ctrl+Alt+1..4 active";
         }
         catch (Exception ex)
@@ -186,27 +227,61 @@ public partial class MainWindow : Window
 
     private void StopButton_Click(object sender, RoutedEventArgs e)
     {
-        _engine?.StopAll();
+        _monitorEngine?.StopAll();
+        _virtualEngine?.StopAll();
         StatusText.Text = "Stopped";
     }
 
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
         _hotkeys?.Dispose();
-        _engine?.Dispose();
+        _monitorEngine?.Dispose();
+        _virtualEngine?.Dispose();
     }
 
     // ── Core playback ─────────────────────────────────────────────────────────
 
     private void PlayCachedSound(string fileName)
     {
-        if (_engine is null || !_sounds.TryGetValue(fileName, out var sound))
+        if (!_sounds.TryGetValue(fileName, out var sound))
         {
             StatusText.Text = "Sound not loaded.";
             return;
         }
 
-        _engine.Play(sound);
-        StatusText.Text = $"Playing: {fileName}";
+        if (_monitorEngine is null && _virtualEngine is null)
+        {
+            StatusText.Text = "No output device selected.";
+            return;
+        }
+
+        try
+        {
+            _monitorEngine?.Play(sound);
+
+            // Guard against double-play.
+            // AreSameOutputDevice resolves WAVE_MAPPER (-1 / "Default") to its real
+            // device index before comparing, so Default == headphones is caught even
+            // when the user picks them via different ComboBox entries.
+            var monitorDevice = MonitorComboBox.SelectedItem as AudioDevice;
+            var virtualDevice = VirtualComboBox.SelectedItem as AudioDevice;
+
+            bool sameDevice = _virtualEngine is not null
+                           && AudioDevice.AreSameOutputDevice(monitorDevice, virtualDevice);
+
+            if (sameDevice)
+            {
+                StatusText.Text = $"Playing: {fileName} — Virtual = Monitor, playing once";
+            }
+            else
+            {
+                _virtualEngine?.Play(sound);
+                StatusText.Text = $"Playing: {fileName}";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Playback error: {ex.Message}";
+        }
     }
 }

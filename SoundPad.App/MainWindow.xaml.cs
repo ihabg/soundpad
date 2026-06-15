@@ -189,6 +189,9 @@ public partial class MainWindow : Window
         EmptyLibraryText.Text = _library.Count == 0
             ? "No sounds yet — click \"+ Add Sound\" to import an audio file."
             : "No sounds match your search or filter.";
+
+        if (LibraryCountText is not null)
+            LibraryCountText.Text = $"{SoundsPanel.Children.Count}";
     }
 
     // Repopulates the Category ComboBox from the distinct categories in the
@@ -217,47 +220,118 @@ public partial class MainWindow : Window
 
     // ── Sound card builder ────────────────────────────────────────────────────
 
-    // Creates one visual card for a SoundItem.
+    // Creates one sound-pad card for a SoundItem.
     // libraryIndex is the item's position in _library (not the filtered view),
-    // so hotkey labels are always accurate.
+    // so hotkey labels remain accurate while the user searches.
     private Border BuildSoundCard(SoundItem item, int libraryIndex)
     {
         var capturedItem = item;
-
-        // ── Play button ────────────────────────────────────────────────────
-        var playBtn = new Button
-        {
-            Content             = item.DisplayName,
-            Style               = (Style)FindResource("CardPlayButton"),
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-        playBtn.Click += (_, _) => PlayLibraryItem(capturedItem);
-
-        // ── Hotkey + category line ─────────────────────────────────────────
-        var hotkeyText   = libraryIndex < HotkeyLabels.Length ? HotkeyLabels[libraryIndex] : "No hotkey";
         var categoryText = string.IsNullOrWhiteSpace(item.Category) ? "General" : item.Category;
 
-        var infoLine = new TextBlock
+        var stack = new StackPanel();
+
+        // ── Accent top line: blue→purple gradient for the 4 hotkey pads ──
+        if (libraryIndex < 4)
         {
-            Text         = $"{hotkeyText}  ·  {categoryText}",
-            Foreground   = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
-            FontSize     = 9,
-            Margin       = new Thickness(12, 0, 12, 8),
-            TextWrapping = TextWrapping.Wrap
+            stack.Children.Add(new Border
+            {
+                Height     = 2,
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(0x3B, 0x82, 0xF6),
+                    Color.FromRgb(0x8B, 0x5C, 0xF6),
+                    0.0)
+            });
+        }
+
+        // ── Play area: name + meta overlaid on a faint background icon ────
+        var nameBlock = new TextBlock
+        {
+            Text         = item.DisplayName,
+            Foreground   = new SolidColorBrush(Color.FromRgb(0xEA, 0xEA, 0xEA)),
+            FontSize     = 14,
+            FontWeight   = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            Margin       = new Thickness(0, 0, 0, 10)
         };
 
-        // ── Volume row ─────────────────────────────────────────────────────
+        var catBadge = new Border
+        {
+            Background      = new SolidColorBrush(Color.FromRgb(0x09, 0x19, 0x0E)),
+            BorderBrush     = new SolidColorBrush(Color.FromRgb(0x12, 0x32, 0x1A)),
+            BorderThickness = new Thickness(1),
+            CornerRadius    = new CornerRadius(4),
+            Padding         = new Thickness(6, 2, 6, 2),
+            Margin          = new Thickness(0, 0, 8, 0),
+            Child = new TextBlock
+            {
+                Text       = categoryText,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E)),
+                FontSize   = 9,
+                FontWeight = FontWeights.SemiBold
+            }
+        };
+
+        var metaRow = new StackPanel { Orientation = Orientation.Horizontal };
+        metaRow.Children.Add(catBadge);
+        if (libraryIndex < 4)
+        {
+            metaRow.Children.Add(new TextBlock
+            {
+                Text              = $"Ctrl+Alt+{libraryIndex + 1}",
+                Foreground        = new SolidColorBrush(Color.FromRgb(0x3B, 0x82, 0xF6)),
+                FontSize          = 9,
+                FontWeight        = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+                Opacity           = 0.75
+            });
+        }
+
+        // Foreground content (name + meta) stacked in col 0 of a 2-col grid;
+        // col 1 holds a faint decorative ▶ glyph for visual depth.
+        var textStack = new StackPanel();
+        textStack.Children.Add(nameBlock);
+        textStack.Children.Add(metaRow);
+
+        var bgGlyph = new TextBlock
+        {
+            Text                = "▶",
+            Foreground          = new SolidColorBrush(Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF)),
+            FontSize            = 36,
+            VerticalAlignment   = VerticalAlignment.Bottom,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin              = new Thickness(0, 0, 4, 0)
+        };
+
+        var playAreaGrid = new Grid();
+        playAreaGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        playAreaGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(bgGlyph,    1);
+        Grid.SetColumn(textStack,  0);
+        playAreaGrid.Children.Add(bgGlyph);
+        playAreaGrid.Children.Add(textStack);
+
+        var playBtn = new Button
+        {
+            Content                    = playAreaGrid,
+            Style                      = (Style)FindResource("CardPlayButton"),
+            HorizontalAlignment        = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch
+        };
+        playBtn.Click += (_, _) => PlayLibraryItem(capturedItem);
+        stack.Children.Add(playBtn);
+        stack.Children.Add(MakeDivider());
+
+        // ── Volume row ────────────────────────────────────────────────────
         int initPct = (int)Math.Round(item.Volume * 100);
 
         var volPct = new TextBlock
         {
             Text              = $"{initPct}%",
-            Foreground        = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
+            Foreground        = new SolidColorBrush(Color.FromRgb(0x3E, 0x4A, 0x5C)),
             FontSize          = 10,
-            Width             = 32,
+            Width             = 34,
             TextAlignment     = TextAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin            = new Thickness(0, 0, 8, 0)
+            VerticalAlignment = VerticalAlignment.Center
         };
 
         var volSlider = new Slider
@@ -278,24 +352,26 @@ public partial class MainWindow : Window
         var volLabel = new TextBlock
         {
             Text              = "Vol",
-            Foreground        = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
+            Foreground        = new SolidColorBrush(Color.FromRgb(0x3E, 0x4A, 0x5C)),
             FontSize          = 10,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin            = new Thickness(8, 0, 0, 0)
+            Margin            = new Thickness(0, 0, 8, 0)
         };
 
-        var volRow = new DockPanel { Margin = new Thickness(4, 0, 4, 0) };
+        var volRow = new DockPanel { Margin = new Thickness(14, 8, 14, 8) };
         DockPanel.SetDock(volLabel, Dock.Left);
         DockPanel.SetDock(volPct,   Dock.Right);
         volRow.Children.Add(volLabel);
         volRow.Children.Add(volPct);
         volRow.Children.Add(volSlider);
+        stack.Children.Add(volRow);
+        stack.Children.Add(MakeDivider());
 
-        // ── Edit + Remove buttons ──────────────────────────────────────────
+        // ── Edit + Remove buttons ─────────────────────────────────────────
         var editBtn = new Button
         {
             Content             = "Edit",
-            Foreground          = new SolidColorBrush(Color.FromRgb(0x80, 0xB8, 0xFF)),
+            Foreground          = new SolidColorBrush(Color.FromRgb(0x4A, 0x7A, 0xB4)),
             Style               = (Style)FindResource("CardActionButton"),
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
@@ -304,44 +380,47 @@ public partial class MainWindow : Window
         var removeBtn = new Button
         {
             Content             = "Remove",
-            Foreground          = new SolidColorBrush(Color.FromRgb(0xEF, 0x53, 0x50)),
+            Foreground          = new SolidColorBrush(Color.FromRgb(0x7A, 0x28, 0x28)),
             Style               = (Style)FindResource("CardActionButton"),
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         removeBtn.Click += (_, _) => RemoveSound(capturedItem);
 
-        var btnGrid = new Grid { Margin = new Thickness(4, 0, 4, 4) };
+        var btnGrid = new Grid();
         btnGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         btnGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         Grid.SetColumn(editBtn,   0);
         Grid.SetColumn(removeBtn, 1);
         btnGrid.Children.Add(editBtn);
         btnGrid.Children.Add(removeBtn);
-
-        // ── Assemble ───────────────────────────────────────────────────────
-        var stack = new StackPanel();
-        stack.Children.Add(playBtn);
-        stack.Children.Add(infoLine);
-        stack.Children.Add(MakeDivider());
-        stack.Children.Add(volRow);
-        stack.Children.Add(MakeDivider());
         stack.Children.Add(btnGrid);
 
-        return new Border
+        // ── Card border: changes color on hover to signal interactivity ───
+        var defaultBorder = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A));
+        var hoverBorder   = libraryIndex < 4
+            ? new SolidColorBrush(Color.FromRgb(0x26, 0x40, 0x6A))   // blue tint for hotkey cards
+            : new SolidColorBrush(Color.FromRgb(0x28, 0x28, 0x28));  // neutral for others
+
+        // ClipToBounds ensures children respect the card's rounded corners.
+        var card = new Border
         {
-            Width           = 190,
-            Background      = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)),
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x3A)),
+            Width           = 230,
+            Background      = new SolidColorBrush(Color.FromRgb(0x10, 0x10, 0x10)),
+            BorderBrush     = defaultBorder,
             BorderThickness = new Thickness(1),
-            CornerRadius    = new CornerRadius(6),
-            Margin          = new Thickness(0, 0, 8, 8),
+            CornerRadius    = new CornerRadius(10),
+            ClipToBounds    = true,
+            Margin          = new Thickness(0, 0, 10, 10),
             Child           = stack
         };
+        card.MouseEnter += (_, _) => { card.BorderBrush = hoverBorder; };
+        card.MouseLeave += (_, _) => { card.BorderBrush = defaultBorder; };
+        return card;
     }
 
     private static Border MakeDivider() => new Border
     {
-        BorderBrush     = new SolidColorBrush(Color.FromRgb(0x38, 0x38, 0x38)),
+        BorderBrush     = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A)),
         BorderThickness = new Thickness(0, 1, 0, 0)
     };
 
@@ -760,5 +839,31 @@ public partial class MainWindow : Window
         _micPassthrough?.Dispose();
         _monitorEngine?.Dispose();
         _virtualEngine?.Dispose();
+    }
+
+    // ── Custom title bar ──────────────────────────────────────────────────────
+
+    private void TitleBar_Minimize(object sender, RoutedEventArgs e)
+        => SystemCommands.MinimizeWindow(this);
+
+    private void TitleBar_MaxRestore(object sender, RoutedEventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+            SystemCommands.RestoreWindow(this);
+        else
+            SystemCommands.MaximizeWindow(this);
+    }
+
+    private void TitleBar_Close(object sender, RoutedEventArgs e)
+        => SystemCommands.CloseWindow(this);
+
+    // Compensate for the 6px resize border that Windows adds beyond screen edges
+    // when a WindowStyle=None window is maximized.
+    protected override void OnStateChanged(EventArgs e)
+    {
+        base.OnStateChanged(e);
+        RootContainer.Padding = WindowState == WindowState.Maximized
+            ? new Thickness(7)
+            : new Thickness(0);
     }
 }

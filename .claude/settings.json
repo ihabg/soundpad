@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd \"c:\\\\Users\\\\Kebab\\\\Desktop\\\\SoundPad\"; dotnet build SoundPad.App/SoundPad.App.csproj -v:quiet 2>&1 | Select-String -Pattern \"error|warning|Build succeeded|failed\" | ForEach-Object { $_.Line })"
+    ]
+  }
+}

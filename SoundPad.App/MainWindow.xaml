@@ -7,6 +7,7 @@
         Title="SoundPad" Height="400" Width="420"
         Background="#1E1E1E"
         ResizeMode="CanMinimize"
+        Loaded="MainWindow_Loaded"
         Closing="Window_Closing">
 
     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="340">

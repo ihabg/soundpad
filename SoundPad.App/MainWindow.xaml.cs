@@ -34,6 +34,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private List<SoundItem>                        _library      = new List<SoundItem>();
     private readonly Dictionary<Guid, CachedSound> _cachedSounds = new Dictionary<Guid, CachedSound>();
 
+    // ── App-level settings (currently just the Stop All hotkey) ─────────────────
+    private AppSettings _settings = new AppSettings();
+
     // ── Supporting objects ─────────────────────────────────────────────────────
     private HotkeyManager?  _hotkeys;
     private HotkeyService?  _hotkeyService;
@@ -57,6 +60,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             _hotkeys = new HotkeyManager(this);
             _hotkeyService = new HotkeyService(_hotkeys);
             _hotkeyService.HotkeyTriggered += OnSoundHotkeyTriggered;
+            _hotkeyService.StopAllHotkeyTriggered += OnStopAllHotkeyTriggered;
         }
         catch (Exception ex)
         {
@@ -72,6 +76,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (item is not null)
             PlayLibraryItem(item);
     }
+
+    private void OnStopAllHotkeyTriggered() => StopAllSounds();
 
     // ── Loaded: sound library + device lists ──────────────────────────────────
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -97,6 +103,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // then renders the sound cards.
     private void LoadLibrary()
     {
+        _settings = AppSettingsService.Load();
+
         _library = SoundLibraryService.Load();
 
         // If the library is empty (first launch or cleared), copy the built-in
@@ -130,12 +138,20 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         RefreshCategoryFilter();
         FilterSoundsPanel();
+        RefreshStopAllHotkeyDisplay();
 
-        var failedHotkeys = _hotkeyService?.ReregisterAll(_library) ?? new HashSet<Guid>();
+        var result = _hotkeyService?.ReregisterAll(_library, _settings.StopAllHotkey)
+                     ?? new HotkeyRegistrationResult();
 
         int loaded = _cachedSounds.Count;
-        StatusText.Text = failedHotkeys.Count > 0
-            ? $"Library: {loaded} sound(s) loaded — {failedHotkeys.Count} hotkey(s) could not be registered"
+        var problems = new List<string>();
+        if (result.FailedSoundIds.Count > 0)
+            problems.Add($"{result.FailedSoundIds.Count} sound hotkey(s)");
+        if (result.StopAllFailed)
+            problems.Add("Stop All hotkey");
+
+        StatusText.Text = problems.Count > 0
+            ? $"Library: {loaded} sound(s) loaded — could not register: {string.Join(", ", problems)}"
             : loaded > 0
                 ? $"Library: {loaded} sound(s) loaded"
                 : "Library empty — click '+ Add Sound'";
@@ -542,6 +558,25 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     // ── Hotkey assignment ────────────────────────────────────────────────────
 
+    // Returns the display name of whatever already owns this combination
+    // (a sound, or "Stop All Sounds"), or null if the combination is free.
+    // excludeSoundId lets a sound's own current binding be excluded from the check.
+    private string? FindHotkeyOwner(HotkeyBinding binding, Guid? excludeSoundId)
+    {
+        var sound = _library.FirstOrDefault(x => (excludeSoundId is null || x.Id != excludeSoundId)
+                        && x.Hotkey is not null
+                        && x.Hotkey.Modifiers == binding.Modifiers && x.Hotkey.Key == binding.Key);
+        if (sound is not null)
+            return sound.DisplayName;
+
+        if (_settings.StopAllHotkey is not null
+            && _settings.StopAllHotkey.Modifiers == binding.Modifiers
+            && _settings.StopAllHotkey.Key == binding.Key)
+            return "Stop All Sounds";
+
+        return null;
+    }
+
     private void OpenHotkeyCapture(SoundItem item)
     {
         if (_hotkeyService is null)
@@ -558,7 +593,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (dlg.WasCleared)
         {
             item.Hotkey = null;
-            _hotkeyService.ReregisterAll(_library);
+            _hotkeyService.ReregisterAll(_library, _settings.StopAllHotkey);
             SoundLibraryService.Save(_library);
             FilterSoundsPanel();
             StatusText.Text = $"Hotkey cleared: {item.DisplayName}";
@@ -569,13 +604,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (newBinding is null)
             return;
 
-        // In-app conflict: another sound already uses this exact combination.
-        var conflict = _library.FirstOrDefault(x => x.Id != item.Id && x.Hotkey is not null
-                           && x.Hotkey.Modifiers == newBinding.Modifiers && x.Hotkey.Key == newBinding.Key);
-        if (conflict is not null)
+        var owner = FindHotkeyOwner(newBinding, item.Id);
+        if (owner is not null)
         {
             MessageBox.Show(
-                $"\"{newBinding.DisplayText}\" is already assigned to \"{conflict.DisplayName}\".\n\n" +
+                $"\"{newBinding.DisplayText}\" is already assigned to \"{owner}\".\n\n" +
                 "Choose a different combination.",
                 "Hotkey already in use", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -584,12 +617,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var previousBinding = item.Hotkey;
         item.Hotkey = newBinding;
 
-        var failed = _hotkeyService.ReregisterAll(_library);
-        if (failed.Contains(item.Id))
+        var result = _hotkeyService.ReregisterAll(_library, _settings.StopAllHotkey);
+        if (result.FailedSoundIds.Contains(item.Id))
         {
             // Roll back and restore the previously-working hotkey set.
             item.Hotkey = previousBinding;
-            _hotkeyService.ReregisterAll(_library);
+            _hotkeyService.ReregisterAll(_library, _settings.StopAllHotkey);
             MessageBox.Show(
                 $"Windows could not register \"{newBinding.DisplayText}\".\n\n" +
                 "It may already be used by another application or by Windows itself. " +
@@ -601,6 +634,84 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         SoundLibraryService.Save(_library);
         FilterSoundsPanel();
         StatusText.Text = $"Hotkey set: {item.DisplayName} → {newBinding.DisplayText}";
+    }
+
+    // ── Stop All hotkey assignment ──────────────────────────────────────────
+
+    private void RefreshStopAllHotkeyDisplay()
+    {
+        if (StopAllHotkeyText is null)
+            return;
+
+        StopAllHotkeyText.Text       = _settings.StopAllHotkey?.DisplayText ?? "No hotkey";
+        ClearStopAllHotkeyButton.IsEnabled = _settings.StopAllHotkey is not null;
+    }
+
+    private void SetStopAllHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        if (_hotkeyService is null)
+        {
+            MessageBox.Show("Hotkeys are not available in this session.", "Hotkeys",
+                             MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var dlg = new HotkeyCaptureDialog(this, "Stop All Sounds", _settings.StopAllHotkey);
+        if (dlg.ShowDialog() != true)
+            return; // cancelled — nothing changes
+
+        if (dlg.WasCleared)
+        {
+            ClearStopAllHotkey_Click(sender, e);
+            return;
+        }
+
+        var newBinding = dlg.ResultBinding;
+        if (newBinding is null)
+            return;
+
+        var owner = FindHotkeyOwner(newBinding, null);
+        if (owner is not null)
+        {
+            MessageBox.Show(
+                $"\"{newBinding.DisplayText}\" is already assigned to \"{owner}\".\n\n" +
+                "Choose a different combination.",
+                "Hotkey already in use", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var previous = _settings.StopAllHotkey;
+        _settings.StopAllHotkey = newBinding;
+
+        var result = _hotkeyService.ReregisterAll(_library, _settings.StopAllHotkey);
+        if (result.StopAllFailed)
+        {
+            // Roll back and restore the previously-working hotkey set.
+            _settings.StopAllHotkey = previous;
+            _hotkeyService.ReregisterAll(_library, _settings.StopAllHotkey);
+            MessageBox.Show(
+                $"Windows could not register \"{newBinding.DisplayText}\".\n\n" +
+                "It may already be used by another application or by Windows itself. " +
+                "Choose a different combination.",
+                "Hotkey unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        AppSettingsService.Save(_settings);
+        RefreshStopAllHotkeyDisplay();
+        StatusText.Text = $"Stop All hotkey set: {newBinding.DisplayText}";
+    }
+
+    private void ClearStopAllHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settings.StopAllHotkey is null)
+            return;
+
+        _settings.StopAllHotkey = null;
+        _hotkeyService?.ReregisterAll(_library, _settings.StopAllHotkey);
+        AppSettingsService.Save(_settings);
+        RefreshStopAllHotkeyDisplay();
+        StatusText.Text = "Stop All hotkey cleared";
     }
 
     // ── Search and category filter ─────────────────────────────────────────────
@@ -659,7 +770,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     // ── Stop All ──────────────────────────────────────────────────────────────
 
-    private void StopButton_Click(object sender, RoutedEventArgs e)
+    private void StopButton_Click(object sender, RoutedEventArgs e) => StopAllSounds();
+
+    // Stops every active sound effect on both engines. Mic passthrough is a
+    // persistent mixer input (added via AddMixerInput, not tracked in the
+    // engine's _active list), so it is unaffected and keeps working.
+    private void StopAllSounds()
     {
         _monitorEngine?.StopAll();
         _virtualEngine?.StopAll();

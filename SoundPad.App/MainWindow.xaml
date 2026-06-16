@@ -218,6 +218,50 @@
                             </ui:Card>
                         </Grid>
 
+                        <ui:Card Padding="20">
+                            <StackPanel>
+                                <TextBlock Text="GLOBAL SHORTCUTS"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,16"/>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="Stop All Sounds"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        <TextBlock x:Name="StopAllHotkeyText"
+                                                   Text="No hotkey"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   Margin="0,3,0,0"/>
+                                    </StackPanel>
+
+                                    <ui:Button Grid.Column="1"
+                                               Content="Set Hotkey"
+                                               Appearance="Secondary"
+                                               Width="120"
+                                               Margin="0,0,8,0"
+                                               Click="SetStopAllHotkey_Click"/>
+                                    <ui:Button x:Name="ClearStopAllHotkeyButton"
+                                               Grid.Column="2"
+                                               Content="Clear"
+                                               Appearance="Secondary"
+                                               Width="90"
+                                               IsEnabled="False"
+                                               Click="ClearStopAllHotkey_Click"/>
+                                </Grid>
+                            </StackPanel>
+                        </ui:Card>
+
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

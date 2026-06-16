@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.3.0" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
   </ItemGroup>
 
   <!-- Copy everything inside the Sounds folder next to the .exe at build time -->

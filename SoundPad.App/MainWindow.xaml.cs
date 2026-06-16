@@ -10,10 +10,16 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ControlAppearance = Wpf.Ui.Controls.ControlAppearance;
+using SymbolRegular = Wpf.Ui.Controls.SymbolRegular;
+using UiBadge = Wpf.Ui.Controls.Badge;
+using UiButton = Wpf.Ui.Controls.Button;
+using UiCard = Wpf.Ui.Controls.Card;
+using UiSymbolIcon = Wpf.Ui.Controls.SymbolIcon;
 
 namespace SoundPad.App;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 {
     // ── Audio engines ──────────────────────────────────────────────────────────
     // Two independent engines: one per physical output device.
@@ -191,7 +197,7 @@ public partial class MainWindow : Window
             : "No sounds match your search or filter.";
 
         if (LibraryCountText is not null)
-            LibraryCountText.Text = $"{SoundsPanel.Children.Count}";
+            LibraryCountText.Content = $"{SoundsPanel.Children.Count}";
     }
 
     // Repopulates the Category ComboBox from the distinct categories in the
@@ -223,10 +229,11 @@ public partial class MainWindow : Window
     // Creates one sound-pad card for a SoundItem.
     // libraryIndex is the item's position in _library (not the filtered view),
     // so hotkey labels remain accurate while the user searches.
-    private Border BuildSoundCard(SoundItem item, int libraryIndex)
+    private UiCard BuildSoundCard(SoundItem item, int libraryIndex)
     {
         var capturedItem = item;
         var categoryText = string.IsNullOrWhiteSpace(item.Category) ? "General" : item.Category;
+        var accentBrush  = (Brush)Application.Current.Resources["SystemAccentColorPrimaryBrush"];
 
         var stack = new StackPanel();
 
@@ -243,32 +250,23 @@ public partial class MainWindow : Window
             });
         }
 
-        // ── Play area: name + meta overlaid on a faint background icon ────
+        // ── Play area: name + meta overlaid on a faint background play glyph ──
         var nameBlock = new TextBlock
         {
             Text         = item.DisplayName,
-            Foreground   = new SolidColorBrush(Color.FromRgb(0xEA, 0xEA, 0xEA)),
+            Foreground   = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"],
             FontSize     = 14,
             FontWeight   = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             Margin       = new Thickness(0, 0, 0, 10)
         };
 
-        var catBadge = new Border
+        var catBadge = new UiBadge
         {
-            Background      = new SolidColorBrush(Color.FromRgb(0x09, 0x19, 0x0E)),
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0x12, 0x32, 0x1A)),
-            BorderThickness = new Thickness(1),
-            CornerRadius    = new CornerRadius(4),
-            Padding         = new Thickness(6, 2, 6, 2),
-            Margin          = new Thickness(0, 0, 8, 0),
-            Child = new TextBlock
-            {
-                Text       = categoryText,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E)),
-                FontSize   = 9,
-                FontWeight = FontWeights.SemiBold
-            }
+            Content    = categoryText,
+            Appearance = ControlAppearance.Success,
+            FontSize   = 9,
+            Margin     = new Thickness(0, 0, 8, 0)
         };
 
         var metaRow = new StackPanel { Orientation = Orientation.Horizontal };
@@ -278,24 +276,25 @@ public partial class MainWindow : Window
             metaRow.Children.Add(new TextBlock
             {
                 Text              = $"Ctrl+Alt+{libraryIndex + 1}",
-                Foreground        = new SolidColorBrush(Color.FromRgb(0x3B, 0x82, 0xF6)),
+                Foreground        = accentBrush,
                 FontSize          = 9,
                 FontWeight        = FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
-                Opacity           = 0.75
+                Opacity           = 0.85
             });
         }
 
         // Foreground content (name + meta) stacked in col 0 of a 2-col grid;
-        // col 1 holds a faint decorative ▶ glyph for visual depth.
+        // col 1 holds a faint decorative play glyph for visual depth.
         var textStack = new StackPanel();
         textStack.Children.Add(nameBlock);
         textStack.Children.Add(metaRow);
 
-        var bgGlyph = new TextBlock
+        var bgGlyph = new UiSymbolIcon
         {
-            Text                = "▶",
-            Foreground          = new SolidColorBrush(Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF)),
+            Symbol              = SymbolRegular.Play48,
+            Filled              = true,
+            Foreground          = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
             FontSize            = 36,
             VerticalAlignment   = VerticalAlignment.Bottom,
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -310,10 +309,11 @@ public partial class MainWindow : Window
         playAreaGrid.Children.Add(bgGlyph);
         playAreaGrid.Children.Add(textStack);
 
-        var playBtn = new Button
+        var playBtn = new UiButton
         {
             Content                    = playAreaGrid,
-            Style                      = (Style)FindResource("CardPlayButton"),
+            Appearance                 = ControlAppearance.Transparent,
+            Padding                    = new Thickness(16, 18, 16, 14),
             HorizontalAlignment        = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
@@ -327,7 +327,7 @@ public partial class MainWindow : Window
         var volPct = new TextBlock
         {
             Text              = $"{initPct}%",
-            Foreground        = new SolidColorBrush(Color.FromRgb(0x3E, 0x4A, 0x5C)),
+            Foreground        = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             FontSize          = 10,
             Width             = 34,
             TextAlignment     = TextAlignment.Right,
@@ -352,7 +352,7 @@ public partial class MainWindow : Window
         var volLabel = new TextBlock
         {
             Text              = "Vol",
-            Foreground        = new SolidColorBrush(Color.FromRgb(0x3E, 0x4A, 0x5C)),
+            Foreground        = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             FontSize          = 10,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(0, 0, 8, 0)
@@ -367,22 +367,25 @@ public partial class MainWindow : Window
         stack.Children.Add(volRow);
         stack.Children.Add(MakeDivider());
 
-        // ── Edit + Remove buttons ─────────────────────────────────────────
-        var editBtn = new Button
+        // ── Edit + Remove buttons (subtle, icon-led) ───────────────────────
+        var editBtn = new UiButton
         {
             Content             = "Edit",
-            Foreground          = new SolidColorBrush(Color.FromRgb(0x4A, 0x7A, 0xB4)),
-            Style               = (Style)FindResource("CardActionButton"),
-            HorizontalAlignment = HorizontalAlignment.Stretch
+            Appearance          = ControlAppearance.Transparent,
+            FontSize            = 11,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Icon                = new UiSymbolIcon { Symbol = SymbolRegular.Edit16 }
         };
         editBtn.Click += (_, _) => EditSound(capturedItem);
 
-        var removeBtn = new Button
+        var removeBtn = new UiButton
         {
             Content             = "Remove",
-            Foreground          = new SolidColorBrush(Color.FromRgb(0x7A, 0x28, 0x28)),
-            Style               = (Style)FindResource("CardActionButton"),
-            HorizontalAlignment = HorizontalAlignment.Stretch
+            Appearance          = ControlAppearance.Transparent,
+            Foreground          = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
+            FontSize            = 11,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Icon                = new UiSymbolIcon { Symbol = SymbolRegular.Delete16 }
         };
         removeBtn.Click += (_, _) => RemoveSound(capturedItem);
 
@@ -395,32 +398,27 @@ public partial class MainWindow : Window
         btnGrid.Children.Add(removeBtn);
         stack.Children.Add(btnGrid);
 
-        // ── Card border: changes color on hover to signal interactivity ───
-        var defaultBorder = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A));
-        var hoverBorder   = libraryIndex < 4
-            ? new SolidColorBrush(Color.FromRgb(0x26, 0x40, 0x6A))   // blue tint for hotkey cards
-            : new SolidColorBrush(Color.FromRgb(0x28, 0x28, 0x28));  // neutral for others
+        // ── Card: WPF UI Fluent card with hover border to signal interactivity ──
+        var hoverBorder = libraryIndex < 4
+            ? accentBrush
+            : (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"];
 
-        // ClipToBounds ensures children respect the card's rounded corners.
-        var card = new Border
+        var card = new UiCard
         {
-            Width           = 230,
-            Background      = new SolidColorBrush(Color.FromRgb(0x10, 0x10, 0x10)),
-            BorderBrush     = defaultBorder,
-            BorderThickness = new Thickness(1),
-            CornerRadius    = new CornerRadius(10),
-            ClipToBounds    = true,
-            Margin          = new Thickness(0, 0, 10, 10),
-            Child           = stack
+            Width        = 230,
+            Padding      = new Thickness(0),
+            ClipToBounds = true,
+            Margin       = new Thickness(0, 0, 10, 10),
+            Content      = stack
         };
-        card.MouseEnter += (_, _) => { card.BorderBrush = hoverBorder; };
-        card.MouseLeave += (_, _) => { card.BorderBrush = defaultBorder; };
+        card.MouseEnter += (_, _) => card.BorderBrush = hoverBorder;
+        card.MouseLeave += (_, _) => card.ClearValue(Control.BorderBrushProperty);
         return card;
     }
 
     private static Border MakeDivider() => new Border
     {
-        BorderBrush     = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A)),
+        BorderBrush     = (Brush)Application.Current.Resources["CardBorderBrush"],
         BorderThickness = new Thickness(0, 1, 0, 0)
     };
 
@@ -841,29 +839,4 @@ public partial class MainWindow : Window
         _virtualEngine?.Dispose();
     }
 
-    // ── Custom title bar ──────────────────────────────────────────────────────
-
-    private void TitleBar_Minimize(object sender, RoutedEventArgs e)
-        => SystemCommands.MinimizeWindow(this);
-
-    private void TitleBar_MaxRestore(object sender, RoutedEventArgs e)
-    {
-        if (WindowState == WindowState.Maximized)
-            SystemCommands.RestoreWindow(this);
-        else
-            SystemCommands.MaximizeWindow(this);
-    }
-
-    private void TitleBar_Close(object sender, RoutedEventArgs e)
-        => SystemCommands.CloseWindow(this);
-
-    // Compensate for the 6px resize border that Windows adds beyond screen edges
-    // when a WindowStyle=None window is maximized.
-    protected override void OnStateChanged(EventArgs e)
-    {
-        base.OnStateChanged(e);
-        RootContainer.Padding = WindowState == WindowState.Maximized
-            ? new Thickness(7)
-            : new Thickness(0);
-    }
 }

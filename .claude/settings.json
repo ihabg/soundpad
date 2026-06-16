@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(cd \"c:\\\\Users\\\\Kebab\\\\Desktop\\\\SoundPad\"; dotnet build SoundPad.App/SoundPad.App.csproj -v:quiet 2>&1 | Select-String -Pattern \"error|warning|Build succeeded|failed\" | ForEach-Object { $_.Line })"
+      "PowerShell(cd \"c:\\\\Users\\\\Kebab\\\\Desktop\\\\SoundPad\"; dotnet build SoundPad.App/SoundPad.App.csproj -v:quiet 2>&1 | Select-String -Pattern \"error|warning|Build succeeded|failed\" | ForEach-Object { $_.Line })",
+      "Bash(find \"/c/Users/Kebab/.nuget/packages/wpf-ui/4.3.0\" -type d | head -50)",
+      "Read(//c/Users/Kebab/.nuget/packages/wpf-ui/4.3.0/**)",
+      "PowerShell(cd \"$env:TEMP\\\\wpfui_probe\"; dotnet run -v:quiet 2>&1)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Kebab\\AppData\\Local\\Temp\\wpfui_probe"
     ]
   }
 }

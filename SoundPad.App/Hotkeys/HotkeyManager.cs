@@ -95,13 +95,20 @@ public class HotkeyManager : IDisposable
         return ok;
     }
 
-    // Releases every registered hotkey and detaches the message hook.
-    public void Dispose()
+    // Releases every registered hotkey without detaching the message hook,
+    // so the manager can be reused immediately for a fresh Register() pass.
+    public void UnregisterAll()
     {
         foreach (int id in _registeredIds)
             UnregisterHotKey(_hwnd, id);
 
         _registeredIds.Clear();
+    }
+
+    // Releases every registered hotkey and detaches the message hook.
+    public void Dispose()
+    {
+        UnregisterAll();
         _source.RemoveHook(_hook);
     }
 

@@ -99,9 +99,9 @@
                                 <ColumnDefinition Width="48"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="110"/>
-                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="140"/>
                                 <ColumnDefinition Width="170"/>
-                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="95"/>
                                 <ColumnDefinition Width="84"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="1" Text="NAME" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>

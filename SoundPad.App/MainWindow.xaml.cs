@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using ControlAppearance = Wpf.Ui.Controls.ControlAppearance;
 using SymbolRegular = Wpf.Ui.Controls.SymbolRegular;
@@ -35,25 +36,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     // ── Supporting objects ─────────────────────────────────────────────────────
     private HotkeyManager?  _hotkeys;
+    private HotkeyService?  _hotkeyService;
     private MicPassthrough? _micPassthrough;
-
-    // ── Hotkey IDs ─────────────────────────────────────────────────────────────
-    //
-    // Primary: Ctrl+Alt+1..4 (may be blocked by AltGr keyboards)
-    // Fallback: Ctrl+Shift+F1..F4 (almost never taken by other apps)
-    // Both sets map to the same library indices 0–3.
-    private const int HotkeyId1 = 9001, HotkeyId2 = 9002, HotkeyId3 = 9003, HotkeyId4 = 9004;
-    private const int HotkeyIdFallback1 = 9011, HotkeyIdFallback2 = 9012;
-    private const int HotkeyIdFallback3 = 9013, HotkeyIdFallback4 = 9014;
-
-    // Short hotkey labels shown on the first four sound cards.
-    private static readonly string[] HotkeyLabels = new string[]
-    {
-        "Ctrl+Alt+1  /  Ctrl+Shift+F1",
-        "Ctrl+Alt+2  /  Ctrl+Shift+F2",
-        "Ctrl+Alt+3  /  Ctrl+Shift+F3",
-        "Ctrl+Alt+4  /  Ctrl+Shift+F4",
-    };
 
     // ── Constructor ────────────────────────────────────────────────────────────
     public MainWindow()
@@ -63,10 +47,30 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     // ── OnSourceInitialized: earliest safe point for hotkeys ──────────────────
     // WPF guarantees both the Win32 HWND and its HwndSource exist here.
+    // Library hotkeys aren't loaded yet at this point, so registration happens
+    // later in LoadLibrary(), once _library is populated.
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        RegisterHotkeys();
+        try
+        {
+            _hotkeys = new HotkeyManager(this);
+            _hotkeyService = new HotkeyService(_hotkeys);
+            _hotkeyService.HotkeyTriggered += OnSoundHotkeyTriggered;
+        }
+        catch (Exception ex)
+        {
+            _hotkeys = null;
+            _hotkeyService = null;
+            Debug.WriteLine($"[Hotkeys] Setup failed: {ex.Message}");
+        }
+    }
+
+    private void OnSoundHotkeyTriggered(Guid soundId)
+    {
+        var item = _library.FirstOrDefault(x => x.Id == soundId);
+        if (item is not null)
+            PlayLibraryItem(item);
     }
 
     // ── Loaded: sound library + device lists ──────────────────────────────────
@@ -100,6 +104,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (_library.Count == 0)
             SeedDefaultSounds();
 
+        bool hotkeysMigrated = MigrateDefaultHotkeys();
+
         // Preload each sound.  Skip missing or unreadable files gracefully.
         foreach (var item in _library.ToList())
         {
@@ -119,13 +125,54 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
         }
 
+        if (hotkeysMigrated)
+            SoundLibraryService.Save(_library);
+
         RefreshCategoryFilter();
         FilterSoundsPanel();
 
+        var failedHotkeys = _hotkeyService?.ReregisterAll(_library) ?? new HashSet<Guid>();
+
         int loaded = _cachedSounds.Count;
-        StatusText.Text = loaded > 0
-            ? $"Library: {loaded} sound(s) loaded"
-            : "Library empty — click '+ Add Sound'";
+        StatusText.Text = failedHotkeys.Count > 0
+            ? $"Library: {loaded} sound(s) loaded — {failedHotkeys.Count} hotkey(s) could not be registered"
+            : loaded > 0
+                ? $"Library: {loaded} sound(s) loaded"
+                : "Library empty — click '+ Add Sound'";
+    }
+
+    // One-time migration: the first four sounds keep their original default
+    // hotkeys (Ctrl+Alt+1..4) the first time hotkey data is seen for them.
+    // HotkeyInitialized guards against re-seeding after a deliberate user clear.
+    private bool MigrateDefaultHotkeys()
+    {
+        bool changed = false;
+
+        for (int i = 0; i < _library.Count; i++)
+        {
+            var item = _library[i];
+            if (item.HotkeyInitialized)
+                continue;
+
+            if (i < 4)
+                item.Hotkey = CreateDefaultHotkey(i);
+
+            item.HotkeyInitialized = true;
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static HotkeyBinding CreateDefaultHotkey(int slotIndex)
+    {
+        uint vk = (uint)(0x31 + slotIndex); // '1'..'4'
+        return new HotkeyBinding
+        {
+            Modifiers   = (uint)(ModifierKeys.Control | ModifierKeys.Alt),
+            Key         = vk,
+            DisplayText = $"Ctrl+Alt+{slotIndex + 1}"
+        };
     }
 
     // On first launch, copies bundled sample sounds into %AppData%\SoundPad\Sounds.
@@ -176,10 +223,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         SoundsPanel.Children.Clear();
 
-        for (int i = 0; i < _library.Count; i++)
+        foreach (var item in _library)
         {
-            var item = _library[i];
-
             bool matchSearch   = string.IsNullOrEmpty(search)
                               || item.DisplayName.ToLowerInvariant().Contains(search);
             bool matchCategory = category == "All" || item.Category == category;
@@ -187,7 +232,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (!matchSearch || !matchCategory)
                 continue;
 
-            SoundsPanel.Children.Add(BuildSoundRow(item, i));
+            SoundsPanel.Children.Add(BuildSoundRow(item));
         }
 
         bool panelEmpty = SoundsPanel.Children.Count == 0;
@@ -233,16 +278,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(95) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(84) });
     }
 
-    // Creates one details-list row for a SoundItem.
-    // libraryIndex is the item's position in _library (not the filtered view),
-    // so hotkey labels remain accurate while the user searches.
-    private Border BuildSoundRow(SoundItem item, int libraryIndex)
+    // Creates one details-list row for a SoundItem. Hotkey display now comes
+    // from the item's own HotkeyBinding, not its position in the library.
+    private Border BuildSoundRow(SoundItem item)
     {
         var capturedItem = item;
         var categoryText = string.IsNullOrWhiteSpace(item.Category) ? "General" : item.Category;
@@ -290,17 +334,28 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         Grid.SetColumn(catBadge, 2);
         grid.Children.Add(catBadge);
 
-        // ── Col 3: Hotkey (read-only display; editable in a later phase) ──
-        var hotkeyText = new TextBlock
+        // ── Col 3: Hotkey (click to open the capture dialog) ──────────────
+        var hotkeyContent = new TextBlock
         {
-            Text              = libraryIndex < 4 ? $"Ctrl+Alt+{libraryIndex + 1}" : "No hotkey",
-            FontSize          = 11,
-            FontWeight        = libraryIndex < 4 ? FontWeights.SemiBold : FontWeights.Normal,
-            Foreground        = libraryIndex < 4 ? accentBrush : (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
-            VerticalAlignment = VerticalAlignment.Center
+            Text         = item.Hotkey?.DisplayText ?? "No hotkey",
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth     = 118
         };
-        Grid.SetColumn(hotkeyText, 3);
-        grid.Children.Add(hotkeyText);
+        var hotkeyBtn = new UiButton
+        {
+            Content                    = hotkeyContent,
+            Appearance                 = ControlAppearance.Transparent,
+            FontSize                   = 11,
+            FontWeight                 = item.Hotkey is not null ? FontWeights.SemiBold : FontWeights.Normal,
+            Foreground                 = item.Hotkey is not null ? accentBrush : (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            HorizontalAlignment        = HorizontalAlignment.Left,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Padding                    = new Thickness(8, 4, 8, 4),
+            ToolTip                    = "Click to set or change this sound's hotkey"
+        };
+        hotkeyBtn.Click += (_, _) => OpenHotkeyCapture(capturedItem);
+        Grid.SetColumn(hotkeyBtn, 3);
+        grid.Children.Add(hotkeyBtn);
 
         // ── Col 4: Volume ────────────────────────────────────────────────
         int initPct = (int)Math.Round(item.Volume * 100);
@@ -449,8 +504,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             .OrderBy(c => c)
             .ToList();
 
-        int idx = _library.IndexOf(item);
-        var hotkeyDisplay = idx >= 0 && idx < 4 ? $"Ctrl+Alt+{idx + 1}" : "";
+        var hotkeyDisplay = item.Hotkey?.DisplayText ?? "";
 
         var dlg = new EditSoundDialog(this, item.DisplayName, item.Category, categories, hotkeyDisplay);
         if (dlg.ShowDialog() != true)
@@ -486,6 +540,69 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = $"Removed: {name}";
     }
 
+    // ── Hotkey assignment ────────────────────────────────────────────────────
+
+    private void OpenHotkeyCapture(SoundItem item)
+    {
+        if (_hotkeyService is null)
+        {
+            MessageBox.Show("Hotkeys are not available in this session.", "Hotkeys",
+                             MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var dlg = new HotkeyCaptureDialog(this, item.DisplayName, item.Hotkey);
+        if (dlg.ShowDialog() != true)
+            return; // cancelled — nothing changes
+
+        if (dlg.WasCleared)
+        {
+            item.Hotkey = null;
+            _hotkeyService.ReregisterAll(_library);
+            SoundLibraryService.Save(_library);
+            FilterSoundsPanel();
+            StatusText.Text = $"Hotkey cleared: {item.DisplayName}";
+            return;
+        }
+
+        var newBinding = dlg.ResultBinding;
+        if (newBinding is null)
+            return;
+
+        // In-app conflict: another sound already uses this exact combination.
+        var conflict = _library.FirstOrDefault(x => x.Id != item.Id && x.Hotkey is not null
+                           && x.Hotkey.Modifiers == newBinding.Modifiers && x.Hotkey.Key == newBinding.Key);
+        if (conflict is not null)
+        {
+            MessageBox.Show(
+                $"\"{newBinding.DisplayText}\" is already assigned to \"{conflict.DisplayName}\".\n\n" +
+                "Choose a different combination.",
+                "Hotkey already in use", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var previousBinding = item.Hotkey;
+        item.Hotkey = newBinding;
+
+        var failed = _hotkeyService.ReregisterAll(_library);
+        if (failed.Contains(item.Id))
+        {
+            // Roll back and restore the previously-working hotkey set.
+            item.Hotkey = previousBinding;
+            _hotkeyService.ReregisterAll(_library);
+            MessageBox.Show(
+                $"Windows could not register \"{newBinding.DisplayText}\".\n\n" +
+                "It may already be used by another application or by Windows itself. " +
+                "Choose a different combination.",
+                "Hotkey unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        SoundLibraryService.Save(_library);
+        FilterSoundsPanel();
+        StatusText.Text = $"Hotkey set: {item.DisplayName} → {newBinding.DisplayText}";
+    }
+
     // ── Search and category filter ─────────────────────────────────────────────
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -497,16 +614,6 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // ══════════════════════════════════════════════════════════════════════════
     //  PLAYBACK
     // ══════════════════════════════════════════════════════════════════════════
-
-    // Plays library[index].  Hotkeys always use the library index, not the
-    // filtered/visual index, so they remain stable while searching.
-    private void PlayByIndex(int index)
-    {
-        if (index < 0 || index >= _library.Count)
-            return;
-
-        PlayLibraryItem(_library[index]);
-    }
 
     private void PlayLibraryItem(SoundItem item)
     {
@@ -733,87 +840,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StartMicPassthrough();
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  HOTKEYS
-    // ══════════════════════════════════════════════════════════════════════════
-
-    private void RegisterHotkeys()
-    {
-        try
-        {
-            _hotkeys = new HotkeyManager(this);
-            _hotkeys.HotkeyPressed += OnHotkeyPressed;
-            Debug.WriteLine("[Hotkeys] HotkeyManager created — HWND and HwndSource OK");
-
-            var primary = new (int Id, uint Vk, string Label)[]
-            {
-                (HotkeyId1, 0x31, "Ctrl+Alt+1"),
-                (HotkeyId2, 0x32, "Ctrl+Alt+2"),
-                (HotkeyId3, 0x33, "Ctrl+Alt+3"),
-                (HotkeyId4, 0x34, "Ctrl+Alt+4"),
-            };
-
-            int primaryOk = 0;
-            foreach (var (Id, Vk, Label) in primary)
-            {
-                if (_hotkeys.Register(Id, HotkeyManager.CtrlAlt, Vk))
-                {
-                    primaryOk++;
-                    Debug.WriteLine($"[Hotkeys] Registered: {Label}");
-                }
-                else
-                {
-                    Debug.WriteLine($"[Hotkeys] FAILED: {Label} — likely AltGr conflict");
-                }
-            }
-
-            var fallback = new (int Id, uint Vk, string Label)[]
-            {
-                (HotkeyIdFallback1, 0x70, "Ctrl+Shift+F1"),
-                (HotkeyIdFallback2, 0x71, "Ctrl+Shift+F2"),
-                (HotkeyIdFallback3, 0x72, "Ctrl+Shift+F3"),
-                (HotkeyIdFallback4, 0x73, "Ctrl+Shift+F4"),
-            };
-
-            int fallbackOk = 0;
-            foreach (var (Id, Vk, Label) in fallback)
-            {
-                if (_hotkeys.Register(Id, HotkeyManager.CtrlShift, Vk))
-                {
-                    fallbackOk++;
-                    Debug.WriteLine($"[Hotkeys] Registered fallback: {Label}");
-                }
-                else
-                {
-                    Debug.WriteLine($"[Hotkeys] FAILED fallback: {Label}");
-                }
-            }
-
-            Debug.WriteLine($"[Hotkeys] Summary: primary={primaryOk}/4, fallback={fallbackOk}/4");
-        }
-        catch (Exception ex)
-        {
-            _hotkeys = null;
-            Debug.WriteLine($"[Hotkeys] Exception during setup: {ex.Message}");
-        }
-    }
-
-    private void OnHotkeyPressed(int id)
-    {
-        Debug.WriteLine($"[Hotkeys] WM_HOTKEY ID={id}");
-        switch (id)
-        {
-            case HotkeyId1: case HotkeyIdFallback1: PlayByIndex(0); break;
-            case HotkeyId2: case HotkeyIdFallback2: PlayByIndex(1); break;
-            case HotkeyId3: case HotkeyIdFallback3: PlayByIndex(2); break;
-            case HotkeyId4: case HotkeyIdFallback4: PlayByIndex(3); break;
-        }
-    }
-
     // ── Window closing ────────────────────────────────────────────────────────
 
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
+        _hotkeyService?.UnregisterAll();
         _hotkeys?.Dispose();
         _micPassthrough?.Dispose();
         _monitorEngine?.Dispose();

@@ -187,7 +187,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (!matchSearch || !matchCategory)
                 continue;
 
-            SoundsPanel.Children.Add(BuildSoundCard(item, i));
+            SoundsPanel.Children.Add(BuildSoundRow(item, i));
         }
 
         bool panelEmpty = SoundsPanel.Children.Count == 0;
@@ -224,104 +224,85 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         CategoryFilter.SelectionChanged += CategoryFilter_SelectionChanged;
     }
 
-    // ── Sound card builder ────────────────────────────────────────────────────
+    // ── Sound row builder (details/list view) ───────────────────────────────────
 
-    // Creates one sound-pad card for a SoundItem.
+    // Column widths shared by the static XAML header and every row built here,
+    // so the two stay pixel-aligned: Play | Name | Category | Hotkey | Volume | Created | Actions
+    private static void AddRowColumns(Grid grid)
+    {
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(84) });
+    }
+
+    // Creates one details-list row for a SoundItem.
     // libraryIndex is the item's position in _library (not the filtered view),
     // so hotkey labels remain accurate while the user searches.
-    private UiCard BuildSoundCard(SoundItem item, int libraryIndex)
+    private Border BuildSoundRow(SoundItem item, int libraryIndex)
     {
         var capturedItem = item;
         var categoryText = string.IsNullOrWhiteSpace(item.Category) ? "General" : item.Category;
         var accentBrush  = (Brush)Application.Current.Resources["SystemAccentColorPrimaryBrush"];
 
-        var stack = new StackPanel();
+        var grid = new Grid();
+        AddRowColumns(grid);
 
-        // ── Accent top line: blue→purple gradient for the 4 hotkey pads ──
-        if (libraryIndex < 4)
-        {
-            stack.Children.Add(new Border
-            {
-                Height     = 2,
-                Background = new LinearGradientBrush(
-                    Color.FromRgb(0x3B, 0x82, 0xF6),
-                    Color.FromRgb(0x8B, 0x5C, 0xF6),
-                    0.0)
-            });
-        }
-
-        // ── Play area: name + meta overlaid on a faint background play glyph ──
-        var nameBlock = new TextBlock
-        {
-            Text         = item.DisplayName,
-            Foreground   = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"],
-            FontSize     = 14,
-            FontWeight   = FontWeights.SemiBold,
-            TextWrapping = TextWrapping.Wrap,
-            Margin       = new Thickness(0, 0, 0, 10)
-        };
-
-        var catBadge = new UiBadge
-        {
-            Content    = categoryText,
-            Appearance = ControlAppearance.Success,
-            FontSize   = 9,
-            Margin     = new Thickness(0, 0, 8, 0)
-        };
-
-        var metaRow = new StackPanel { Orientation = Orientation.Horizontal };
-        metaRow.Children.Add(catBadge);
-        if (libraryIndex < 4)
-        {
-            metaRow.Children.Add(new TextBlock
-            {
-                Text              = $"Ctrl+Alt+{libraryIndex + 1}",
-                Foreground        = accentBrush,
-                FontSize          = 9,
-                FontWeight        = FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Center,
-                Opacity           = 0.85
-            });
-        }
-
-        // Foreground content (name + meta) stacked in col 0 of a 2-col grid;
-        // col 1 holds a faint decorative play glyph for visual depth.
-        var textStack = new StackPanel();
-        textStack.Children.Add(nameBlock);
-        textStack.Children.Add(metaRow);
-
-        var bgGlyph = new UiSymbolIcon
-        {
-            Symbol              = SymbolRegular.Play48,
-            Filled              = true,
-            Foreground          = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
-            FontSize            = 36,
-            VerticalAlignment   = VerticalAlignment.Bottom,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin              = new Thickness(0, 0, 4, 0)
-        };
-
-        var playAreaGrid = new Grid();
-        playAreaGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        playAreaGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(bgGlyph,    1);
-        Grid.SetColumn(textStack,  0);
-        playAreaGrid.Children.Add(bgGlyph);
-        playAreaGrid.Children.Add(textStack);
-
+        // ── Col 0: Play ──────────────────────────────────────────────────
         var playBtn = new UiButton
         {
-            Content                    = playAreaGrid,
-            Appearance                 = ControlAppearance.Transparent,
-            Padding                    = new Thickness(16, 18, 16, 14),
-            HorizontalAlignment        = HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch
+            Appearance          = ControlAppearance.Transparent,
+            Padding             = new Thickness(8),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+            Icon                = new UiSymbolIcon { Symbol = SymbolRegular.Play20 }
         };
         playBtn.Click += (_, _) => PlayLibraryItem(capturedItem);
-        stack.Children.Add(playBtn);
-        stack.Children.Add(MakeDivider());
+        Grid.SetColumn(playBtn, 0);
+        grid.Children.Add(playBtn);
 
-        // ── Volume row ────────────────────────────────────────────────────
+        // ── Col 1: Name ──────────────────────────────────────────────────
+        var nameBlock = new TextBlock
+        {
+            Text              = item.DisplayName,
+            Foreground        = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"],
+            FontSize          = 13,
+            FontWeight        = FontWeights.SemiBold,
+            TextTrimming      = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(4, 0, 8, 0)
+        };
+        Grid.SetColumn(nameBlock, 1);
+        grid.Children.Add(nameBlock);
+
+        // ── Col 2: Category ──────────────────────────────────────────────
+        var catBadge = new UiBadge
+        {
+            Content             = categoryText,
+            Appearance          = ControlAppearance.Success,
+            FontSize            = 9,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment   = VerticalAlignment.Center
+        };
+        Grid.SetColumn(catBadge, 2);
+        grid.Children.Add(catBadge);
+
+        // ── Col 3: Hotkey (read-only display; editable in a later phase) ──
+        var hotkeyText = new TextBlock
+        {
+            Text              = libraryIndex < 4 ? $"Ctrl+Alt+{libraryIndex + 1}" : "No hotkey",
+            FontSize          = 11,
+            FontWeight        = libraryIndex < 4 ? FontWeights.SemiBold : FontWeights.Normal,
+            Foreground        = libraryIndex < 4 ? accentBrush : (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(hotkeyText, 3);
+        grid.Children.Add(hotkeyText);
+
+        // ── Col 4: Volume ────────────────────────────────────────────────
         int initPct = (int)Math.Round(item.Volume * 100);
 
         var volPct = new TextBlock
@@ -349,78 +330,75 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             SoundLibraryService.Save(_library);
         };
 
-        var volLabel = new TextBlock
-        {
-            Text              = "Vol",
-            Foreground        = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
-            FontSize          = 10,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin            = new Thickness(0, 0, 8, 0)
-        };
-
-        var volRow = new DockPanel { Margin = new Thickness(14, 8, 14, 8) };
-        DockPanel.SetDock(volLabel, Dock.Left);
-        DockPanel.SetDock(volPct,   Dock.Right);
-        volRow.Children.Add(volLabel);
+        var volRow = new DockPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+        DockPanel.SetDock(volPct, Dock.Right);
         volRow.Children.Add(volPct);
         volRow.Children.Add(volSlider);
-        stack.Children.Add(volRow);
-        stack.Children.Add(MakeDivider());
+        Grid.SetColumn(volRow, 4);
+        grid.Children.Add(volRow);
 
-        // ── Edit + Remove buttons (subtle, icon-led) ───────────────────────
+        // ── Col 5: Created ───────────────────────────────────────────────
+        var createdText = new TextBlock
+        {
+            Text              = item.CreatedAt.ToLocalTime().ToString("MMM d, yyyy"),
+            FontSize          = 11,
+            Foreground        = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(createdText, 5);
+        grid.Children.Add(createdText);
+
+        // ── Col 6: Actions (subtle icon buttons) ────────────────────────
         var editBtn = new UiButton
         {
-            Content             = "Edit",
-            Appearance          = ControlAppearance.Transparent,
-            FontSize            = 11,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Icon                = new UiSymbolIcon { Symbol = SymbolRegular.Edit16 }
+            Appearance = ControlAppearance.Transparent,
+            Padding    = new Thickness(6),
+            ToolTip    = "Edit",
+            Icon       = new UiSymbolIcon { Symbol = SymbolRegular.Edit16 }
         };
         editBtn.Click += (_, _) => EditSound(capturedItem);
 
         var removeBtn = new UiButton
         {
-            Content             = "Remove",
-            Appearance          = ControlAppearance.Transparent,
-            Foreground          = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
-            FontSize            = 11,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Icon                = new UiSymbolIcon { Symbol = SymbolRegular.Delete16 }
+            Appearance = ControlAppearance.Transparent,
+            Padding    = new Thickness(6),
+            Margin     = new Thickness(4, 0, 0, 0),
+            ToolTip    = "Remove",
+            Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
+            Icon       = new UiSymbolIcon { Symbol = SymbolRegular.Delete16 }
         };
         removeBtn.Click += (_, _) => RemoveSound(capturedItem);
 
-        var btnGrid = new Grid();
-        btnGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        btnGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        Grid.SetColumn(editBtn,   0);
-        Grid.SetColumn(removeBtn, 1);
-        btnGrid.Children.Add(editBtn);
-        btnGrid.Children.Add(removeBtn);
-        stack.Children.Add(btnGrid);
-
-        // ── Card: WPF UI Fluent card with hover border to signal interactivity ──
-        var hoverBorder = libraryIndex < 4
-            ? accentBrush
-            : (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"];
-
-        var card = new UiCard
+        var actionsPanel = new StackPanel
         {
-            Width        = 230,
-            Padding      = new Thickness(0),
-            ClipToBounds = true,
-            Margin       = new Thickness(0, 0, 10, 10),
-            Content      = stack
+            Orientation         = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center
         };
-        card.MouseEnter += (_, _) => card.BorderBrush = hoverBorder;
-        card.MouseLeave += (_, _) => card.ClearValue(Control.BorderBrushProperty);
-        return card;
-    }
+        actionsPanel.Children.Add(editBtn);
+        actionsPanel.Children.Add(removeBtn);
+        Grid.SetColumn(actionsPanel, 6);
+        grid.Children.Add(actionsPanel);
 
-    private static Border MakeDivider() => new Border
-    {
-        BorderBrush     = (Brush)Application.Current.Resources["CardBorderBrush"],
-        BorderThickness = new Thickness(0, 1, 0, 0)
-    };
+        // ── Row container: hover highlight + double-click to play ──────────
+        var row = new Border
+        {
+            Padding         = new Thickness(14, 8, 14, 8),
+            Background      = Brushes.Transparent,
+            BorderBrush     = (Brush)Application.Current.Resources["CardBorderBrush"],
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Child           = grid
+        };
+        var hoverBg = (Brush)Application.Current.Resources["ControlFillColorDefaultBrush"];
+        row.MouseEnter += (_, _) => row.Background = hoverBg;
+        row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+        row.MouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ClickCount == 2)
+                PlayLibraryItem(capturedItem);
+        };
+        return row;
+    }
 
     // ── Add Sound ──────────────────────────────────────────────────────────────
 
@@ -471,7 +449,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             .OrderBy(c => c)
             .ToList();
 
-        var dlg = new EditSoundDialog(this, item.DisplayName, item.Category, categories);
+        int idx = _library.IndexOf(item);
+        var hotkeyDisplay = idx >= 0 && idx < 4 ? $"Ctrl+Alt+{idx + 1}" : "";
+
+        var dlg = new EditSoundDialog(this, item.DisplayName, item.Category, categories, hotkeyDisplay);
         if (dlg.ShowDialog() != true)
             return;
 

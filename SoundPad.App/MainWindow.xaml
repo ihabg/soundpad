@@ -29,97 +29,20 @@
             </ui:TitleBar.Icon>
         </ui:TitleBar>
 
-        <!-- ── Scrollable main content ──────────────────────────────────────────── -->
-        <ScrollViewer Grid.Row="1"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="28,16,28,24">
+        <!-- ── Tabs: Sound Library | Settings ──────────────────────────────────── -->
+        <TabControl Grid.Row="1" Margin="0">
 
-                <!-- ── Top row: Audio Routing | Microphone ─────────────────────── -->
-                <Grid Margin="0,0,0,14">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="14"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
+            <TabItem Header="Sound Library">
+                <Grid Margin="24,18,24,16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
 
-                    <ui:Card Grid.Column="0" Padding="20">
-                        <StackPanel>
-                            <TextBlock Text="AUDIO ROUTING"
-                                       FontSize="11"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                       Margin="0,0,0,16"/>
-
-                            <TextBlock Text="Monitor Output"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Margin="0,0,0,6"/>
-                            <ComboBox x:Name="MonitorComboBox"
-                                      SelectionChanged="MonitorComboBox_SelectionChanged"/>
-
-                            <TextBlock Text="Virtual / Cable Output"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Margin="0,14,0,6"/>
-                            <ComboBox x:Name="VirtualComboBox"
-                                      SelectionChanged="VirtualComboBox_SelectionChanged"/>
-                        </StackPanel>
-                    </ui:Card>
-
-                    <ui:Card Grid.Column="2" Padding="20">
-                        <StackPanel>
-                            <TextBlock Text="MICROPHONE"
-                                       FontSize="11"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                       Margin="0,0,0,16"/>
-
-                            <TextBlock Text="Input Device"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Margin="0,0,0,6"/>
-                            <ComboBox x:Name="MicComboBox"
-                                      Margin="0,0,0,16"
-                                      SelectionChanged="MicComboBox_SelectionChanged"/>
-
-                            <ui:ToggleSwitch x:Name="MicPassthroughCheckBox"
-                                             Content="Pass microphone to virtual output"
-                                             Margin="0,0,0,16"
-                                             Checked="MicPassthroughCheckBox_Checked"
-                                             Unchecked="MicPassthroughCheckBox_Unchecked"/>
-
-                            <DockPanel>
-                                <TextBlock DockPanel.Dock="Left"
-                                           Text="Volume"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           VerticalAlignment="Center"
-                                           Margin="0,0,10,0"
-                                           Width="52"/>
-                                <TextBlock x:Name="MicVolumeLabel"
-                                           DockPanel.Dock="Right"
-                                           Text="80%"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                           VerticalAlignment="Center"
-                                           TextAlignment="Right"
-                                           Width="38"/>
-                                <Slider x:Name="MicVolumeSlider"
-                                        Minimum="0" Maximum="100" Value="80"
-                                        VerticalAlignment="Center"
-                                        ValueChanged="MicVolumeSlider_ValueChanged"/>
-                            </DockPanel>
-                        </StackPanel>
-                    </ui:Card>
-                </Grid>
-
-                <!-- ── Sound Library card ──────────────────────────────────────── -->
-                <ui:Card Padding="20">
-                    <StackPanel>
-
-                        <!-- Library header: label + count badge + Add button -->
-                        <DockPanel Margin="0,0,0,16">
+                    <!-- Toolbar: label + count + Add Sound, then Search + Category -->
+                    <StackPanel Grid.Row="0" Margin="0,0,0,14">
+                        <DockPanel Margin="0,0,0,14">
                             <ui:Button DockPanel.Dock="Right"
                                        Content="Add Sound"
                                        Appearance="Primary"
@@ -142,8 +65,7 @@
                             </StackPanel>
                         </DockPanel>
 
-                        <!-- Search + Category filter toolbar -->
-                        <Grid Margin="0,0,0,16">
+                        <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="12"/>
@@ -163,50 +85,171 @@
                                       Grid.Column="2"
                                       SelectionChanged="CategoryFilter_SelectionChanged"/>
                         </Grid>
+                    </StackPanel>
 
-                        <!-- Sound pad grid (populated in code-behind) -->
-                        <WrapPanel x:Name="SoundsPanel"/>
+                    <!-- Column header (pinned above the scrollable rows) -->
+                    <Border Grid.Row="1"
+                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource CardBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6,6,0,0"
+                            Padding="14,9">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="48"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="170"/>
+                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="84"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="1" Text="NAME" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock Grid.Column="2" Text="CATEGORY" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock Grid.Column="3" Text="HOTKEY" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock Grid.Column="4" Text="VOLUME" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock Grid.Column="5" Text="CREATED" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock Grid.Column="6" Text="ACTIONS" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center"/>
+                        </Grid>
+                    </Border>
 
-                        <!-- Empty library message -->
-                        <TextBlock x:Name="EmptyLibraryText"
-                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                   FontSize="13"
-                                   TextWrapping="Wrap"
-                                   Margin="0,12,0,4"
-                                   Visibility="Collapsed"/>
+                    <!-- Scrollable rows -->
+                    <Border Grid.Row="2"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource CardBorderBrush}"
+                            BorderThickness="1,0,1,1"
+                            CornerRadius="0,0,6,6">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel>
+                                <StackPanel x:Name="SoundsPanel"/>
+                                <TextBlock x:Name="EmptyLibraryText"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           FontSize="13"
+                                           TextWrapping="Wrap"
+                                           Margin="14,18,14,18"
+                                           Visibility="Collapsed"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Settings">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="24,18,24,16">
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <ui:Card Grid.Column="0" Padding="20">
+                                <StackPanel>
+                                    <TextBlock Text="AUDIO ROUTING"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               Margin="0,0,0,16"/>
+
+                                    <TextBlock Text="Monitor Output"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               Margin="0,0,0,6"/>
+                                    <ComboBox x:Name="MonitorComboBox"
+                                              SelectionChanged="MonitorComboBox_SelectionChanged"/>
+
+                                    <TextBlock Text="Virtual / Cable Output"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               Margin="0,14,0,6"/>
+                                    <ComboBox x:Name="VirtualComboBox"
+                                              SelectionChanged="VirtualComboBox_SelectionChanged"/>
+                                </StackPanel>
+                            </ui:Card>
+
+                            <ui:Card Grid.Column="2" Padding="20">
+                                <StackPanel>
+                                    <TextBlock Text="MICROPHONE"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               Margin="0,0,0,16"/>
+
+                                    <TextBlock Text="Input Device"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               Margin="0,0,0,6"/>
+                                    <ComboBox x:Name="MicComboBox"
+                                              Margin="0,0,0,16"
+                                              SelectionChanged="MicComboBox_SelectionChanged"/>
+
+                                    <ui:ToggleSwitch x:Name="MicPassthroughCheckBox"
+                                                     Content="Pass microphone to virtual output"
+                                                     Margin="0,0,0,16"
+                                                     Checked="MicPassthroughCheckBox_Checked"
+                                                     Unchecked="MicPassthroughCheckBox_Unchecked"/>
+
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Left"
+                                                   Text="Volume"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,10,0"
+                                                   Width="52"/>
+                                        <TextBlock x:Name="MicVolumeLabel"
+                                                   DockPanel.Dock="Right"
+                                                   Text="80%"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   TextAlignment="Right"
+                                                   Width="38"/>
+                                        <Slider x:Name="MicVolumeSlider"
+                                                Minimum="0" Maximum="100" Value="80"
+                                                VerticalAlignment="Center"
+                                                ValueChanged="MicVolumeSlider_ValueChanged"/>
+                                    </DockPanel>
+                                </StackPanel>
+                            </ui:Card>
+                        </Grid>
 
                     </StackPanel>
-                </ui:Card>
+                </ScrollViewer>
+            </TabItem>
 
-            </StackPanel>
-        </ScrollViewer>
+        </TabControl>
 
-        <!-- ── Footer: status + Stop All ───────────────────────────────────────── -->
+        <!-- ── Footer: status + fixed-size Stop All ────────────────────────────── -->
         <Border Grid.Row="2"
                 Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource CardBorderBrush}"
                 BorderThickness="0,1,0,0"
-                Padding="28,12,28,16">
-            <StackPanel>
-                <TextBlock x:Name="StatusText"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           FontSize="11"
-                           Text="Ready"
-                           TextTrimming="CharacterEllipsis"
-                           Margin="0,0,0,8"/>
-                <ui:Button Content="Stop All Sounds"
+                Padding="24,10">
+            <DockPanel>
+                <ui:Button DockPanel.Dock="Right"
+                           Content="Stop All Sounds"
                            Appearance="Danger"
-                           HorizontalAlignment="Stretch"
-                           HorizontalContentAlignment="Center"
-                           Height="42"
-                           FontSize="13"
+                           Width="200"
+                           Height="44"
                            FontWeight="SemiBold"
                            Click="StopButton_Click">
                     <ui:Button.Icon>
                         <ui:SymbolIcon Symbol="Stop24"/>
                     </ui:Button.Icon>
                 </ui:Button>
-            </StackPanel>
+                <TextBlock x:Name="StatusText"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           FontSize="11"
+                           TextTrimming="CharacterEllipsis"
+                           Margin="0,0,16,0"
+                           Text="Ready"/>
+            </DockPanel>
         </Border>
 
     </Grid>

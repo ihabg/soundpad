@@ -884,13 +884,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void RemoveSound(SoundItem item)
     {
-        var result = MessageBox.Show(
-            $"Remove \"{item.DisplayName}\" from the library?\n\nThe audio file will not be deleted.",
-            "Confirm Remove",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        if (result != MessageBoxResult.Yes)
+        var dlg = new ConfirmRemoveDialog(this, item.DisplayName);
+        if (dlg.ShowDialog() != true)
             return;
 
         var name = item.DisplayName;

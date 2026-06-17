@@ -11,6 +11,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using WinForms = System.Windows.Forms;
 using ControlAppearance = Wpf.Ui.Controls.ControlAppearance;
 using SymbolRegular = Wpf.Ui.Controls.SymbolRegular;
@@ -53,9 +54,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // bounds can be applied before the window is ever shown (no visible jump).
     public MainWindow()
     {
+        Debug.WriteLine("[Startup] Constructor start");
         _settings = AppSettingsService.Load();
+        Debug.WriteLine("[Startup] Settings loaded");
         InitializeComponent();
+        Debug.WriteLine("[Startup] InitializeComponent done");
         RestoreWindowBounds();
+        Debug.WriteLine("[Startup] Constructor end");
     }
 
     private void RestoreWindowBounds()
@@ -87,6 +92,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     }
 
     private void SaveSettings() => AppSettingsService.Save(_settings);
+
+    // Called by the global DispatcherUnhandledException handler in App.xaml.cs
+    // so the user sees a status-bar message instead of a silent crash.
+    public void ShowFatalError(string message)
+    {
+        try { StatusText.Text = message; } catch { }
+    }
 
     // ── System tray ────────────────────────────────────────────────────────────
 
@@ -362,24 +374,37 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     // ── OnSourceInitialized: earliest safe point for hotkeys ──────────────────
     // WPF guarantees both the Win32 HWND and its HwndSource exist here.
-    // Library hotkeys aren't loaded yet at this point, so registration happens
-    // later in LoadLibrary(), once _library is populated.
+    // Library hotkeys aren't loaded yet at this point, so registration is
+    // deferred until ContextIdle in MainWindow_Loaded.
     protected override void OnSourceInitialized(EventArgs e)
     {
+        Debug.WriteLine("[Startup] OnSourceInitialized start");
         base.OnSourceInitialized(e);
         try
         {
+            var helper = new System.Windows.Interop.WindowInteropHelper(this);
+            var hwnd   = helper.Handle;
+            Debug.WriteLine($"[Startup] HWND = 0x{hwnd:X16} {(hwnd == IntPtr.Zero ? "— ZERO, hotkeys will fail" : "OK")}");
+
+            var src = System.Windows.Interop.HwndSource.FromHwnd(hwnd);
+            Debug.WriteLine($"[Startup] HwndSource = {(src is null ? "NULL — hotkeys will fail" : "OK")}");
+
             _hotkeys = new HotkeyManager(this);
+            Debug.WriteLine("[Startup] HotkeyManager created");
+
             _hotkeyService = new HotkeyService(_hotkeys);
-            _hotkeyService.HotkeyTriggered += OnSoundHotkeyTriggered;
+            _hotkeyService.HotkeyTriggered        += OnSoundHotkeyTriggered;
             _hotkeyService.StopAllHotkeyTriggered += OnStopAllHotkeyTriggered;
+            Debug.WriteLine("[Startup] HotkeyService ready");
         }
         catch (Exception ex)
         {
-            _hotkeys = null;
+            _hotkeys       = null;
             _hotkeyService = null;
-            Debug.WriteLine($"[Hotkeys] Setup failed: {ex.Message}");
+            Debug.WriteLine($"[Startup] Hotkey init FAILED ({ex.GetType().Name}): {ex.Message}");
+            Debug.WriteLine($"[Startup] {ex.StackTrace}");
         }
+        Debug.WriteLine("[Startup] OnSourceInitialized end");
     }
 
     private void OnSoundHotkeyTriggered(Guid soundId)
@@ -394,11 +419,17 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // ── Loaded: sound library + device lists ──────────────────────────────────
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        Debug.WriteLine("[Startup] Loaded start");
         try
         {
             LoadLibrary();
+            Debug.WriteLine("[Startup] LoadLibrary done");
+
             PopulateDeviceLists();
+            Debug.WriteLine("[Startup] PopulateDeviceLists done");
+
             PopulateMicList();
+            Debug.WriteLine("[Startup] PopulateMicList done");
 
             // Mic passthrough depends on both the virtual engine and the mic
             // device list being ready, so it's restored only after both calls above.
@@ -409,12 +440,38 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             InitializeTrayIcon();
             AboutVersionText.Text    = $"Version {GetAppVersion()}";
             AboutDataFolderText.Text = AppPaths.AppDataDir;
+
+            // Defer hotkey registration until the dispatcher is idle so that
+            // WPF-UI (Mica backdrop, DWM attributes, title-bar composition) has
+            // fully finished its own Loaded/Render work.  RegisterHotKey called
+            // during the Loaded burst can fail transiently; ContextIdle fires
+            // only after all pending Render/DataBind/Normal priority items drain.
+            // The lambda has its own try/catch so an exception here never
+            // crashes the process — only a status-bar message is shown.
+            Debug.WriteLine("[Startup] Loaded end — queuing deferred hotkey registration");
+            Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
+            {
+                Debug.WriteLine("[Startup] Deferred hotkey registration start");
+                try
+                {
+                    ReregisterAllHotkeysAndReport("startup");
+                    Debug.WriteLine("[Startup] Deferred hotkey registration complete");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[Startup] Deferred hotkey registration FAILED ({ex.GetType().Name}): {ex.Message}");
+                    Debug.WriteLine($"[Startup] {ex.StackTrace}");
+                    try { StatusText.Text = $"Hotkey startup error: {ex.Message}"; } catch { }
+                }
+            }));
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[Startup] Unexpected error: {ex.Message}");
-            StatusText.Text = $"Startup error: {ex.Message}";
+            Debug.WriteLine($"[Startup] Loaded FAILED ({ex.GetType().Name}): {ex.Message}");
+            Debug.WriteLine($"[Startup] {ex.StackTrace}");
+            try { StatusText.Text = $"Startup error: {ex.Message}"; } catch { }
         }
+        Debug.WriteLine("[Startup] Loaded handler returning");
     }
 
     private void RestoreMicPassthroughState()
@@ -486,21 +543,57 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         FilterSoundsPanel();
         RefreshStopAllHotkeyDisplay();
 
-        var result = _hotkeyService?.ReregisterAll(_library, _settings.StopAllHotkey)
-                     ?? new HotkeyRegistrationResult();
-
         int loaded = _cachedSounds.Count;
-        var problems = new List<string>();
-        if (result.FailedSoundIds.Count > 0)
-            problems.Add($"{result.FailedSoundIds.Count} sound hotkey(s)");
-        if (result.StopAllFailed)
-            problems.Add("Stop All hotkey");
+        StatusText.Text = loaded > 0
+            ? $"Library: {loaded} sound(s) loaded"
+            : "Library empty — click '+ Add Sound'";
+    }
 
-        StatusText.Text = problems.Count > 0
-            ? $"Library: {loaded} sound(s) loaded — could not register: {string.Join(", ", problems)}"
-            : loaded > 0
-                ? $"Library: {loaded} sound(s) loaded"
-                : "Library empty — click '+ Add Sound'";
+    // Single registration point used by every code path that touches hotkeys:
+    // startup (via ContextIdle Dispatcher.BeginInvoke), hotkey capture dialog
+    // Save/Clear, and Stop All dialog Save/Clear.
+    // Always writes diagnostics to Debug output so failures are visible in the
+    // VS Output window even when StatusText is later overridden by a success msg.
+    // Sets StatusText only on failure; interactive callers override it on success.
+    // Returns the raw result so callers can inspect specific failures for rollback.
+    private HotkeyRegistrationResult ReregisterAllHotkeysAndReport(string context)
+    {
+        int soundCount = _library.Count(x => x.Hotkey is not null);
+        Debug.WriteLine($"[Hotkeys:{context}] Starting — {soundCount} sound hotkey(s), " +
+                        $"Stop All: {_settings.StopAllHotkey?.DisplayText ?? "none"}");
+
+        if (_hotkeyService is null)
+        {
+            Debug.WriteLine($"[Hotkeys:{context}] HotkeyService is null — registration skipped.");
+            StatusText.Text = "Warning: global hotkeys unavailable (window initialization failed).";
+            return new HotkeyRegistrationResult();
+        }
+
+        var result = _hotkeyService.ReregisterAll(_library, _settings.StopAllHotkey);
+
+        int total  = soundCount + (_settings.StopAllHotkey is not null ? 1 : 0);
+        int failed = result.FailedSoundIds.Count + (result.StopAllFailed ? 1 : 0);
+        Debug.WriteLine($"[Hotkeys:{context}] Registered {total - failed}/{total}, {failed} failed.");
+
+        foreach (var failId in result.FailedSoundIds)
+        {
+            var name = _library.FirstOrDefault(x => x.Id == failId)?.DisplayName ?? failId.ToString("B");
+            Debug.WriteLine($"[Hotkeys:{context}] FAILED sound \"{name}\" — Win32 RegisterHotKey returned false");
+        }
+        if (result.StopAllFailed)
+            Debug.WriteLine($"[Hotkeys:{context}] FAILED Stop All hotkey — Win32 RegisterHotKey returned false");
+
+        if (failed > 0)
+        {
+            var problems = new List<string>();
+            if (result.FailedSoundIds.Count > 0)
+                problems.Add($"{result.FailedSoundIds.Count} sound hotkey(s)");
+            if (result.StopAllFailed)
+                problems.Add("Stop All hotkey");
+            StatusText.Text = $"Ready — could not register: {string.Join(", ", problems)}";
+        }
+
+        return result;
     }
 
     // One-time migration: the first four sounds keep their original default
@@ -934,7 +1027,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (dlg.WasCleared)
         {
             item.Hotkey = null;
-            _hotkeyService.ReregisterAll(_library, _settings.StopAllHotkey);
+            ReregisterAllHotkeysAndReport("hotkey-clear");
             SoundLibraryService.Save(_library);
             FilterSoundsPanel();
             StatusText.Text = $"Hotkey cleared: {item.DisplayName}";
@@ -958,12 +1051,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var previousBinding = item.Hotkey;
         item.Hotkey = newBinding;
 
-        var result = _hotkeyService.ReregisterAll(_library, _settings.StopAllHotkey);
+        var result = ReregisterAllHotkeysAndReport("hotkey-save");
         if (result.FailedSoundIds.Contains(item.Id))
         {
             // Roll back and restore the previously-working hotkey set.
             item.Hotkey = previousBinding;
-            _hotkeyService.ReregisterAll(_library, _settings.StopAllHotkey);
+            ReregisterAllHotkeysAndReport("hotkey-save-rollback");
             MessageBox.Show(
                 $"Windows could not register \"{newBinding.DisplayText}\".\n\n" +
                 "It may already be used by another application or by Windows itself. " +
@@ -1024,12 +1117,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var previous = _settings.StopAllHotkey;
         _settings.StopAllHotkey = newBinding;
 
-        var result = _hotkeyService.ReregisterAll(_library, _settings.StopAllHotkey);
+        var result = ReregisterAllHotkeysAndReport("stop-all-save");
         if (result.StopAllFailed)
         {
             // Roll back and restore the previously-working hotkey set.
             _settings.StopAllHotkey = previous;
-            _hotkeyService.ReregisterAll(_library, _settings.StopAllHotkey);
+            ReregisterAllHotkeysAndReport("stop-all-save-rollback");
             MessageBox.Show(
                 $"Windows could not register \"{newBinding.DisplayText}\".\n\n" +
                 "It may already be used by another application or by Windows itself. " +
@@ -1049,7 +1142,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
 
         _settings.StopAllHotkey = null;
-        _hotkeyService?.ReregisterAll(_library, _settings.StopAllHotkey);
+        ReregisterAllHotkeysAndReport("stop-all-clear");
         AppSettingsService.Save(_settings);
         RefreshStopAllHotkeyDisplay();
         StatusText.Text = "Stop All hotkey cleared";

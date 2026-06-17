@@ -7,11 +7,13 @@
       "PowerShell(cd \"$env:TEMP\\\\wpfui_probe\"; dotnet run -v:quiet 2>&1)",
       "Bash(cat \"/c/Users/Kebab/AppData/Roaming/SoundPad/sounds.json\")",
       "Read(//c/Users/Kebab/AppData/Roaming/SoundPad/**)",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(s['DisplayName'], '->', s.get\\('Hotkey'\\)\\) for s in d]\")"
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(s['DisplayName'], '->', s.get\\('Hotkey'\\)\\) for s in d]\")",
+      "Bash(mkdir -p \"c:/Users/Kebab/Desktop/SoundPad/scripts\" \"c:/Users/Kebab/Desktop/SoundPad/installer\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\Kebab\\AppData\\Local\\Temp\\wpfui_probe",
-      "C:\\Users\\Kebab\\AppData\\Roaming\\SoundPad"
+      "C:\\Users\\Kebab\\AppData\\Roaming\\SoundPad",
+      "c:\\Users\\Kebab\\Desktop\\SoundPad"
     ]
   }
 }

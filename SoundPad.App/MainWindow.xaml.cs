@@ -11,6 +11,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using WinForms = System.Windows.Forms;
 using ControlAppearance = Wpf.Ui.Controls.ControlAppearance;
 using SymbolRegular = Wpf.Ui.Controls.SymbolRegular;
 using UiBadge = Wpf.Ui.Controls.Badge;
@@ -38,9 +39,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private AppSettings _settings;
 
     // ── Supporting objects ─────────────────────────────────────────────────────
-    private HotkeyManager?  _hotkeys;
-    private HotkeyService?  _hotkeyService;
-    private MicPassthrough? _micPassthrough;
+    private HotkeyManager?        _hotkeys;
+    private HotkeyService?        _hotkeyService;
+    private MicPassthrough?       _micPassthrough;
+    private WinForms.NotifyIcon?  _trayIcon;
+
+    // Set to true by ExitApp() so Window_Closing knows to proceed with shutdown
+    // rather than hide to tray when CloseToTray is enabled.
+    private bool _isExiting;
 
     // ── Constructor ────────────────────────────────────────────────────────────
     // Settings are loaded before InitializeComponent so the saved window
@@ -81,6 +87,96 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     }
 
     private void SaveSettings() => AppSettingsService.Save(_settings);
+
+    // ── System tray ────────────────────────────────────────────────────────────
+
+    private void InitializeTrayIcon()
+    {
+        _trayIcon = new WinForms.NotifyIcon
+        {
+            Text    = "SoundPad",
+            Icon    = GetAppIcon(),
+            Visible = true
+        };
+
+        var menu = new WinForms.ContextMenuStrip();
+        menu.Items.Add("Show SoundPad",    null, (_, _) => Dispatcher.Invoke(ShowFromTray));
+        menu.Items.Add(new WinForms.ToolStripSeparator());
+        menu.Items.Add("Stop All Sounds",  null, (_, _) => Dispatcher.Invoke(StopAllSounds));
+        menu.Items.Add(new WinForms.ToolStripSeparator());
+        menu.Items.Add("Exit",             null, (_, _) => Dispatcher.Invoke(ExitApp));
+
+        _trayIcon.ContextMenuStrip = menu;
+        _trayIcon.DoubleClick     += (_, _) => Dispatcher.Invoke(ShowFromTray);
+    }
+
+    private static System.Drawing.Icon GetAppIcon()
+    {
+        try
+        {
+            var path = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(path))
+            {
+                var ico = System.Drawing.Icon.ExtractAssociatedIcon(path);
+                if (ico is not null) return ico;
+            }
+        }
+        catch { }
+        return System.Drawing.SystemIcons.Application;
+    }
+
+    private void ShowFromTray()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    // Called from the tray "Exit" item and any path that needs a real shutdown.
+    // Sets _isExiting so Window_Closing does not cancel the close for CloseToTray.
+    private void ExitApp()
+    {
+        _isExiting = true;
+        Close();
+    }
+
+    private void Window_StateChanged(object sender, EventArgs e)
+    {
+        if (WindowState == WindowState.Minimized && _settings.MinimizeToTray)
+            Hide();
+    }
+
+    private void RestoreBehaviorSettings()
+    {
+        MinimizeToTraySwitch.IsChecked = _settings.MinimizeToTray;
+        CloseToTraySwitch.IsChecked    = _settings.CloseToTray;
+    }
+
+    // ── Behavior toggle handlers ───────────────────────────────────────────────
+
+    private void MinimizeToTraySwitch_Checked(object sender, RoutedEventArgs e)
+    {
+        _settings.MinimizeToTray = true;
+        SaveSettings();
+    }
+
+    private void MinimizeToTraySwitch_Unchecked(object sender, RoutedEventArgs e)
+    {
+        _settings.MinimizeToTray = false;
+        SaveSettings();
+    }
+
+    private void CloseToTraySwitch_Checked(object sender, RoutedEventArgs e)
+    {
+        _settings.CloseToTray = true;
+        SaveSettings();
+    }
+
+    private void CloseToTraySwitch_Unchecked(object sender, RoutedEventArgs e)
+    {
+        _settings.CloseToTray = false;
+        SaveSettings();
+    }
 
     // Finds the index of a previously-saved device in a freshly-enumerated list.
     // Matches by name first (most stable across restarts), falling back to the
@@ -149,6 +245,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             // device list being ready, so it's restored only after both calls above.
             RestoreMicPassthroughState();
             RestoreSelectedTab();
+            RestoreBehaviorSettings();
+            InitializeTrayIcon();
         }
         catch (Exception ex)
         {
@@ -1112,6 +1210,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
+        // If CloseToTray is on and this isn't a deliberate exit (from the tray
+        // menu or ExitApp()), cancel the close and just hide to tray instead.
+        if (!_isExiting && _settings.CloseToTray)
+        {
+            e.Cancel = true;
+            Hide();
+            return;
+        }
+
         // Only persist bounds while Normal; maximized/minimized dimensions
         // aren't meaningful as a restored size for next launch.
         if (WindowState == WindowState.Normal)
@@ -1123,6 +1230,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
         SaveSettings();
 
+        _trayIcon?.Dispose();
+        _trayIcon = null;
         _hotkeyService?.UnregisterAll();
         _hotkeys?.Dispose();
         _micPassthrough?.Dispose();

@@ -13,7 +13,8 @@
         WindowBackdropType="Mica"
         WindowCornerPreference="Round"
         Loaded="MainWindow_Loaded"
-        Closing="Window_Closing">
+        Closing="Window_Closing"
+        StateChanged="Window_StateChanged">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -219,7 +220,7 @@
                             </ui:Card>
                         </Grid>
 
-                        <ui:Card Padding="20">
+                        <ui:Card Padding="20" Margin="0,0,0,14">
                             <StackPanel>
                                 <TextBlock Text="GLOBAL SHORTCUTS"
                                            FontSize="11"
@@ -260,6 +261,27 @@
                                                IsEnabled="False"
                                                Click="ClearStopAllHotkey_Click"/>
                                 </Grid>
+                            </StackPanel>
+                        </ui:Card>
+
+                        <ui:Card Padding="20">
+                            <StackPanel>
+                                <TextBlock Text="BEHAVIOR"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,16"/>
+
+                                <ui:ToggleSwitch x:Name="MinimizeToTraySwitch"
+                                                 Content="Minimize to tray"
+                                                 Checked="MinimizeToTraySwitch_Checked"
+                                                 Unchecked="MinimizeToTraySwitch_Unchecked"/>
+
+                                <ui:ToggleSwitch x:Name="CloseToTraySwitch"
+                                                 Content="Close to tray"
+                                                 Margin="0,12,0,0"
+                                                 Checked="CloseToTraySwitch_Checked"
+                                                 Unchecked="CloseToTraySwitch_Unchecked"/>
                             </StackPanel>
                         </ui:Card>
 

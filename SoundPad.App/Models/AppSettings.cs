@@ -22,6 +22,9 @@ public class AppSettings
 
     public int SelectedTabIndex { get; set; } = 0;
 
+    public bool MinimizeToTray { get; set; } = false;
+    public bool CloseToTray    { get; set; } = false;
+
     public double? WindowLeft   { get; set; }
     public double? WindowTop    { get; set; }
     public double? WindowWidth  { get; set; }

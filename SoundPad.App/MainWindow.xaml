@@ -264,7 +264,7 @@
                             </StackPanel>
                         </ui:Card>
 
-                        <ui:Card Padding="20">
+                        <ui:Card Padding="20" Margin="0,0,0,14">
                             <StackPanel>
                                 <TextBlock Text="BEHAVIOR"
                                            FontSize="11"
@@ -282,6 +282,51 @@
                                                  Margin="0,12,0,0"
                                                  Checked="CloseToTraySwitch_Checked"
                                                  Unchecked="CloseToTraySwitch_Unchecked"/>
+
+                                <ui:ToggleSwitch x:Name="StartWithWindowsSwitch"
+                                                 Content="Start with Windows"
+                                                 Margin="0,12,0,0"
+                                                 Checked="StartWithWindowsSwitch_Checked"
+                                                 Unchecked="StartWithWindowsSwitch_Unchecked"/>
+                            </StackPanel>
+                        </ui:Card>
+
+                        <ui:Card Padding="20">
+                            <StackPanel>
+                                <TextBlock Text="ABOUT"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,16"/>
+
+                                <TextBlock Text="SoundPad"
+                                           FontSize="18"
+                                           FontWeight="Bold"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           Margin="0,0,0,2"/>
+
+                                <TextBlock x:Name="AboutVersionText"
+                                           Text="Version 1.0.0"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Margin="0,0,0,6"/>
+
+                                <TextBlock Text="Low-latency Windows soundpad for games and Discord"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,16"/>
+
+                                <TextBlock Text="DATA FOLDER"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,4"/>
+
+                                <TextBlock x:Name="AboutDataFolderText"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap"/>
                             </StackPanel>
                         </ui:Card>
 

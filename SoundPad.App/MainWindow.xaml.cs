@@ -92,10 +92,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void InitializeTrayIcon()
     {
+        var appIcon = GetAppIcon();
+        SetWindowIcon(appIcon);
+
         _trayIcon = new WinForms.NotifyIcon
         {
             Text    = "SoundPad",
-            Icon    = GetAppIcon(),
+            Icon    = appIcon,
             Visible = true
         };
 
@@ -110,8 +113,17 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _trayIcon.DoubleClick     += (_, _) => Dispatcher.Invoke(ShowFromTray);
     }
 
+    // Returns the best available icon for both the WPF window and the tray.
+    // Priority: bundled Resources\app.ico > exe's own associated icon > OS default.
     private static System.Drawing.Icon GetAppIcon()
     {
+        var resourceIco = Path.Combine(AppContext.BaseDirectory, "Resources", "app.ico");
+        if (File.Exists(resourceIco))
+        {
+            try { return new System.Drawing.Icon(resourceIco); }
+            catch { }
+        }
+
         try
         {
             var path = Environment.ProcessPath;
@@ -122,7 +134,21 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
         }
         catch { }
+
         return System.Drawing.SystemIcons.Application;
+    }
+
+    // Converts a Win32 HICON to a WPF ImageSource so Window.Icon can be set.
+    private void SetWindowIcon(System.Drawing.Icon icon)
+    {
+        try
+        {
+            Icon = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
+                icon.Handle,
+                System.Windows.Int32Rect.Empty,
+                System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
+        }
+        catch { }
     }
 
     private void ShowFromTray()
@@ -150,6 +176,23 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         MinimizeToTraySwitch.IsChecked = _settings.MinimizeToTray;
         CloseToTraySwitch.IsChecked    = _settings.CloseToTray;
+
+        // Sync the toggle with the actual registry state so it stays accurate
+        // even if the user manually edited the registry or moved the exe.
+        bool actualStartup = ReadStartWithWindowsRegistryState();
+        if (_settings.StartWithWindows != actualStartup)
+        {
+            _settings.StartWithWindows = actualStartup;
+            SaveSettings();
+        }
+
+        // Unhook while setting IsChecked to avoid triggering a registry write
+        // on every startup (the registry is already in the correct state).
+        StartWithWindowsSwitch.Checked   -= StartWithWindowsSwitch_Checked;
+        StartWithWindowsSwitch.Unchecked -= StartWithWindowsSwitch_Unchecked;
+        StartWithWindowsSwitch.IsChecked  = _settings.StartWithWindows;
+        StartWithWindowsSwitch.Checked   += StartWithWindowsSwitch_Checked;
+        StartWithWindowsSwitch.Unchecked += StartWithWindowsSwitch_Unchecked;
     }
 
     // ── Behavior toggle handlers ───────────────────────────────────────────────
@@ -176,6 +219,92 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         _settings.CloseToTray = false;
         SaveSettings();
+    }
+
+    private void StartWithWindowsSwitch_Checked(object sender, RoutedEventArgs e)
+    {
+        _settings.StartWithWindows = true;
+        ApplyStartWithWindows(true);
+        SaveSettings();
+    }
+
+    private void StartWithWindowsSwitch_Unchecked(object sender, RoutedEventArgs e)
+    {
+        _settings.StartWithWindows = false;
+        ApplyStartWithWindows(false);
+        SaveSettings();
+    }
+
+    // ── Startup with Windows (HKCU Run key, no admin required) ────────────────
+
+    private const string StartupRegistryPath  = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string StartupRegistryValue = "SoundPad";
+
+    private void ApplyStartWithWindows(bool enable)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryPath, writable: true);
+            if (key is null)
+            {
+                StatusText.Text = "Could not open startup registry key.";
+                return;
+            }
+
+            if (enable)
+            {
+                var exePath = Environment.ProcessPath;
+                if (string.IsNullOrEmpty(exePath))
+                {
+                    StatusText.Text = "Could not determine app path for startup entry.";
+                    return;
+                }
+                key.SetValue(StartupRegistryValue, $"\"{exePath}\"");
+                StatusText.Text = "SoundPad will start with Windows.";
+            }
+            else
+            {
+                key.DeleteValue(StartupRegistryValue, throwOnMissingValue: false);
+                StatusText.Text = "Removed SoundPad from Windows startup.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Startup setting failed: {ex.Message}";
+
+            // Revert the toggle and saved setting so they stay consistent.
+            _settings.StartWithWindows = !enable;
+            SaveSettings();
+            StartWithWindowsSwitch.Checked   -= StartWithWindowsSwitch_Checked;
+            StartWithWindowsSwitch.Unchecked -= StartWithWindowsSwitch_Unchecked;
+            StartWithWindowsSwitch.IsChecked  = _settings.StartWithWindows;
+            StartWithWindowsSwitch.Checked   += StartWithWindowsSwitch_Checked;
+            StartWithWindowsSwitch.Unchecked += StartWithWindowsSwitch_Unchecked;
+        }
+    }
+
+    private static bool ReadStartWithWindowsRegistryState()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryPath);
+            return key?.GetValue(StartupRegistryValue) is not null;
+        }
+        catch { return false; }
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    // Returns true for known virtual audio router products so we can show
+    // the Discord routing hint when one of these is selected as Virtual Output.
+    private static bool IsVirtualAudioRouterDevice(string name) =>
+        name.Contains("CABLE",       StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("Voicemeeter", StringComparison.OrdinalIgnoreCase);
+
+    private static string GetAppVersion()
+    {
+        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        return v is null ? "1.0.0" : $"{v.Major}.{v.Minor}.{v.Build}";
     }
 
     // Finds the index of a previously-saved device in a freshly-enumerated list.
@@ -247,6 +376,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             RestoreSelectedTab();
             RestoreBehaviorSettings();
             InitializeTrayIcon();
+            AboutVersionText.Text    = $"Version {GetAppVersion()}";
+            AboutDataFolderText.Text = AppPaths.AppDataDir;
         }
         catch (Exception ex)
         {
@@ -1007,6 +1138,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 StatusText.Text = $"Saved monitor device \"{_settings.MonitorDeviceName}\" not found — using default.";
             else if (virtualMissing)
                 StatusText.Text = $"Saved virtual device \"{_settings.VirtualDeviceName}\" not found — using None.";
+            else if (!selectedVirtual.IsNone && IsVirtualAudioRouterDevice(selectedVirtual.Name))
+                StatusText.Text = $"Virtual: {selectedVirtual.Name} — set as Microphone input in Discord to route audio";
         }
         catch (Exception ex)
         {
@@ -1060,7 +1193,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (_virtualEngine is not null)
         {
-            StatusText.Text = $"Virtual: {device.Name}";
+            StatusText.Text = IsVirtualAudioRouterDevice(device.Name)
+                ? $"Virtual: {device.Name} — set as Microphone input in Discord to route audio"
+                : $"Virtual: {device.Name}";
             if (MicPassthroughCheckBox.IsChecked == true)
                 StartMicPassthrough();
         }
@@ -1165,7 +1300,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         if (_virtualEngine is null)
         {
-            StatusText.Text = "Select a Virtual Output before enabling mic passthrough.";
+            StatusText.Text = "Virtual Output is None — select a virtual device (e.g. CABLE Input) before enabling mic passthrough.";
             MicPassthroughCheckBox.IsChecked = false;
             return;
         }

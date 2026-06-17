@@ -8,7 +8,8 @@ public static class AppPaths
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "SoundPad");
 
-    public static string SoundsDirectory => Path.Combine(_base, "Sounds");
-    public static string SoundsJsonPath  => Path.Combine(_base, "sounds.json");
+    public static string AppDataDir      => _base;
+    public static string SoundsDirectory  => Path.Combine(_base, "Sounds");
+    public static string SoundsJsonPath   => Path.Combine(_base, "sounds.json");
     public static string SettingsJsonPath => Path.Combine(_base, "settings.json");
 }

@@ -293,6 +293,36 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         catch { return false; }
     }
 
+    // If StartWithWindows is on, verifies the registry entry points to the
+    // currently running exe. Fixes it silently when it differs (e.g. after
+    // publishing replaces the dev-build path). Shows a status message only
+    // on failure; success is intentionally silent so it does not obscure the
+    // library-loaded message shown just before this runs.
+    private void SyncStartupRegistryPath()
+    {
+        if (!_settings.StartWithWindows) return;
+
+        var exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath)) return;
+
+        var expected = $"\"{exePath}\"";
+
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryPath, writable: true);
+            if (key is null) return;
+
+            var current = key.GetValue(StartupRegistryValue) as string;
+            if (string.Equals(current, expected, StringComparison.OrdinalIgnoreCase)) return;
+
+            key.SetValue(StartupRegistryValue, expected);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Could not update startup entry: {ex.Message}";
+        }
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     // Returns true for known virtual audio router products so we can show
@@ -375,6 +405,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             RestoreMicPassthroughState();
             RestoreSelectedTab();
             RestoreBehaviorSettings();
+            SyncStartupRegistryPath();
             InitializeTrayIcon();
             AboutVersionText.Text    = $"Version {GetAppVersion()}";
             AboutDataFolderText.Text = AppPaths.AppDataDir;

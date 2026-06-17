@@ -34,8 +34,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private List<SoundItem>                        _library      = new List<SoundItem>();
     private readonly Dictionary<Guid, CachedSound> _cachedSounds = new Dictionary<Guid, CachedSound>();
 
-    // ── App-level settings (currently just the Stop All hotkey) ─────────────────
-    private AppSettings _settings = new AppSettings();
+    // ── App-level settings (devices, mic state, hotkeys, window bounds) ─────────
+    private AppSettings _settings;
 
     // ── Supporting objects ─────────────────────────────────────────────────────
     private HotkeyManager?  _hotkeys;
@@ -43,9 +43,66 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private MicPassthrough? _micPassthrough;
 
     // ── Constructor ────────────────────────────────────────────────────────────
+    // Settings are loaded before InitializeComponent so the saved window
+    // bounds can be applied before the window is ever shown (no visible jump).
     public MainWindow()
     {
+        _settings = AppSettingsService.Load();
         InitializeComponent();
+        RestoreWindowBounds();
+    }
+
+    private void RestoreWindowBounds()
+    {
+        if (_settings.WindowWidth is > 0 && _settings.WindowHeight is > 0)
+        {
+            Width  = _settings.WindowWidth.Value;
+            Height = _settings.WindowHeight.Value;
+        }
+
+        if (_settings.WindowLeft is double left && _settings.WindowTop is double top && IsOnScreen(left, top))
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Left = left;
+            Top  = top;
+        }
+    }
+
+    // Guards against restoring a position on a monitor that's no longer connected.
+    private static bool IsOnScreen(double left, double top)
+    {
+        double virtualLeft   = SystemParameters.VirtualScreenLeft;
+        double virtualTop    = SystemParameters.VirtualScreenTop;
+        double virtualRight  = virtualLeft + SystemParameters.VirtualScreenWidth;
+        double virtualBottom = virtualTop  + SystemParameters.VirtualScreenHeight;
+
+        return left >= virtualLeft && left < virtualRight
+            && top  >= virtualTop  && top  < virtualBottom;
+    }
+
+    private void SaveSettings() => AppSettingsService.Save(_settings);
+
+    // Finds the index of a previously-saved device in a freshly-enumerated list.
+    // Matches by name first (most stable across restarts), falling back to the
+    // saved device number. Returns -1 if neither matches.
+    private static int FindDeviceIndex<T>(IList<T> items, string? savedName, int? savedNumber,
+                                           Func<T, string> nameOf, Func<T, int> numberOf)
+    {
+        if (!string.IsNullOrEmpty(savedName))
+        {
+            for (int i = 0; i < items.Count; i++)
+                if (nameOf(items[i]) == savedName)
+                    return i;
+        }
+
+        if (savedNumber is not null)
+        {
+            for (int i = 0; i < items.Count; i++)
+                if (numberOf(items[i]) == savedNumber.Value)
+                    return i;
+        }
+
+        return -1;
     }
 
     // ── OnSourceInitialized: earliest safe point for hotkeys ──────────────────
@@ -87,12 +144,41 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             LoadLibrary();
             PopulateDeviceLists();
             PopulateMicList();
+
+            // Mic passthrough depends on both the virtual engine and the mic
+            // device list being ready, so it's restored only after both calls above.
+            RestoreMicPassthroughState();
+            RestoreSelectedTab();
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[Startup] Unexpected error: {ex.Message}");
             StatusText.Text = $"Startup error: {ex.Message}";
         }
+    }
+
+    private void RestoreMicPassthroughState()
+    {
+        MicVolumeSlider.Value = Math.Clamp(_settings.MicVolume, 0, 100);
+        MicVolumeLabel.Text   = $"{(int)MicVolumeSlider.Value}%";
+
+        if (_settings.MicPassthroughEnabled)
+            MicPassthroughCheckBox.IsChecked = true; // triggers MicPassthroughCheckBox_Checked -> StartMicPassthrough()
+    }
+
+    private void RestoreSelectedTab()
+    {
+        if (_settings.SelectedTabIndex >= 0 && _settings.SelectedTabIndex < MainTabControl.Items.Count)
+            MainTabControl.SelectedIndex = _settings.SelectedTabIndex;
+    }
+
+    private void MainTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (MainTabControl.SelectedIndex < 0)
+            return;
+
+        _settings.SelectedTabIndex = MainTabControl.SelectedIndex;
+        SaveSettings();
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -103,8 +189,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // then renders the sound cards.
     private void LoadLibrary()
     {
-        _settings = AppSettingsService.Load();
-
+        // _settings was already loaded in the constructor (so window bounds
+        // could be applied before the window was shown); reused here as-is.
         _library = SoundLibraryService.Load();
 
         // If the library is empty (first launch or cleared), copy the built-in
@@ -170,7 +256,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (item.HotkeyInitialized)
                 continue;
 
-            if (i < 4)
+            if (i < 4 && item.Hotkey is null)
                 item.Hotkey = CreateDefaultHotkey(i);
 
             item.HotkeyInitialized = true;
@@ -790,16 +876,39 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         try
         {
+            var monitorDevices = AudioDevice.GetAll();
+            int monitorIndex = FindDeviceIndex(monitorDevices, _settings.MonitorDeviceName, _settings.MonitorDeviceNumber,
+                                                d => d.Name, d => d.Number);
+            bool monitorMissing = monitorIndex < 0 && !string.IsNullOrEmpty(_settings.MonitorDeviceName);
+            if (monitorIndex < 0)
+                monitorIndex = 0;
+
             MonitorComboBox.SelectionChanged -= MonitorComboBox_SelectionChanged;
-            MonitorComboBox.ItemsSource       = AudioDevice.GetAll();
-            MonitorComboBox.SelectedIndex     = 0;
+            MonitorComboBox.ItemsSource       = monitorDevices;
+            MonitorComboBox.SelectedIndex     = monitorIndex;
             MonitorComboBox.SelectionChanged += MonitorComboBox_SelectionChanged;
-            CreateMonitorEngine(AudioDevice.DefaultDeviceNumber);
+            CreateMonitorEngine(monitorDevices[monitorIndex].Number);
+
+            var virtualDevices = AudioDevice.GetAllWithNone();
+            int virtualIndex = FindDeviceIndex(virtualDevices, _settings.VirtualDeviceName, _settings.VirtualDeviceNumber,
+                                                d => d.Name, d => d.Number);
+            bool virtualMissing = virtualIndex < 0 && !string.IsNullOrEmpty(_settings.VirtualDeviceName);
+            if (virtualIndex < 0)
+                virtualIndex = 0;
 
             VirtualComboBox.SelectionChanged -= VirtualComboBox_SelectionChanged;
-            VirtualComboBox.ItemsSource       = AudioDevice.GetAllWithNone();
-            VirtualComboBox.SelectedIndex     = 0;
+            VirtualComboBox.ItemsSource       = virtualDevices;
+            VirtualComboBox.SelectedIndex     = virtualIndex;
             VirtualComboBox.SelectionChanged += VirtualComboBox_SelectionChanged;
+
+            var selectedVirtual = virtualDevices[virtualIndex];
+            if (!selectedVirtual.IsNone)
+                CreateVirtualEngine(selectedVirtual.Number);
+
+            if (monitorMissing)
+                StatusText.Text = $"Saved monitor device \"{_settings.MonitorDeviceName}\" not found — using default.";
+            else if (virtualMissing)
+                StatusText.Text = $"Saved virtual device \"{_settings.VirtualDeviceName}\" not found — using None.";
         }
         catch (Exception ex)
         {
@@ -822,6 +931,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (_monitorEngine is not null)
                 StatusText.Text = $"Monitor: {device.Name}";
         }
+
+        _settings.MonitorDeviceName   = device.Name;
+        _settings.MonitorDeviceNumber = device.Number;
+        SaveSettings();
     }
 
     private void VirtualComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -834,6 +947,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _virtualEngine?.StopAll();
         _virtualEngine?.Dispose();
         _virtualEngine = null;
+
+        _settings.VirtualDeviceName   = device.Name;
+        _settings.VirtualDeviceNumber = device.Number;
+        SaveSettings();
 
         if (device.IsNone)
         {
@@ -880,11 +997,28 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         try
         {
             var mics = MicDevice.GetAll();
+            MicComboBox.SelectionChanged -= MicComboBox_SelectionChanged;
             MicComboBox.ItemsSource = mics;
+
             if (mics.Count > 0)
-                MicComboBox.SelectedIndex = 0;
+            {
+                int micIndex = FindDeviceIndex(mics, _settings.MicDeviceName, _settings.MicDeviceNumber,
+                                                d => d.Name, d => d.Number);
+                bool micMissing = micIndex < 0 && !string.IsNullOrEmpty(_settings.MicDeviceName);
+                if (micIndex < 0)
+                    micIndex = 0;
+
+                MicComboBox.SelectedIndex = micIndex;
+
+                if (micMissing)
+                    StatusText.Text = $"Saved microphone \"{_settings.MicDeviceName}\" not found — using default.";
+            }
             else
+            {
                 StatusText.Text = "No microphone devices found.";
+            }
+
+            MicComboBox.SelectionChanged += MicComboBox_SelectionChanged;
         }
         catch (Exception ex)
         {
@@ -894,21 +1028,39 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void MicComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (MicComboBox.SelectedItem is MicDevice device)
+        {
+            _settings.MicDeviceName   = device.Name;
+            _settings.MicDeviceNumber = device.Number;
+            SaveSettings();
+        }
+
         if (MicPassthroughCheckBox.IsChecked == true)
             RestartMicPassthrough();
     }
 
     private void MicPassthroughCheckBox_Checked(object sender, RoutedEventArgs e)
-        => StartMicPassthrough();
+    {
+        StartMicPassthrough();
+        _settings.MicPassthroughEnabled = MicPassthroughCheckBox.IsChecked == true;
+        SaveSettings();
+    }
 
     private void MicPassthroughCheckBox_Unchecked(object sender, RoutedEventArgs e)
-        => StopMicPassthrough();
+    {
+        StopMicPassthrough();
+        _settings.MicPassthroughEnabled = MicPassthroughCheckBox.IsChecked == true;
+        SaveSettings();
+    }
 
     private void MicVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         _micPassthrough?.SetVolume((float)(MicVolumeSlider.Value / 100.0));
         if (MicVolumeLabel is not null)
             MicVolumeLabel.Text = $"{(int)MicVolumeSlider.Value}%";
+
+        _settings.MicVolume = (int)MicVolumeSlider.Value;
+        SaveSettings();
     }
 
     private void StartMicPassthrough()
@@ -960,6 +1112,17 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
+        // Only persist bounds while Normal; maximized/minimized dimensions
+        // aren't meaningful as a restored size for next launch.
+        if (WindowState == WindowState.Normal)
+        {
+            _settings.WindowLeft   = Left;
+            _settings.WindowTop    = Top;
+            _settings.WindowWidth  = Width;
+            _settings.WindowHeight = Height;
+        }
+        SaveSettings();
+
         _hotkeyService?.UnregisterAll();
         _hotkeys?.Dispose();
         _micPassthrough?.Dispose();

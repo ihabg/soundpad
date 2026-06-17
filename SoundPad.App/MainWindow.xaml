@@ -30,7 +30,8 @@
         </ui:TitleBar>
 
         <!-- ── Tabs: Sound Library | Settings ──────────────────────────────────── -->
-        <TabControl Grid.Row="1" Margin="0">
+        <TabControl x:Name="MainTabControl" Grid.Row="1" Margin="0"
+                    SelectionChanged="MainTabControl_SelectionChanged">
 
             <TabItem Header="Sound Library">
                 <Grid Margin="24,18,24,16">

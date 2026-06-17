@@ -672,17 +672,27 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // text and selected category.  Called after any library or filter change.
     private void FilterSoundsPanel()
     {
-        // SearchBox and CategoryFilter may not exist yet during early startup calls.
-        var search   = SearchBox?.Text.Trim().ToLowerInvariant() ?? "";
+        var search   = SearchBox?.Text.Trim() ?? "";
         var category = CategoryFilter?.SelectedItem as string ?? "All";
+
+        IEnumerable<SoundItem> source = category == "Recent"
+            ? _library.OrderByDescending(x => x.LastPlayedAt ?? DateTime.MinValue)
+            : _library;
 
         SoundsPanel.Children.Clear();
 
-        foreach (var item in _library)
+        foreach (var item in source)
         {
-            bool matchSearch   = string.IsNullOrEmpty(search)
-                              || item.DisplayName.ToLowerInvariant().Contains(search);
-            bool matchCategory = category == "All" || item.Category == category;
+            bool matchSearch = string.IsNullOrEmpty(search)
+                            || item.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase);
+            bool matchCategory = category switch
+            {
+                "All"       => true,
+                "Favorites" => item.IsFavorite,
+                "Recent"    => item.LastPlayedAt.HasValue
+                            && (DateTime.UtcNow - item.LastPlayedAt.Value).TotalDays <= 7,
+                _           => item.Category == category
+            };
 
             if (!matchSearch || !matchCategory)
                 continue;
@@ -694,7 +704,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         EmptyLibraryText.Visibility = panelEmpty ? Visibility.Visible : Visibility.Collapsed;
         EmptyLibraryText.Text = _library.Count == 0
             ? "No sounds yet — click \"+ Add Sound\" to import an audio file."
-            : "No sounds match your search or filter.";
+            : category == "Favorites"
+                ? "No favorites yet — click the star on a sound to mark it as a favorite."
+                : category == "Recent"
+                    ? "No sounds played in the last 7 days."
+                    : "No sounds match your search or filter.";
 
         if (LibraryCountText is not null)
             LibraryCountText.Content = $"{SoundsPanel.Children.Count}";
@@ -710,6 +724,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         CategoryFilter.SelectionChanged -= CategoryFilter_SelectionChanged;
         CategoryFilter.Items.Clear();
         CategoryFilter.Items.Add("All");
+        CategoryFilter.Items.Add("Favorites");
+        CategoryFilter.Items.Add("Recent");
 
         foreach (var cat in _library
             .Select(x => string.IsNullOrWhiteSpace(x.Category) ? "General" : x.Category)
@@ -736,7 +752,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(95) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(84) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
     }
 
     // Creates one details-list row for a SoundItem. Hotkey display now comes
@@ -859,10 +875,26 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         grid.Children.Add(createdText);
 
         // ── Col 6: Actions (subtle icon buttons) ────────────────────────
+        var favBtn = new UiButton
+        {
+            Appearance = ControlAppearance.Transparent,
+            Padding    = new Thickness(6),
+            ToolTip    = item.IsFavorite ? "Remove from favorites" : "Add to favorites",
+            Foreground = item.IsFavorite ? accentBrush : (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            Icon       = new UiSymbolIcon { Symbol = item.IsFavorite ? SymbolRegular.Star16 : SymbolRegular.StarOff16 }
+        };
+        favBtn.Click += (_, _) =>
+        {
+            capturedItem.IsFavorite = !capturedItem.IsFavorite;
+            SoundLibraryService.Save(_library);
+            FilterSoundsPanel();
+        };
+
         var editBtn = new UiButton
         {
             Appearance = ControlAppearance.Transparent,
             Padding    = new Thickness(6),
+            Margin     = new Thickness(4, 0, 0, 0),
             ToolTip    = "Edit",
             Icon       = new UiSymbolIcon { Symbol = SymbolRegular.Edit16 }
         };
@@ -885,6 +917,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment   = VerticalAlignment.Center
         };
+        actionsPanel.Children.Add(favBtn);
         actionsPanel.Children.Add(editBtn);
         actionsPanel.Children.Add(removeBtn);
         Grid.SetColumn(actionsPanel, 6);
@@ -1167,6 +1200,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             StatusText.Text = $"Not loaded: {item.DisplayName}";
             return;
         }
+
+        item.LastPlayedAt = DateTime.UtcNow;
+        SoundLibraryService.Save(_library);
+
+        if (CategoryFilter?.SelectedItem as string == "Recent")
+            FilterSoundsPanel();
 
         PlaySound(sound, item.DisplayName, ConvertUiVolumeToGain(item.Volume));
     }
@@ -1468,6 +1507,108 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         StopMicPassthrough();
         StartMicPassthrough();
+    }
+
+    // ── Drag and drop ──────────────────────────────────────────────────────────
+
+    private static readonly HashSet<string> _audioExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp3", ".wav", ".ogg", ".flac", ".aac"
+    };
+
+    private static bool HasAudioFiles(IDataObject data)
+    {
+        if (!data.GetDataPresent(DataFormats.FileDrop)) return false;
+        var files = data.GetData(DataFormats.FileDrop) as string[];
+        return files?.Any(f => _audioExtensions.Contains(Path.GetExtension(f))) is true;
+    }
+
+    private void SoundsArea_DragEnter(object sender, DragEventArgs e)
+    {
+        if (HasAudioFiles(e.Data))
+        {
+            e.Effects = DragDropEffects.Copy;
+            SoundsAreaBorder.BorderBrush = (Brush)Application.Current.Resources["SystemAccentColorPrimaryBrush"];
+        }
+        else
+        {
+            e.Effects = DragDropEffects.None;
+        }
+        e.Handled = true;
+    }
+
+    private void SoundsArea_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = HasAudioFiles(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void SoundsArea_DragLeave(object sender, DragEventArgs e)
+    {
+        var pos = e.GetPosition(SoundsAreaBorder);
+        if (pos.X < 0 || pos.Y < 0 ||
+            pos.X > SoundsAreaBorder.ActualWidth ||
+            pos.Y > SoundsAreaBorder.ActualHeight)
+        {
+            SoundsAreaBorder.BorderBrush = (Brush)Application.Current.Resources["CardBorderBrush"];
+        }
+    }
+
+    private void SoundsArea_Drop(object sender, DragEventArgs e)
+    {
+        SoundsAreaBorder.BorderBrush = (Brush)Application.Current.Resources["CardBorderBrush"];
+
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+        var files = e.Data.GetData(DataFormats.FileDrop) as string[];
+        if (files is null) return;
+
+        var audioFiles = files.Where(f => _audioExtensions.Contains(Path.GetExtension(f))).ToList();
+        if (audioFiles.Count == 0) return;
+
+        int added  = 0;
+        var failed = new List<string>();
+
+        foreach (var filePath in audioFiles)
+        {
+            try
+            {
+                var destPath = SoundLibraryService.ImportFile(filePath);
+                var sound    = new CachedSound(destPath);
+                var item     = new SoundItem
+                {
+                    DisplayName = Path.GetFileNameWithoutExtension(filePath),
+                    FilePath    = destPath,
+                    Category    = "General",
+                    Volume      = 1.0f,
+                    CreatedAt   = DateTime.UtcNow
+                };
+
+                _cachedSounds[item.Id] = sound;
+                _library.Add(item);
+                added++;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Drop] Failed to import {filePath}: {ex.Message}");
+                failed.Add(Path.GetFileName(filePath));
+            }
+        }
+
+        if (added > 0)
+        {
+            SoundLibraryService.Save(_library);
+            RefreshCategoryFilter();
+            FilterSoundsPanel();
+        }
+
+        if (failed.Count > 0 && added > 0)
+            StatusText.Text = $"Added {added} sound(s). Failed: {string.Join(", ", failed)}";
+        else if (failed.Count > 0)
+            StatusText.Text = $"Could not import: {string.Join(", ", failed)}";
+        else if (added == 1)
+            StatusText.Text = $"Added: {Path.GetFileNameWithoutExtension(audioFiles[0])}";
+        else
+            StatusText.Text = $"Added {added} sound(s)";
     }
 
     // ── Window closing ────────────────────────────────────────────────────────

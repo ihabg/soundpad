@@ -104,7 +104,7 @@
                                 <ColumnDefinition Width="140"/>
                                 <ColumnDefinition Width="170"/>
                                 <ColumnDefinition Width="95"/>
-                                <ColumnDefinition Width="84"/>
+                                <ColumnDefinition Width="120"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="1" Text="NAME" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                             <TextBlock Grid.Column="2" Text="CATEGORY" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
@@ -116,11 +116,17 @@
                     </Border>
 
                     <!-- Scrollable rows -->
-                    <Border Grid.Row="2"
+                    <Border x:Name="SoundsAreaBorder"
+                            Grid.Row="2"
                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{DynamicResource CardBorderBrush}"
                             BorderThickness="1,0,1,1"
-                            CornerRadius="0,0,6,6">
+                            CornerRadius="0,0,6,6"
+                            AllowDrop="True"
+                            DragEnter="SoundsArea_DragEnter"
+                            DragOver="SoundsArea_DragOver"
+                            DragLeave="SoundsArea_DragLeave"
+                            Drop="SoundsArea_Drop">
                         <ScrollViewer VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
                             <StackPanel>

@@ -54,13 +54,34 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // bounds can be applied before the window is ever shown (no visible jump).
     public MainWindow()
     {
-        Debug.WriteLine("[Startup] Constructor start");
-        _settings = AppSettingsService.Load();
-        Debug.WriteLine("[Startup] Settings loaded");
-        InitializeComponent();
-        Debug.WriteLine("[Startup] InitializeComponent done");
+        StartupLogger.Log("Constructor begin");
+
+        try
+        {
+            _settings = AppSettingsService.Load();
+            StartupLogger.Log("Settings loaded");
+        }
+        catch (Exception ex)
+        {
+            StartupLogger.Log($"Settings load FAILED ({ex.GetType().Name}): {ex.Message} — using defaults");
+            _settings = new AppSettings();
+        }
+
+        try
+        {
+            StartupLogger.Log("InitializeComponent begin");
+            InitializeComponent();
+            StartupLogger.Log("InitializeComponent done");
+        }
+        catch (Exception ex)
+        {
+            StartupLogger.Log($"InitializeComponent FAILED ({ex.GetType().Name}): {ex.Message}");
+            StartupLogger.Log($"  Stack: {ex.StackTrace}");
+            throw; // propagate so App_Startup shows an error dialog
+        }
+
         RestoreWindowBounds();
-        Debug.WriteLine("[Startup] Constructor end");
+        StartupLogger.Log("Constructor end");
     }
 
     private void RestoreWindowBounds()
@@ -378,33 +399,33 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // deferred until ContextIdle in MainWindow_Loaded.
     protected override void OnSourceInitialized(EventArgs e)
     {
-        Debug.WriteLine("[Startup] OnSourceInitialized start");
+        StartupLogger.Log("OnSourceInitialized begin");
         base.OnSourceInitialized(e);
         try
         {
             var helper = new System.Windows.Interop.WindowInteropHelper(this);
             var hwnd   = helper.Handle;
-            Debug.WriteLine($"[Startup] HWND = 0x{hwnd:X16} {(hwnd == IntPtr.Zero ? "— ZERO, hotkeys will fail" : "OK")}");
+            StartupLogger.Log($"HWND = 0x{hwnd:X16} {(hwnd == IntPtr.Zero ? "— ZERO, hotkeys will fail" : "OK")}");
 
             var src = System.Windows.Interop.HwndSource.FromHwnd(hwnd);
-            Debug.WriteLine($"[Startup] HwndSource = {(src is null ? "NULL — hotkeys will fail" : "OK")}");
+            StartupLogger.Log($"HwndSource = {(src is null ? "NULL — hotkeys will fail" : "OK")}");
 
             _hotkeys = new HotkeyManager(this);
-            Debug.WriteLine("[Startup] HotkeyManager created");
+            StartupLogger.Log("HotkeyManager created");
 
             _hotkeyService = new HotkeyService(_hotkeys);
             _hotkeyService.HotkeyTriggered        += OnSoundHotkeyTriggered;
             _hotkeyService.StopAllHotkeyTriggered += OnStopAllHotkeyTriggered;
-            Debug.WriteLine("[Startup] HotkeyService ready");
+            StartupLogger.Log("HotkeyService ready");
         }
         catch (Exception ex)
         {
             _hotkeys       = null;
             _hotkeyService = null;
-            Debug.WriteLine($"[Startup] Hotkey init FAILED ({ex.GetType().Name}): {ex.Message}");
-            Debug.WriteLine($"[Startup] {ex.StackTrace}");
+            StartupLogger.Log($"Hotkey init FAILED ({ex.GetType().Name}): {ex.Message}");
+            StartupLogger.Log($"  Stack: {ex.StackTrace}");
         }
-        Debug.WriteLine("[Startup] OnSourceInitialized end");
+        StartupLogger.Log("OnSourceInitialized end");
     }
 
     private void OnSoundHotkeyTriggered(Guid soundId)
@@ -419,59 +440,59 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // ── Loaded: sound library + device lists ──────────────────────────────────
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        Debug.WriteLine("[Startup] Loaded start");
+        StartupLogger.Log("MainWindow_Loaded begin");
         try
         {
+            StartupLogger.Log("LoadLibrary begin");
             LoadLibrary();
-            Debug.WriteLine("[Startup] LoadLibrary done");
+            StartupLogger.Log("LoadLibrary done");
 
+            StartupLogger.Log("PopulateDeviceLists begin");
             PopulateDeviceLists();
-            Debug.WriteLine("[Startup] PopulateDeviceLists done");
+            StartupLogger.Log("PopulateDeviceLists done");
 
+            StartupLogger.Log("PopulateMicList begin");
             PopulateMicList();
-            Debug.WriteLine("[Startup] PopulateMicList done");
+            StartupLogger.Log("PopulateMicList done");
 
-            // Mic passthrough depends on both the virtual engine and the mic
-            // device list being ready, so it's restored only after both calls above.
+            StartupLogger.Log("RestoreMicPassthroughState begin");
             RestoreMicPassthroughState();
+            StartupLogger.Log("RestoreSelectedTab begin");
             RestoreSelectedTab();
+            StartupLogger.Log("RestoreBehaviorSettings begin");
             RestoreBehaviorSettings();
+            StartupLogger.Log("SyncStartupRegistryPath begin");
             SyncStartupRegistryPath();
+            StartupLogger.Log("InitializeTrayIcon begin");
             InitializeTrayIcon();
+            StartupLogger.Log("InitializeTrayIcon done");
             AboutVersionText.Text    = $"Version {GetAppVersion()}";
             AboutDataFolderText.Text = AppPaths.AppDataDir;
 
-            // Defer hotkey registration until the dispatcher is idle so that
-            // WPF-UI (Mica backdrop, DWM attributes, title-bar composition) has
-            // fully finished its own Loaded/Render work.  RegisterHotKey called
-            // during the Loaded burst can fail transiently; ContextIdle fires
-            // only after all pending Render/DataBind/Normal priority items drain.
-            // The lambda has its own try/catch so an exception here never
-            // crashes the process — only a status-bar message is shown.
-            Debug.WriteLine("[Startup] Loaded end — queuing deferred hotkey registration");
+            StartupLogger.Log("MainWindow_Loaded end — queuing deferred hotkey registration");
             Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
             {
-                Debug.WriteLine("[Startup] Deferred hotkey registration start");
+                StartupLogger.Log("Deferred hotkey registration begin");
                 try
                 {
                     ReregisterAllHotkeysAndReport("startup");
-                    Debug.WriteLine("[Startup] Deferred hotkey registration complete");
+                    StartupLogger.Log("Deferred hotkey registration done");
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[Startup] Deferred hotkey registration FAILED ({ex.GetType().Name}): {ex.Message}");
-                    Debug.WriteLine($"[Startup] {ex.StackTrace}");
+                    StartupLogger.Log($"Deferred hotkey registration FAILED ({ex.GetType().Name}): {ex.Message}");
+                    StartupLogger.Log($"  Stack: {ex.StackTrace}");
                     try { StatusText.Text = $"Hotkey startup error: {ex.Message}"; } catch { }
                 }
             }));
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[Startup] Loaded FAILED ({ex.GetType().Name}): {ex.Message}");
-            Debug.WriteLine($"[Startup] {ex.StackTrace}");
+            StartupLogger.Log($"MainWindow_Loaded FAILED ({ex.GetType().Name}): {ex.Message}");
+            StartupLogger.Log($"  Stack: {ex.StackTrace}");
             try { StatusText.Text = $"Startup error: {ex.Message}"; } catch { }
         }
-        Debug.WriteLine("[Startup] Loaded handler returning");
+        StartupLogger.Log("MainWindow_Loaded handler returning");
     }
 
     private void RestoreMicPassthroughState()
@@ -1507,6 +1528,81 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         StopMicPassthrough();
         StartMicPassthrough();
+    }
+
+    // ── Import / Export Library Backup ────────────────────────────────────────
+
+    private void ExportBackup_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title           = "Export Sound Library Backup",
+            Filter          = "SoundPad Backup (*.zip)|*.zip",
+            FileName        = $"SoundPad-Backup-{DateTime.Now:yyyy-MM-dd}.zip",
+            DefaultExt      = ".zip",
+            AddExtension    = true,
+            OverwritePrompt = true
+        };
+
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            LibraryBackupService.Export(_library, dialog.FileName);
+            StatusText.Text = $"Backup exported: {Path.GetFileName(dialog.FileName)}";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Export failed: {ex.Message}";
+        }
+    }
+
+    private void ImportBackup_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title  = "Import Sound Library Backup",
+            Filter = "SoundPad Backup (*.zip)|*.zip"
+        };
+
+        if (dialog.ShowDialog() != true) return;
+
+        ImportResult result;
+        try
+        {
+            result = LibraryBackupService.Import(dialog.FileName, _library, _settings.StopAllHotkey);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Import failed: {ex.Message}";
+            return;
+        }
+
+        foreach (var item in result.NewItems)
+        {
+            if (File.Exists(item.FilePath))
+            {
+                try   { _cachedSounds[item.Id] = new CachedSound(item.FilePath); }
+                catch (Exception ex) { Debug.WriteLine($"[Import] Could not preload '{item.DisplayName}': {ex.Message}"); }
+            }
+            _library.Add(item);
+        }
+
+        if (result.NewItems.Count > 0)
+        {
+            SoundLibraryService.Save(_library);
+            RefreshCategoryFilter();
+            FilterSoundsPanel();
+            ReregisterAllHotkeysAndReport("import");
+        }
+
+        var parts = new List<string> { $"Imported {result.NewItems.Count} sound(s)" };
+        if (result.SkippedDuplicates > 0)
+            parts.Add($"skipped {result.SkippedDuplicates} duplicate(s)");
+        if (result.ClearedHotkeys > 0)
+            parts.Add($"cleared {result.ClearedHotkeys} conflicting hotkey(s)");
+
+        StatusText.Text = string.Join(". ", parts) + ".";
     }
 
     // ── Drag and drop ──────────────────────────────────────────────────────────

@@ -297,6 +297,37 @@
                             </StackPanel>
                         </ui:Card>
 
+                        <ui:Card Padding="20" Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="LIBRARY BACKUP"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,8"/>
+                                <TextBlock Text="Export your sound library and restore it on any device."
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Margin="0,0,0,16"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:Button Content="Export Backup"
+                                               Appearance="Secondary"
+                                               Click="ExportBackup_Click">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="ArrowDownload20"/>
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                    <ui:Button Content="Import Backup"
+                                               Appearance="Secondary"
+                                               Margin="12,0,0,0"
+                                               Click="ImportBackup_Click">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="ArrowUpload20"/>
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                </StackPanel>
+                            </StackPanel>
+                        </ui:Card>
+
                         <ui:Card Padding="20">
                             <StackPanel>
                                 <TextBlock Text="ABOUT"

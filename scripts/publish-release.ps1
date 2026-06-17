@@ -1,14 +1,9 @@
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Publishes SoundPad as a self-contained single-file win-x64 exe.
-
-.DESCRIPTION
-    Cleans artifacts/publish, runs dotnet publish in Release mode, and prints
-    the path of the produced exe.  Called by build-installer.ps1 but can also
-    be run directly when you only need a published binary (no installer).
-
 .OUTPUTS
-    artifacts/publish/SoundPad.App.exe  (+ required WPF native DLLs)
+    artifacts\publish\SoundPad.App.exe  (plus required WPF native DLLs)
 #>
 
 $ErrorActionPreference = "Stop"
@@ -17,15 +12,15 @@ $root    = Split-Path $PSScriptRoot -Parent
 $project = Join-Path $root "SoundPad.App\SoundPad.App.csproj"
 $outDir  = Join-Path $root "artifacts\publish"
 
-# ── Clean ─────────────────────────────────────────────────────────────────────
+# Clean old output
 Write-Host ""
 Write-Host "Cleaning old publish output..." -ForegroundColor Cyan
 if (Test-Path $outDir) {
     Remove-Item $outDir -Recurse -Force
 }
 
-# ── Publish ───────────────────────────────────────────────────────────────────
-Write-Host "Publishing SoundPad (Release · win-x64 · self-contained · single-file)..." -ForegroundColor Cyan
+# Publish
+Write-Host "Publishing SoundPad (Release / win-x64 / self-contained / single-file)..." -ForegroundColor Cyan
 Write-Host ""
 
 dotnet publish $project `
@@ -43,11 +38,11 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# ── Verify ────────────────────────────────────────────────────────────────────
+# Verify exe exists
 $exe = Join-Path $outDir "SoundPad.App.exe"
 if (-not (Test-Path $exe)) {
     Write-Host ""
-    Write-Host "ERROR: Publish appeared to succeed but SoundPad.App.exe was not found in:" -ForegroundColor Red
+    Write-Host "ERROR: SoundPad.App.exe not found in output directory:" -ForegroundColor Red
     Write-Host "  $outDir" -ForegroundColor Red
     exit 1
 }

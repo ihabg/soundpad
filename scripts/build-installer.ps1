@@ -1,24 +1,19 @@
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Publishes SoundPad and compiles the Inno Setup installer.
-
-.DESCRIPTION
-    1. Runs publish-release.ps1 to produce a clean win-x64 publish output.
-    2. Locates ISCC.exe (Inno Setup 6 or 7).
-    3. Compiles installer/SoundPad.iss and places the result in
-       artifacts/installer/SoundPad-Setup-1.0.0.exe.
-
 .REQUIREMENTS
-    Inno Setup 6 or 7 — https://jrsoftware.org/isinfo.php
+    Inno Setup 6 or 7 must be installed.
+    Download from: https://jrsoftware.org/isinfo.php
 #>
 
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path $PSScriptRoot -Parent
 
-# ── Step 1: Publish ───────────────────────────────────────────────────────────
+# Step 1 - Publish
 Write-Host ""
-Write-Host "Step 1 / 2 — Publishing application..." -ForegroundColor Cyan
+Write-Host "Step 1 / 2 - Publishing application..." -ForegroundColor Cyan
 & "$PSScriptRoot\publish-release.ps1"
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
@@ -26,9 +21,9 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# ── Step 2: Locate Inno Setup ─────────────────────────────────────────────────
+# Step 2 - Find Inno Setup
 Write-Host ""
-Write-Host "Step 2 / 2 — Building installer..." -ForegroundColor Cyan
+Write-Host "Step 2 / 2 - Building installer..." -ForegroundColor Cyan
 
 $isccCandidates = @(
     "C:\Program Files (x86)\Inno Setup 7\ISCC.exe",
@@ -37,29 +32,37 @@ $isccCandidates = @(
     "C:\Program Files\Inno Setup 6\ISCC.exe"
 )
 
-$iscc = $isccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+$isccPath = $null
+foreach ($candidate in $isccCandidates) {
+    if (Test-Path $candidate) {
+        $isccPath = $candidate
+        break
+    }
+}
 
-if (-not $iscc) {
+if (-not $isccPath) {
     Write-Host ""
-    Write-Host "ERROR: Inno Setup compiler (ISCC.exe) not found." -ForegroundColor Red
+    Write-Host "ERROR: Inno Setup compiler (ISCC.exe) was not found." -ForegroundColor Red
     Write-Host ""
     Write-Host "Install Inno Setup from:  https://jrsoftware.org/isinfo.php" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Searched:" -ForegroundColor Gray
-    $isccCandidates | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+    Write-Host "Searched these paths:" -ForegroundColor Gray
+    foreach ($candidate in $isccCandidates) {
+        Write-Host "  $candidate" -ForegroundColor Gray
+    }
     exit 1
 }
 
-Write-Host "  Found: $iscc" -ForegroundColor Gray
+Write-Host "  Found: $isccPath" -ForegroundColor Gray
 
-# ── Compile ───────────────────────────────────────────────────────────────────
-$issFile      = Join-Path $root "installer\SoundPad.iss"
+# Compile installer
+$issPath      = Join-Path $root "installer\SoundPad.iss"
 $outInstaller = Join-Path $root "artifacts\installer\SoundPad-Setup-1.0.0.exe"
 
-Write-Host "  Script: $issFile" -ForegroundColor Gray
+Write-Host "  Script: $issPath" -ForegroundColor Gray
 Write-Host ""
 
-& $iscc $issFile
+& $isccPath $issPath
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
@@ -67,7 +70,6 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# ── Done ──────────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "Installer built successfully." -ForegroundColor Green
 Write-Host "  $outInstaller" -ForegroundColor Yellow

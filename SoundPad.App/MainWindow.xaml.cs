@@ -1080,8 +1080,18 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        PlaySound(sound, item.DisplayName, item.Volume);
+        PlaySound(sound, item.DisplayName, ConvertUiVolumeToGain(item.Volume));
     }
+
+    // Maps a 0–1 UI volume to a 0–1 audio gain using a squared (power-2) curve.
+    // Human loudness perception is roughly logarithmic, so a linear gain slider
+    // feels "flat" — moving from 100% to 50% barely sounds different.
+    // Squaring the value maps the midpoint (0.5) to a gain of 0.25 (−12 dB),
+    // which matches what most people expect "half volume" to sound like.
+    // The stored SoundItem.Volume (0–1) is still the raw UI value; the curve
+    // is applied only at playback so existing JSON files are unaffected.
+    private static float ConvertUiVolumeToGain(float uiVolume)
+        => uiVolume * uiVolume;
 
     private void PlaySound(CachedSound sound, string label, float volume = 1.0f)
     {

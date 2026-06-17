@@ -24,6 +24,15 @@ namespace SoundPad.App.Audio;
 //   so PCM must be converted first.
 public class MicPassthrough : IDisposable
 {
+    // 20 ms per capture buffer keeps end-to-end latency low while remaining
+    // stable on all hardware.  Extreme values (< 10 ms) risk stutter; 50 ms
+    // (the old default) adds unnecessary delay before the mixer hears the audio.
+    private const int MicBufferMilliseconds = 20;
+
+    // Two buffers in the WaveIn ring.  NAudio's minimum is 2; the old default
+    // of 3 adds an extra buffer's worth of latency with no benefit here.
+    private const int MicNumberOfBuffers = 2;
+
     private WaveInEvent?          _waveIn;
     private BufferedWaveProvider? _buffer;
     private VolumeSampleProvider? _volumeProvider; // top of chain — added/removed from mixer
@@ -39,22 +48,23 @@ public class MicPassthrough : IDisposable
     }
 
     // Opens the microphone and starts routing its audio into the engine's mixer.
-    // Throws MmException if the device does not support 44100 Hz mono 16-bit PCM.
+    // Throws MmException if the device does not support the requested capture format.
     public void Start(int micDeviceNumber)
     {
         Stop(); // clean up any previous session before starting a new one
 
-        // Capture at 44100 Hz mono 16-bit PCM.
-        // WaveFormat(sampleRate, channels) defaults to 16-bit PCM.
-        // Windows ACM will convert from the hardware's native format if needed,
-        // so the BufferedWaveProvider always receives data in exactly this format.
-        var captureFormat = new WaveFormat(44100, 1);
+        // Capture at 48 000 Hz mono 16-bit PCM — matches the mixer's target rate
+        // (CachedSound.TargetFormat = 48 kHz) and VB-CABLE's native rate, so the
+        // resampling step in the conversion chain below becomes a no-op.
+        // Windows ACM converts from the hardware's native format if needed.
+        var captureFormat = new WaveFormat(CachedSound.TargetFormat.SampleRate, 1);
 
         _waveIn = new WaveInEvent
         {
             DeviceNumber       = micDeviceNumber,
             WaveFormat         = captureFormat,
-            BufferMilliseconds = 50  // 50 ms between DataAvailable callbacks — low latency
+            BufferMilliseconds = MicBufferMilliseconds,
+            NumberOfBuffers    = MicNumberOfBuffers
         };
 
         _buffer = new BufferedWaveProvider(captureFormat)

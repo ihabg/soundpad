@@ -8,10 +8,11 @@ namespace SoundPad.App.Audio;
 // the disk is never touched again for this sound.
 public class CachedSound
 {
-    // All sounds are decoded to this format so they can all feed the
-    // same mixer without format-mismatch errors.
+    // All sounds are decoded to this format so they can all feed the same mixer
+    // without format-mismatch errors.  48 kHz matches VB-CABLE's and Discord's
+    // native rate, so the mic passthrough chain needs no resampling step.
     public static readonly WaveFormat TargetFormat =
-        WaveFormat.CreateIeeeFloatWaveFormat(44100, 2);
+        WaveFormat.CreateIeeeFloatWaveFormat(48000, 2);
 
     public float[]    AudioData  { get; }
     public WaveFormat WaveFormat => TargetFormat;
@@ -29,9 +30,9 @@ public class CachedSound
         if (reader.WaveFormat.Channels == 1)
             provider = new MonoToStereoSampleProvider(provider);
 
-        // Step 2 — if the sample rate is not 44100 Hz, resample it.
-        if (reader.WaveFormat.SampleRate != 44100)
-            provider = new WdlResamplingSampleProvider(provider, 44100);
+        // Step 2 — resample to the target rate if the source file differs.
+        if (reader.WaveFormat.SampleRate != TargetFormat.SampleRate)
+            provider = new WdlResamplingSampleProvider(provider, TargetFormat.SampleRate);
 
         // Step 3 — read every decoded sample into a List, then freeze as an array.
         // Buffer size = 1 second of stereo audio at 44100 Hz = 88 200 floats.

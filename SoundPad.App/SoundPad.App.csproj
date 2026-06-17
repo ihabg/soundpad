@@ -23,6 +23,19 @@
     <PackageReference Include="WPF-UI" Version="4.3.0" />
   </ItemGroup>
 
+  <!-- Embed app.ico into the exe (shows in File Explorer / taskbar) when present.
+       Build succeeds with no icon file — just drop Resources\app.ico here later.
+       The runtime GetAppIcon() also checks for this file to set the WPF Window.Icon
+       and the tray icon, so all four surfaces use the same image. -->
+  <PropertyGroup Condition="Exists('Resources\app.ico')">
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('Resources\app.ico')">
+    <Content Include="Resources\app.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
   <!-- Copy everything inside the Sounds folder next to the .exe at build time -->
   <ItemGroup>
     <Content Include="Sounds\**\*.*">

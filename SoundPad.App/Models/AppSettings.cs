@@ -22,6 +22,8 @@ public class AppSettings
 
     public int SelectedTabIndex { get; set; } = 0;
 
+    public bool InterruptPreviousSounds { get; set; } = false;
+
     public bool MinimizeToTray   { get; set; } = false;
     public bool CloseToTray      { get; set; } = false;
     public bool StartWithWindows { get; set; } = false;

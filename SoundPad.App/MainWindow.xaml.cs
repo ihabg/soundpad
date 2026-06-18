@@ -207,8 +207,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void RestoreBehaviorSettings()
     {
-        MinimizeToTraySwitch.IsChecked = _settings.MinimizeToTray;
-        CloseToTraySwitch.IsChecked    = _settings.CloseToTray;
+        InterruptSoundsSwitch.IsChecked = _settings.InterruptPreviousSounds;
+        MinimizeToTraySwitch.IsChecked  = _settings.MinimizeToTray;
+        CloseToTraySwitch.IsChecked     = _settings.CloseToTray;
 
         // Sync the toggle with the actual registry state so it stays accurate
         // even if the user manually edited the registry or moved the exe.
@@ -229,6 +230,18 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     }
 
     // ── Behavior toggle handlers ───────────────────────────────────────────────
+
+    private void InterruptSoundsSwitch_Checked(object sender, RoutedEventArgs e)
+    {
+        _settings.InterruptPreviousSounds = true;
+        SaveSettings();
+    }
+
+    private void InterruptSoundsSwitch_Unchecked(object sender, RoutedEventArgs e)
+    {
+        _settings.InterruptPreviousSounds = false;
+        SaveSettings();
+    }
 
     private void MinimizeToTraySwitch_Checked(object sender, RoutedEventArgs e)
     {
@@ -1227,6 +1240,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (CategoryFilter?.SelectedItem as string == "Recent")
             FilterSoundsPanel();
+
+        if (_settings.InterruptPreviousSounds)
+        {
+            _monitorEngine?.StopAll();
+            _virtualEngine?.StopAll();
+        }
 
         PlaySound(sound, item.DisplayName, ConvertUiVolumeToGain(item.Volume));
     }

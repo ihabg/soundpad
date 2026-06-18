@@ -272,6 +272,27 @@
 
                         <ui:Card Padding="20" Margin="0,0,0,14">
                             <StackPanel>
+                                <TextBlock Text="SOUND PLAYBACK"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,16"/>
+
+                                <ui:ToggleSwitch x:Name="InterruptSoundsSwitch"
+                                                 Content="Interrupt previous sound"
+                                                 Checked="InterruptSoundsSwitch_Checked"
+                                                 Unchecked="InterruptSoundsSwitch_Unchecked"/>
+
+                                <TextBlock Text="When on, playing a sound stops any currently playing sounds first. Mic passthrough is unaffected."
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </ui:Card>
+
+                        <ui:Card Padding="20" Margin="0,0,0,14">
+                            <StackPanel>
                                 <TextBlock Text="BEHAVIOR"
                                            FontSize="11"
                                            FontWeight="SemiBold"

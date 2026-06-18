@@ -49,6 +49,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // rather than hide to tray when CloseToTray is enabled.
     private bool _isExiting;
 
+    // URL of the latest GitHub release, populated when an update check returns UpdateAvailable.
+    private string? _lastReleaseUrl;
+
     // ── Constructor ────────────────────────────────────────────────────────────
     // Settings are loaded before InitializeComponent so the saved window
     // bounds can be applied before the window is ever shown (no visible jump).
@@ -208,6 +211,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private void RestoreBehaviorSettings()
     {
         InterruptSoundsSwitch.IsChecked = _settings.InterruptPreviousSounds;
+        AutoUpdateSwitch.IsChecked      = _settings.EnableAutoUpdateChecks;
         MinimizeToTraySwitch.IsChecked  = _settings.MinimizeToTray;
         CloseToTraySwitch.IsChecked     = _settings.CloseToTray;
 
@@ -241,6 +245,77 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         _settings.InterruptPreviousSounds = false;
         SaveSettings();
+    }
+
+    private void AutoUpdateSwitch_Checked(object sender, RoutedEventArgs e)
+    {
+        _settings.EnableAutoUpdateChecks = true;
+        SaveSettings();
+    }
+
+    private void AutoUpdateSwitch_Unchecked(object sender, RoutedEventArgs e)
+    {
+        _settings.EnableAutoUpdateChecks = false;
+        SaveSettings();
+    }
+
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        CheckUpdatesButton.IsEnabled = false;
+        StatusText.Text = "Checking for updates...";
+
+        var result = await UpdateCheckService.CheckAsync(GetAppVersion());
+
+        switch (result.Status)
+        {
+            case UpdateStatus.UpdateAvailable:
+                _lastReleaseUrl = result.ReleaseUrl;
+                StatusText.Text = $"Update available: {result.LatestTag}  — click Open Releases Page to download.";
+                break;
+            case UpdateStatus.UpToDate:
+                StatusText.Text = "SoundPad is up to date.";
+                break;
+            default:
+                StatusText.Text = "Could not check for updates. Check your internet connection.";
+                break;
+        }
+
+        CheckUpdatesButton.IsEnabled = true;
+    }
+
+    private void OpenReleases_Click(object sender, RoutedEventArgs e)
+    {
+        var url = _lastReleaseUrl ?? "https://github.com/ihabg/soundpad/releases";
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch { }
+    }
+
+    private async Task RunAutoUpdateCheckAsync()
+    {
+        StartupLogger.Log("Auto update check begin");
+        try
+        {
+            var result = await UpdateCheckService.CheckAsync(GetAppVersion());
+
+            // Continuation runs back on the UI thread (SynchronizationContext captured at call site).
+            _settings.LastUpdateCheckUtc = DateTime.UtcNow;
+            SaveSettings();
+
+            StartupLogger.Log($"Auto update check result: {result.Status}");
+
+            if (result.Status == UpdateStatus.UpdateAvailable)
+            {
+                _lastReleaseUrl = result.ReleaseUrl;
+                StatusText.Text = $"Update available: {result.LatestTag}  — click Open Releases Page to download.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StartupLogger.Log($"Auto update check unexpected error: {ex.Message}");
+        }
     }
 
     private void MinimizeToTraySwitch_Checked(object sender, RoutedEventArgs e)
@@ -498,6 +573,18 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                     try { StatusText.Text = $"Hotkey startup error: {ex.Message}"; } catch { }
                 }
             }));
+
+            // Auto update check: only when enabled, and only once per 24 hours.
+            // Runs at ApplicationIdle so it never competes with startup rendering.
+            if (_settings.EnableAutoUpdateChecks)
+            {
+                var lastCheck = _settings.LastUpdateCheckUtc;
+                if (lastCheck is null || (DateTime.UtcNow - lastCheck.Value).TotalHours >= 24)
+                {
+                    Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,
+                        new Action(() => _ = RunAutoUpdateCheckAsync()));
+                }
+            }
         }
         catch (Exception ex)
         {

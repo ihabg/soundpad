@@ -24,6 +24,9 @@ public class AppSettings
 
     public bool InterruptPreviousSounds { get; set; } = false;
 
+    public bool      EnableAutoUpdateChecks { get; set; } = false;
+    public DateTime? LastUpdateCheckUtc     { get; set; }
+
     public bool MinimizeToTray   { get; set; } = false;
     public bool CloseToTray      { get; set; } = false;
     public bool StartWithWindows { get; set; } = false;

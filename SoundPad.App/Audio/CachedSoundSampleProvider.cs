@@ -12,6 +12,8 @@ public class CachedSoundSampleProvider : ISampleProvider
 
     public WaveFormat WaveFormat => _sound.WaveFormat;
 
+    public bool IsFinished => _position >= _sound.AudioData.Length;
+
     public CachedSoundSampleProvider(CachedSound sound)
     {
         _sound    = sound;

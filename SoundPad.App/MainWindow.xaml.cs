@@ -52,6 +52,24 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // URL of the latest GitHub release, populated when an update check returns UpdateAvailable.
     private string? _lastReleaseUrl;
 
+    // ── Active playback tracking ──────────────────────────────────────────────
+    private sealed record RowControls(Border Row, UiButton PlayStopButton);
+
+    private sealed class ActivePlayback
+    {
+        public Guid            SoundId       { get; init; }
+        public PlaybackHandle? MonitorHandle { get; init; }
+        public PlaybackHandle? VirtualHandle { get; init; }
+
+        public bool IsFinished =>
+            (MonitorHandle is null || MonitorHandle.IsFinished) &&
+            (VirtualHandle is null || VirtualHandle.IsFinished);
+    }
+
+    private readonly Dictionary<Guid, ActivePlayback> _activePlaybacks = new();
+    private readonly Dictionary<Guid, RowControls>    _rowControls     = new();
+    private DispatcherTimer?                           _playbackMonitor;
+
     // ── Constructor ────────────────────────────────────────────────────────────
     // Settings are loaded before InitializeComponent so the saved window
     // bounds can be applied before the window is ever shown (no visible jump).
@@ -800,6 +818,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             ? _library.OrderByDescending(x => x.LastPlayedAt ?? DateTime.MinValue)
             : _library;
 
+        _rowControls.Clear();
         SoundsPanel.Children.Clear();
 
         foreach (var item in source)
@@ -820,6 +839,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
             SoundsPanel.Children.Add(BuildSoundRow(item));
         }
+
+        foreach (var id in _activePlaybacks.Keys)
+            UpdateRowState(id, active: true);
 
         bool panelEmpty = SoundsPanel.Children.Count == 0;
         EmptyLibraryText.Visibility = panelEmpty ? Visibility.Visible : Visibility.Collapsed;
@@ -887,8 +909,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var grid = new Grid();
         AddRowColumns(grid);
 
-        // ── Col 0: Play ──────────────────────────────────────────────────
-        var playBtn = new UiButton
+        // ── Col 0: Play / Stop toggle ────────────────────────────────────
+        var playStopBtn = new UiButton
         {
             Appearance          = ControlAppearance.Transparent,
             Padding             = new Thickness(8),
@@ -896,9 +918,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             VerticalAlignment   = VerticalAlignment.Center,
             Icon                = new UiSymbolIcon { Symbol = SymbolRegular.Play20 }
         };
-        playBtn.Click += (_, _) => PlayLibraryItem(capturedItem);
-        Grid.SetColumn(playBtn, 0);
-        grid.Children.Add(playBtn);
+        playStopBtn.Click += (_, _) =>
+        {
+            if (_activePlaybacks.ContainsKey(capturedItem.Id))
+                StopSoundById(capturedItem.Id);
+            else
+                PlayLibraryItem(capturedItem);
+        };
+        Grid.SetColumn(playStopBtn, 0);
+        grid.Children.Add(playStopBtn);
 
         // ── Col 1: Name ──────────────────────────────────────────────────
         var nameBlock = new TextBlock
@@ -1054,13 +1082,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             Child           = grid
         };
         var hoverBg = (Brush)Application.Current.Resources["ControlFillColorDefaultBrush"];
-        row.MouseEnter += (_, _) => row.Background = hoverBg;
-        row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+        row.MouseEnter += (_, _) => { if (!_activePlaybacks.ContainsKey(capturedItem.Id)) row.Background = hoverBg; };
+        row.MouseLeave += (_, _) => { if (!_activePlaybacks.ContainsKey(capturedItem.Id)) row.Background = Brushes.Transparent; };
         row.MouseLeftButtonDown += (_, e) =>
         {
             if (e.ClickCount == 2)
                 PlayLibraryItem(capturedItem);
         };
+
+        _rowControls[item.Id] = new RowControls(row, playStopBtn);
         return row;
     }
 
@@ -1314,6 +1344,92 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     //  PLAYBACK
     // ══════════════════════════════════════════════════════════════════════════
 
+    // ── Active playback helpers ────────────────────────────────────────────────
+
+    private void EnsurePlaybackMonitor()
+    {
+        if (_playbackMonitor is not null)
+            return;
+
+        _playbackMonitor = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        _playbackMonitor.Tick += PlaybackMonitor_Tick;
+        _playbackMonitor.Start();
+    }
+
+    private void PlaybackMonitor_Tick(object? sender, EventArgs e)
+    {
+        var finished = _activePlaybacks
+            .Where(kv => kv.Value.IsFinished)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        foreach (var id in finished)
+        {
+            _activePlaybacks.Remove(id);
+            UpdateRowState(id, active: false);
+        }
+
+        if (_activePlaybacks.Count == 0)
+        {
+            _playbackMonitor?.Stop();
+            _playbackMonitor = null;
+        }
+    }
+
+    private static readonly Color _fallbackAccent = Color.FromRgb(0, 120, 215);
+
+    private void UpdateRowState(Guid soundId, bool active)
+    {
+        if (!_rowControls.TryGetValue(soundId, out var ctrl))
+            return;
+
+        if (active)
+        {
+            var accent = (Application.Current.Resources["SystemAccentColorPrimaryBrush"] as SolidColorBrush)?.Color ?? _fallbackAccent;
+            ctrl.Row.Background = new SolidColorBrush(accent) { Opacity = 0.15 };
+        }
+        else
+        {
+            ctrl.Row.Background = Brushes.Transparent;
+        }
+
+        ctrl.PlayStopButton.Icon = new UiSymbolIcon { Symbol = active ? SymbolRegular.Stop20 : SymbolRegular.Play20 };
+    }
+
+    private void StopSoundById(Guid soundId)
+    {
+        if (!_activePlaybacks.TryGetValue(soundId, out var playback))
+            return;
+
+        if (playback.MonitorHandle is not null)
+            _monitorEngine?.StopOne(playback.MonitorHandle.TopProvider);
+        if (playback.VirtualHandle is not null)
+            _virtualEngine?.StopOne(playback.VirtualHandle.TopProvider);
+
+        _activePlaybacks.Remove(soundId);
+        UpdateRowState(soundId, active: false);
+
+        if (_activePlaybacks.Count == 0)
+        {
+            _playbackMonitor?.Stop();
+            _playbackMonitor = null;
+        }
+    }
+
+    private void ClearAllActivePlaybacks()
+    {
+        _monitorEngine?.StopAll();
+        _virtualEngine?.StopAll();
+
+        var ids = _activePlaybacks.Keys.ToList();
+        _activePlaybacks.Clear();
+        foreach (var id in ids)
+            UpdateRowState(id, active: false);
+
+        _playbackMonitor?.Stop();
+        _playbackMonitor = null;
+    }
+
     private void PlayLibraryItem(SoundItem item)
     {
         if (!_cachedSounds.TryGetValue(item.Id, out var sound))
@@ -1329,12 +1445,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             FilterSoundsPanel();
 
         if (_settings.InterruptPreviousSounds)
-        {
-            _monitorEngine?.StopAll();
-            _virtualEngine?.StopAll();
-        }
+            ClearAllActivePlaybacks();
 
-        PlaySound(sound, item.DisplayName, ConvertUiVolumeToGain(item.Volume));
+        PlaySound(item.Id, sound, item.DisplayName, ConvertUiVolumeToGain(item.Volume));
     }
 
     // Maps a 0–1 UI volume to a 0–1 audio gain using a squared (power-2) curve.
@@ -1347,7 +1460,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private static float ConvertUiVolumeToGain(float uiVolume)
         => uiVolume * uiVolume;
 
-    private void PlaySound(CachedSound sound, string label, float volume = 1.0f)
+    private void PlaySound(Guid soundId, CachedSound sound, string label, float volume = 1.0f)
     {
         if (_monitorEngine is null && _virtualEngine is null)
         {
@@ -1357,7 +1470,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         try
         {
-            _monitorEngine?.Play(sound, volume);
+            PlaybackHandle? monitorHandle = _monitorEngine?.Play(sound, volume);
 
             var monitorDevice = MonitorComboBox.SelectedItem as AudioDevice;
             var virtualDevice = VirtualComboBox.SelectedItem as AudioDevice;
@@ -1365,8 +1478,28 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             bool sameDevice = _virtualEngine is not null
                            && AudioDevice.AreSameOutputDevice(monitorDevice, virtualDevice);
 
-            if (!sameDevice)
-                _virtualEngine?.Play(sound, volume);
+            PlaybackHandle? virtualHandle = sameDevice ? null : _virtualEngine?.Play(sound, volume);
+
+            // Stop the previous instance of this same sound before registering the new one.
+            if (_activePlaybacks.TryGetValue(soundId, out var previous))
+            {
+                if (previous.MonitorHandle is not null)
+                    _monitorEngine?.StopOne(previous.MonitorHandle.TopProvider);
+                if (previous.VirtualHandle is not null)
+                    _virtualEngine?.StopOne(previous.VirtualHandle.TopProvider);
+            }
+
+            if (monitorHandle is not null || virtualHandle is not null)
+            {
+                _activePlaybacks[soundId] = new ActivePlayback
+                {
+                    SoundId       = soundId,
+                    MonitorHandle = monitorHandle,
+                    VirtualHandle = virtualHandle,
+                };
+                UpdateRowState(soundId, active: true);
+                EnsurePlaybackMonitor();
+            }
 
             StatusText.Text = sameDevice
                 ? $"▶ {label}  (Virtual = Monitor, playing once)"
@@ -1387,8 +1520,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // engine's _active list), so it is unaffected and keeps working.
     private void StopAllSounds()
     {
-        _monitorEngine?.StopAll();
-        _virtualEngine?.StopAll();
+        ClearAllActivePlaybacks();
         StatusText.Text = "Stopped";
     }
 
@@ -1447,7 +1579,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (MonitorComboBox.SelectedItem is not AudioDevice device)
             return;
 
-        _monitorEngine?.StopAll();
+        ClearAllActivePlaybacks();
         _monitorEngine?.Dispose();
         _monitorEngine = null;
 
@@ -1470,7 +1602,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         StopMicPassthrough();
 
-        _virtualEngine?.StopAll();
+        ClearAllActivePlaybacks();
         _virtualEngine?.Dispose();
         _virtualEngine = null;
 

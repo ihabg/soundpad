@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using NAudio.Wave.SampleProviders;
 using SoundPad.App.Audio;
 using SoundPad.App.Dialogs;
 using SoundPad.App.Hotkeys;
@@ -48,6 +49,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // Set to true by ExitApp() so Window_Closing knows to proceed with shutdown
     // rather than hide to tray when CloseToTray is enabled.
     private bool _isExiting;
+
+    // Tracks an in-progress test tone so it can be stopped by Stop All or replaced
+    // when the user clicks Test Discord Output again. Null when no tone is playing.
+    private OffsetSampleProvider? _virtualTestToneProvider;
 
     // ── Constructor ────────────────────────────────────────────────────────────
     // Settings are loaded before InitializeComponent so the saved window
@@ -1262,6 +1267,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         _monitorEngine?.StopAll();
         _virtualEngine?.StopAll();
+        StopVirtualTestTone();
         StatusText.Text = "Stopped";
     }
 
@@ -1308,6 +1314,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 StatusText.Text = $"Saved virtual device \"{_settings.VirtualDeviceName}\" not found — using None.";
             else if (!selectedVirtual.IsNone && IsVirtualAudioRouterDevice(selectedVirtual.Name))
                 StatusText.Text = $"Virtual: {selectedVirtual.Name} — set as Microphone input in Discord to route audio";
+
+            RefreshRoutingWizard();
         }
         catch (Exception ex)
         {
@@ -1334,6 +1342,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _settings.MonitorDeviceName   = device.Name;
         _settings.MonitorDeviceNumber = device.Number;
         SaveSettings();
+        RefreshRoutingWizard();
     }
 
     private void VirtualComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1342,6 +1351,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
 
         StopMicPassthrough();
+        StopVirtualTestTone();
 
         _virtualEngine?.StopAll();
         _virtualEngine?.Dispose();
@@ -1367,6 +1377,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (MicPassthroughCheckBox.IsChecked == true)
                 StartMicPassthrough();
         }
+
+        RefreshRoutingWizard();
     }
 
     private void CreateMonitorEngine(int deviceNumber)
@@ -1420,6 +1432,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
 
             MicComboBox.SelectionChanged += MicComboBox_SelectionChanged;
+            RefreshRoutingWizard();
         }
         catch (Exception ex)
         {
@@ -1438,6 +1451,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (MicPassthroughCheckBox.IsChecked == true)
             RestartMicPassthrough();
+
+        RefreshRoutingWizard();
     }
 
     private void MicPassthroughCheckBox_Checked(object sender, RoutedEventArgs e)
@@ -1445,6 +1460,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StartMicPassthrough();
         _settings.MicPassthroughEnabled = MicPassthroughCheckBox.IsChecked == true;
         SaveSettings();
+        RefreshRoutingWizard();
     }
 
     private void MicPassthroughCheckBox_Unchecked(object sender, RoutedEventArgs e)
@@ -1452,6 +1468,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StopMicPassthrough();
         _settings.MicPassthroughEnabled = MicPassthroughCheckBox.IsChecked == true;
         SaveSettings();
+        RefreshRoutingWizard();
     }
 
     private void MicVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -1609,6 +1626,142 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             StatusText.Text = $"Added: {Path.GetFileNameWithoutExtension(audioFiles[0])}";
         else
             StatusText.Text = $"Added {added} sound(s)";
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  DISCORD / GAME ROUTING WIZARD
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Updates every wizard UI element to reflect the current routing state.
+    // Safe to call at any time; the null-guard on WizardMonitorDot protects
+    // against edge-case calls before InitializeComponent completes.
+    private void RefreshRoutingWizard()
+    {
+        if (WizardMonitorDot is null) return;
+
+        var successBrush = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"];
+        var cautionBrush  = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"];
+
+        // ── Monitor status ──────────────────────────────────────────────────
+        var monitorDevice = MonitorComboBox.SelectedItem as AudioDevice;
+        WizardMonitorDot.Foreground  = successBrush;
+        WizardMonitorStatusText.Text = monitorDevice?.Name ?? "Not selected";
+
+        // ── Virtual output status ───────────────────────────────────────────
+        var virtualDevice  = VirtualComboBox.SelectedItem as AudioDevice;
+        bool virtualIsNone = virtualDevice is null || virtualDevice.IsNone;
+
+        WizardVirtualDot.Foreground  = virtualIsNone ? cautionBrush : successBrush;
+        WizardVirtualStatusText.Text = virtualIsNone ? "None" : virtualDevice!.Name;
+
+        // ── Mic passthrough status ──────────────────────────────────────────
+        bool micEnabled = MicPassthroughCheckBox.IsChecked == true;
+        WizardMicStatusRow.Visibility = micEnabled ? Visibility.Visible : Visibility.Collapsed;
+        if (micEnabled)
+        {
+            var micDevice = MicComboBox.SelectedItem as MicDevice;
+            bool micOk    = micDevice is not null;
+            WizardMicDot.Foreground  = micOk ? successBrush : cautionBrush;
+            WizardMicStatusText.Text = micOk ? micDevice!.Name : "No microphone selected";
+        }
+
+        // ── Warning banners and recommended panel ───────────────────────────
+        bool sameDevice  = !virtualIsNone && AudioDevice.AreSameOutputDevice(monitorDevice, virtualDevice);
+        bool micNoDevice = micEnabled && MicComboBox.SelectedItem is null;
+        var  best        = FindBestVirtualCableDevice();
+        bool noCable     = best is null;
+
+        WizardNoVirtualWarning.Visibility   = virtualIsNone ? Visibility.Visible : Visibility.Collapsed;
+        WizardConflictWarning.Visibility    = sameDevice    ? Visibility.Visible : Visibility.Collapsed;
+        WizardMicNoDeviceWarning.Visibility = micNoDevice   ? Visibility.Visible : Visibility.Collapsed;
+        WizardNoCableWarning.Visibility     = noCable       ? Visibility.Visible : Visibility.Collapsed;
+
+        WizardRecommendedPanel.Visibility = best is not null ? Visibility.Visible : Visibility.Collapsed;
+        if (best is not null)
+            WizardRecommendedDeviceName.Text = $"Will select: {best.Name}";
+    }
+
+    // Returns the highest-priority virtual cable device found in the current
+    // VirtualComboBox list, or null when no virtual cable is installed.
+    private AudioDevice? FindBestVirtualCableDevice()
+    {
+        if (VirtualComboBox.ItemsSource is not IEnumerable<AudioDevice> devices)
+            return null;
+
+        var list = devices.Where(d => !d.IsNone).ToList();
+
+        var found = list.FirstOrDefault(d =>
+            d.Name.Contains("CABLE Input", StringComparison.OrdinalIgnoreCase));
+        if (found is not null) return found;
+
+        found = list.FirstOrDefault(d =>
+            d.Name.Contains("Voicemeeter Input", StringComparison.OrdinalIgnoreCase));
+        if (found is not null) return found;
+
+        found = list.FirstOrDefault(d =>
+            d.Name.Contains("VoiceMeeter VAIO", StringComparison.OrdinalIgnoreCase) ||
+            d.Name.Contains("Voicemeeter AUX",  StringComparison.OrdinalIgnoreCase));
+        if (found is not null) return found;
+
+        found = list.FirstOrDefault(d =>
+            d.Name.Contains("CABLE", StringComparison.OrdinalIgnoreCase));
+        if (found is not null) return found;
+
+        return list.FirstOrDefault(d =>
+            d.Name.Contains("Voicemeeter", StringComparison.OrdinalIgnoreCase) ||
+            d.Name.Contains("VoiceMeeter", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void UseRecommendedSetup_Click(object sender, RoutedEventArgs e)
+    {
+        var best = FindBestVirtualCableDevice();
+        if (best is null)
+        {
+            StatusText.Text = "No virtual cable device found.";
+            return;
+        }
+
+        // Setting SelectedItem triggers VirtualComboBox_SelectionChanged which
+        // recreates the virtual engine, saves settings, and calls RefreshRoutingWizard.
+        VirtualComboBox.SelectedItem = best;
+        StatusText.Text = $"Virtual Output set to: {best.Name}";
+    }
+
+    // Removes the current test tone from the virtual engine's mixer.
+    // Safe to call when no tone is active or when the tone has already
+    // self-terminated (MixingSampleProvider ignores unknown inputs).
+    private void StopVirtualTestTone()
+    {
+        if (_virtualTestToneProvider is null) return;
+        _virtualEngine?.RemoveMixerInput(_virtualTestToneProvider);
+        _virtualTestToneProvider = null;
+    }
+
+    private void TestVirtualOutput_Click(object sender, RoutedEventArgs e)
+    {
+        if (_virtualEngine is null)
+        {
+            StatusText.Text = "Virtual Output is None — select a virtual cable device first.";
+            return;
+        }
+
+        StopVirtualTestTone(); // stop / replace any previous test tone
+
+        var generator = new SignalGenerator(CachedSound.TargetFormat.SampleRate,
+                                             CachedSound.TargetFormat.Channels)
+        {
+            Type      = SignalGeneratorType.Sin,
+            Frequency = 440,
+            Gain      = 0.25f
+        };
+
+        // 1.5 seconds of interleaved stereo samples at 48 kHz
+        int totalSamples = (int)(CachedSound.TargetFormat.SampleRate * 1.5 *
+                                  CachedSound.TargetFormat.Channels);
+        _virtualTestToneProvider = new OffsetSampleProvider(generator) { TakeSamples = totalSamples };
+
+        _virtualEngine.AddMixerInput(_virtualTestToneProvider);
+        StatusText.Text = "Test tone playing to Virtual Output...";
     }
 
     // ── Window closing ────────────────────────────────────────────────────────

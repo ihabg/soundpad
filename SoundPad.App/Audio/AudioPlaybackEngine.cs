@@ -18,10 +18,17 @@ public class AudioPlaybackEngine : IDisposable
     // so calling RemoveMixerInput on an already-finished one is harmless.
     private readonly List<ISampleProvider> _active = new List<ISampleProvider>();
 
-    // deviceNumber: which Windows output device to use.
+    // deviceNumber:     which Windows output device to use.
     //   -1  = WAVE_MAPPER (always follows the Windows default device)
     //    0+ = specific device index from WaveOut.GetCapabilities()
-    public AudioPlaybackEngine(int deviceNumber = AudioDevice.DefaultDeviceNumber)
+    // desiredLatency:   total ring-buffer size in milliseconds (default = 300).
+    //                   Must be set before Init(); cannot be changed on a live device.
+    // numberOfBuffers:  how many sub-buffers to divide desiredLatency into (default = 3).
+    //                   Per-buffer time = desiredLatency / numberOfBuffers; smaller
+    //                   values reduce start-latency but increase the risk of underruns.
+    public AudioPlaybackEngine(int deviceNumber    = AudioDevice.DefaultDeviceNumber,
+                                int desiredLatency  = 300,
+                                int numberOfBuffers = 3)
     {
         // ReadFully = true makes the mixer output silence when no sounds
         // are active, which keeps the output device from stopping on its own.
@@ -30,8 +37,13 @@ public class AudioPlaybackEngine : IDisposable
             ReadFully = true
         };
 
-        // DeviceNumber must be set before Init() is called.
-        _outputDevice = new WaveOutEvent { DeviceNumber = deviceNumber };
+        // All three properties must be set before Init() is called.
+        _outputDevice = new WaveOutEvent
+        {
+            DeviceNumber    = deviceNumber,
+            DesiredLatency  = desiredLatency,
+            NumberOfBuffers = numberOfBuffers
+        };
         _outputDevice.Init(_mixer);
         _outputDevice.Play(); // starts once; stays running until Dispose()
     }

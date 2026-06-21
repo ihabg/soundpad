@@ -226,6 +226,54 @@
                             </ui:Card>
                         </Grid>
 
+                        <!-- ── Audio Performance Presets ──────────────────────────────────── -->
+                        <ui:Card Padding="20" Margin="0,0,0,14">
+                            <StackPanel>
+
+                                <TextBlock Text="AUDIO PERFORMANCE"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Opacity="0.55"
+                                           Margin="0,0,0,12"/>
+
+                                <!-- Radio buttons -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                    <RadioButton x:Name="PresetStableRadio"
+                                                 Content="Stable"
+                                                 GroupName="AudioPreset"
+                                                 Tag="Stable"
+                                                 Margin="0,0,20,0"
+                                                 Checked="PresetRadio_Checked"/>
+                                    <RadioButton x:Name="PresetBalancedRadio"
+                                                 Content="Balanced (Recommended)"
+                                                 GroupName="AudioPreset"
+                                                 Tag="Balanced"
+                                                 Margin="0,0,20,0"
+                                                 IsChecked="True"
+                                                 Checked="PresetRadio_Checked"/>
+                                    <RadioButton x:Name="PresetLowLatencyRadio"
+                                                 Content="Low Latency"
+                                                 GroupName="AudioPreset"
+                                                 Tag="Low Latency"
+                                                 Checked="PresetRadio_Checked"/>
+                                </StackPanel>
+
+                                <!-- Dynamic description -->
+                                <TextBlock x:Name="PresetDescriptionText"
+                                           Text="100 ms buffer — recommended for most systems."
+                                           Opacity="0.7"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,8"/>
+
+                                <!-- Caution note -->
+                                <TextBlock Text="⚠  Changing the preset recreates the audio engines and stops all playing sounds."
+                                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                           TextWrapping="Wrap"
+                                           FontSize="12"/>
+
+                            </StackPanel>
+                        </ui:Card>
+
                         <!-- ── Discord / Game Routing Wizard ──────────────────────────────── -->
                         <ui:Card Padding="20" Margin="0,0,0,14">
                             <StackPanel>

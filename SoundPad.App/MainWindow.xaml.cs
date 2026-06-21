@@ -441,6 +441,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             RestoreMicPassthroughState();
             RestoreSelectedTab();
             RestoreBehaviorSettings();
+            RestoreAudioPerformancePreset();
             SyncStartupRegistryPath();
             InitializeTrayIcon();
             AboutVersionText.Text    = $"Version {GetAppVersion()}";
@@ -1260,13 +1261,22 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void StopButton_Click(object sender, RoutedEventArgs e) => StopAllSounds();
 
-    // Stops every active sound effect on both engines. Mic passthrough is a
-    // persistent mixer input (added via AddMixerInput, not tracked in the
-    // engine's _active list), so it is unaffected and keeps working.
-    private void StopAllSounds()
+    // Stops every active sound effect on both engines without touching
+    // mic passthrough or the test tone.  This is the shared teardown hook —
+    // future Active Sound Controls UI clearing should also go here so the
+    // preset-change path and the Stop All button path stay in sync.
+    private void ClearAllActivePlaybacks()
     {
         _monitorEngine?.StopAll();
         _virtualEngine?.StopAll();
+    }
+
+    // Public stop-all entry point: clears active sounds, stops the test tone,
+    // and updates the status bar.  Mic passthrough is unaffected (it uses
+    // AddMixerInput, not the engine's tracked _active list).
+    private void StopAllSounds()
+    {
+        ClearAllActivePlaybacks();
         StopVirtualTestTone();
         StatusText.Text = "Stopped";
     }
@@ -1383,7 +1393,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void CreateMonitorEngine(int deviceNumber)
     {
-        try   { _monitorEngine = new AudioPlaybackEngine(deviceNumber); }
+        var (latency, buffers) = GetPresetParams();
+        try   { _monitorEngine = new AudioPlaybackEngine(deviceNumber, latency, buffers); }
         catch (Exception ex)
         {
             _monitorEngine  = null;
@@ -1393,12 +1404,139 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void CreateVirtualEngine(int deviceNumber)
     {
-        try   { _virtualEngine = new AudioPlaybackEngine(deviceNumber); }
+        var (latency, buffers) = GetPresetParams();
+        try   { _virtualEngine = new AudioPlaybackEngine(deviceNumber, latency, buffers); }
         catch (Exception ex)
         {
             _virtualEngine  = null;
             StatusText.Text = $"Virtual device error: {ex.Message}";
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  AUDIO PERFORMANCE PRESETS
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private (int desiredLatency, int numberOfBuffers) GetPresetParams() =>
+        _settings.AudioPerformancePreset switch
+        {
+            "Stable"      => (300, 3),
+            "Low Latency" => (60,  2),
+            _             => (100, 2),  // "Balanced" and unknown values
+        };
+
+    private void UpdatePresetDescription(string preset)
+    {
+        if (PresetDescriptionText is null) return;
+        PresetDescriptionText.Text = preset switch
+        {
+            "Stable"      => "300 ms buffer — most reliable, slight delay before sound starts.",
+            "Low Latency" => "60 ms buffer — fastest response, may crackle on slow systems.",
+            _             => "100 ms buffer — recommended for most systems.",
+        };
+    }
+
+    private void RestoreAudioPerformancePreset()
+    {
+        PresetStableRadio.Checked      -= PresetRadio_Checked;
+        PresetBalancedRadio.Checked    -= PresetRadio_Checked;
+        PresetLowLatencyRadio.Checked  -= PresetRadio_Checked;
+
+        PresetStableRadio.IsChecked     = _settings.AudioPerformancePreset == "Stable";
+        PresetBalancedRadio.IsChecked   = _settings.AudioPerformancePreset == "Balanced";
+        PresetLowLatencyRadio.IsChecked = _settings.AudioPerformancePreset == "Low Latency";
+
+        if (!PresetStableRadio.IsChecked.GetValueOrDefault() &&
+            !PresetBalancedRadio.IsChecked.GetValueOrDefault() &&
+            !PresetLowLatencyRadio.IsChecked.GetValueOrDefault())
+            PresetBalancedRadio.IsChecked = true;
+
+        UpdatePresetDescription(_settings.AudioPerformancePreset);
+
+        PresetStableRadio.Checked      += PresetRadio_Checked;
+        PresetBalancedRadio.Checked    += PresetRadio_Checked;
+        PresetLowLatencyRadio.Checked  += PresetRadio_Checked;
+    }
+
+    private void PresetRadio_Checked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.RadioButton rb) return;
+        string newPreset = rb.Tag as string ?? "Balanced";
+        ApplyAudioPerformancePreset(newPreset);
+    }
+
+    private void ApplyAudioPerformancePreset(string newPreset)
+    {
+        string previousPreset = _settings.AudioPerformancePreset;
+        if (newPreset == previousPreset) return;
+
+        // Remember mic passthrough state; stop it before touching engines.
+        bool micWasActive = _micPassthrough is not null;
+        if (micWasActive) StopMicPassthrough();
+
+        // Stop all playing sounds and the test tone.
+        ClearAllActivePlaybacks();
+        StopVirtualTestTone();
+
+        // Commit the new preset so GetPresetParams() picks it up.
+        _settings.AudioPerformancePreset = newPreset;
+        UpdatePresetDescription(newPreset);
+
+        // Recreate monitor engine.
+        int? monitorNum = (_monitorEngine is not null)
+            ? (MonitorComboBox.SelectedItem as AudioDevice)?.Number
+            : null;
+        _monitorEngine?.StopAll();
+        _monitorEngine?.Dispose();
+        _monitorEngine = null;
+
+        if (monitorNum.HasValue)
+            CreateMonitorEngine(monitorNum.Value);
+
+        // Recreate virtual engine.
+        int? virtualNum = (_virtualEngine is not null)
+            ? (VirtualComboBox.SelectedItem as AudioDevice)?.Number
+            : null;
+        _virtualEngine?.StopAll();
+        _virtualEngine?.Dispose();
+        _virtualEngine = null;
+
+        if (virtualNum.HasValue)
+            CreateVirtualEngine(virtualNum.Value);
+
+        // If either required engine failed to create, roll back.
+        bool monitorFailed = monitorNum.HasValue && _monitorEngine is null;
+        bool virtualFailed = virtualNum.HasValue && _virtualEngine is null;
+
+        if (monitorFailed || virtualFailed)
+        {
+            StatusText.Text = $"Preset '{newPreset}' failed — reverting to '{previousPreset}'.";
+            _settings.AudioPerformancePreset = previousPreset;
+
+            // Recreate with original preset values.
+            if (monitorNum.HasValue)
+            {
+                _monitorEngine?.Dispose();
+                _monitorEngine = null;
+                CreateMonitorEngine(monitorNum.Value);
+            }
+            if (virtualNum.HasValue)
+            {
+                _virtualEngine?.Dispose();
+                _virtualEngine = null;
+                CreateVirtualEngine(virtualNum.Value);
+            }
+
+            RestoreAudioPerformancePreset();
+        }
+        else
+        {
+            SaveSettings();
+        }
+
+        // Restore mic passthrough if it was running.
+        if (micWasActive && _virtualEngine is not null)
+            StartMicPassthrough();
     }
 
     // ══════════════════════════════════════════════════════════════════════════

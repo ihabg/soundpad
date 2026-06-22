@@ -617,44 +617,132 @@
                         </ui:Card>
 
                         <ui:Card Padding="20" Margin="0,0,0,14">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
 
-                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                                    <TextBlock Text="UPDATES"
-                                               FontSize="11"
-                                               FontWeight="SemiBold"
-                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                               Margin="0,0,0,8"/>
-                                    <TextBlock Text="Check for new SoundPad releases on GitHub."
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                               Margin="0,0,0,12"/>
-                                    <ui:ToggleSwitch x:Name="AutoUpdateSwitch"
-                                                     Content="Enable automatic update checks"
-                                                     Checked="AutoUpdateSwitch_Checked"
-                                                     Unchecked="AutoUpdateSwitch_Unchecked"/>
-                                    <TextBlock Text="Automatic checks run once per day when SoundPad opens."
-                                               FontSize="11"
-                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                               TextWrapping="Wrap"
-                                               Margin="0,6,0,0"/>
-                                </StackPanel>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                        <TextBlock Text="UPDATES"
+                                                   FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   Margin="0,0,0,8"/>
+                                        <TextBlock Text="Check for new SoundPad releases on GitHub."
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   Margin="0,0,0,12"/>
+                                        <ui:ToggleSwitch x:Name="AutoUpdateSwitch"
+                                                         Content="Enable automatic update checks"
+                                                         Checked="AutoUpdateSwitch_Checked"
+                                                         Unchecked="AutoUpdateSwitch_Unchecked"/>
+                                        <TextBlock Text="Automatic checks run once per day when SoundPad opens."
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,6,0,0"/>
+                                    </StackPanel>
 
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <ui:Button x:Name="CheckUpdatesButton"
-                                               Content="Check for Updates"
-                                               Appearance="Secondary"
-                                               Click="CheckUpdates_Click"/>
-                                    <ui:Button Content="Open Releases Page"
-                                               Appearance="Secondary"
-                                               Margin="0,8,0,0"
-                                               Click="OpenReleases_Click"/>
-                                </StackPanel>
-                            </Grid>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <ui:Button x:Name="CheckUpdatesButton"
+                                                   Content="Check for Updates"
+                                                   Appearance="Secondary"
+                                                   Click="CheckUpdates_Click"/>
+                                        <ui:Button Content="Open Releases Page"
+                                                   Appearance="Secondary"
+                                                   Margin="0,8,0,0"
+                                                   Click="OpenReleases_Click"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Update-available panel: collapsed until an update is confirmed -->
+                                <Border x:Name="UpdateAvailablePanel"
+                                        Visibility="Collapsed"
+                                        BorderBrush="{DynamicResource SystemAccentColorPrimaryBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="14,12"
+                                        Margin="0,14,0,0">
+                                    <StackPanel>
+
+                                        <!-- Version number -->
+                                        <TextBlock x:Name="UpdateVersionText"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+
+                                        <!-- Release name / title (hidden when same as tag) -->
+                                        <TextBlock x:Name="UpdateTitleText"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   Margin="0,2,0,0"
+                                                   Visibility="Collapsed"/>
+
+                                        <!-- Release notes (capped at 80px, collapsed when empty) -->
+                                        <ScrollViewer x:Name="UpdateBodyScroll"
+                                                      MaxHeight="80"
+                                                      VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled"
+                                                      Margin="0,8,0,0"
+                                                      Visibility="Collapsed">
+                                            <TextBlock x:Name="UpdateBodyText"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       TextWrapping="Wrap"/>
+                                        </ScrollViewer>
+
+                                        <!-- Shown when no matching .exe asset found in the release -->
+                                        <TextBlock x:Name="NoAssetText"
+                                                   Text="No installer file found in this release. Use Open Release Page to download manually."
+                                                   Visibility="Collapsed"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,8,0,0"/>
+
+                                        <!-- Action buttons -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                            <ui:Button x:Name="DownloadInstallButton"
+                                                       Content="Download &amp;&amp; Install"
+                                                       Appearance="Primary"
+                                                       Click="DownloadInstall_Click"/>
+                                            <ui:Button Content="Open Release Page"
+                                                       Appearance="Secondary"
+                                                       Margin="8,0,0,0"
+                                                       Click="OpenReleases_Click"/>
+                                            <ui:Button x:Name="LaterButton"
+                                                       Content="Later"
+                                                       Appearance="Secondary"
+                                                       Margin="8,0,0,0"
+                                                       Click="LaterUpdate_Click"/>
+                                        </StackPanel>
+
+                                        <!-- Download progress (collapsed until download starts) -->
+                                        <StackPanel x:Name="DownloadProgressPanel"
+                                                    Visibility="Collapsed"
+                                                    Margin="0,12,0,0">
+                                            <TextBlock x:Name="DownloadStatusText"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       TextWrapping="Wrap"/>
+                                            <ProgressBar x:Name="DownloadProgressBar"
+                                                         Height="6"
+                                                         Minimum="0"
+                                                         Maximum="100"
+                                                         Margin="0,6,0,0"/>
+                                            <ui:Button x:Name="CancelDownloadButton"
+                                                       Content="Cancel"
+                                                       Appearance="Secondary"
+                                                       HorizontalAlignment="Left"
+                                                       Margin="0,8,0,0"
+                                                       Click="CancelDownload_Click"/>
+                                        </StackPanel>
+
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
                         </ui:Card>
 
                         <ui:Card Padding="20">

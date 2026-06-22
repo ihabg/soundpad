@@ -11,136 +11,231 @@ public static class LibraryBackupService
 
     // ── Export ────────────────────────────────────────────────────────────────
 
-    public static void Export(IReadOnlyList<SoundItem> library, string zipPath)
+    // Writes decks.json (full deck structure) + sounds.json (flat, backward compat)
+    // + Sounds/ folder with all audio files.
+    public static void Export(IReadOnlyList<Deck> decks, string zipPath)
     {
-        // Build sanitized copies where FilePath is just the audio filename.
-        var exportItems = library.Select(src => new SoundItem
+        // Build sanitized deck copies: FilePath → filename only.
+        var exportDecks = decks.Select(deck => new Deck
         {
-            Id                = src.Id,
-            DisplayName       = src.DisplayName,
-            FilePath          = Path.GetFileName(src.FilePath),
-            CreatedAt         = src.CreatedAt,
-            Category          = src.Category,
-            Volume            = src.Volume,
-            Hotkey            = src.Hotkey,
-            HotkeyInitialized = src.HotkeyInitialized,
-            IsFavorite        = src.IsFavorite,
-            LastPlayedAt      = src.LastPlayedAt,
-            TrimStartSeconds  = src.TrimStartSeconds,
-            TrimEndSeconds    = src.TrimEndSeconds,
-            FadeInSeconds     = src.FadeInSeconds,
-            FadeOutSeconds    = src.FadeOutSeconds
+            Id               = deck.Id,
+            Name             = deck.Name,
+            CreatedAt        = deck.CreatedAt,
+            CustomCategories = deck.CustomCategories.ToList(),
+            Sounds           = deck.Sounds.Select(s => new SoundItem
+            {
+                Id                = s.Id,
+                DisplayName       = s.DisplayName,
+                FilePath          = Path.GetFileName(s.FilePath),
+                CreatedAt         = s.CreatedAt,
+                Category          = s.Category,
+                Volume            = s.Volume,
+                Hotkey            = s.Hotkey,
+                HotkeyInitialized = s.HotkeyInitialized,
+                IsFavorite        = s.IsFavorite,
+                LastPlayedAt      = s.LastPlayedAt,
+                TrimStartSeconds  = s.TrimStartSeconds,
+                TrimEndSeconds    = s.TrimEndSeconds,
+                FadeInSeconds     = s.FadeInSeconds,
+                FadeOutSeconds    = s.FadeOutSeconds
+            }).ToList()
         }).ToList();
+
+        // Flat list of all sounds across all decks for backward compat.
+        var allSounds = exportDecks.SelectMany(d => d.Sounds).ToList();
 
         if (File.Exists(zipPath)) File.Delete(zipPath);
         using var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create);
 
-        // sounds.json entry
-        var jsonEntry = zip.CreateEntry("sounds.json", CompressionLevel.Optimal);
-        using (var writer = new StreamWriter(jsonEntry.Open()))
-            writer.Write(JsonSerializer.Serialize(exportItems, _jsonOptions));
+        var decksEntry = zip.CreateEntry("decks.json", CompressionLevel.Optimal);
+        using (var w = new StreamWriter(decksEntry.Open()))
+            w.Write(JsonSerializer.Serialize(exportDecks, _jsonOptions));
 
-        // One audio file per sound; skip missing files and exact-filename duplicates.
+        var soundsEntry = zip.CreateEntry("sounds.json", CompressionLevel.Optimal);
+        using (var w = new StreamWriter(soundsEntry.Open()))
+            w.Write(JsonSerializer.Serialize(allSounds, _jsonOptions));
+
         var addedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var src in library)
+        foreach (var deck in decks)
         {
-            if (!File.Exists(src.FilePath)) continue;
-            var fileName = Path.GetFileName(src.FilePath);
-            if (!addedFiles.Add(fileName)) continue;
-            zip.CreateEntryFromFile(src.FilePath, $"Sounds/{fileName}", CompressionLevel.Optimal);
+            foreach (var src in deck.Sounds)
+            {
+                if (!File.Exists(src.FilePath)) continue;
+                var fileName = Path.GetFileName(src.FilePath);
+                if (!addedFiles.Add(fileName)) continue;
+                zip.CreateEntryFromFile(src.FilePath, $"Sounds/{fileName}", CompressionLevel.Optimal);
+            }
         }
     }
 
     // ── Import ────────────────────────────────────────────────────────────────
 
+    // Detects backup format from the ZIP contents:
+    //   decks.json present  → new format: merge decks into currentDecks
+    //   sounds.json only    → old format: add sounds into activeDeck
     public static ImportResult Import(string zipPath,
-                                      IReadOnlyList<SoundItem> currentLibrary,
+                                      List<Deck> currentDecks,
+                                      Deck activeDeck,
                                       HotkeyBinding? stopAllHotkey)
     {
         var result = new ImportResult();
 
         using var zip = ZipFile.OpenRead(zipPath);
+        Directory.CreateDirectory(AppPaths.SoundsDirectory);
 
-        var jsonEntry = zip.GetEntry("sounds.json")
-            ?? throw new InvalidOperationException("sounds.json not found inside the backup.");
+        var decksEntry = zip.GetEntry("decks.json");
+        if (decksEntry is not null)
+        {
+            ImportNewFormat(zip, decksEntry, currentDecks, stopAllHotkey, result);
+        }
+        else
+        {
+            var soundsEntry = zip.GetEntry("sounds.json")
+                ?? throw new InvalidOperationException("sounds.json not found inside the backup.");
+            ImportOldFormat(zip, soundsEntry, activeDeck, currentDecks, stopAllHotkey, result);
+        }
 
+        return result;
+    }
+
+    private static void ImportNewFormat(ZipArchive zip, ZipArchiveEntry decksEntry,
+                                        List<Deck> currentDecks, HotkeyBinding? stopAllHotkey,
+                                        ImportResult result)
+    {
+        List<Deck> importedDecks;
+        using (var reader = new StreamReader(decksEntry.Open()))
+        {
+            var json = reader.ReadToEnd();
+            importedDecks = JsonSerializer.Deserialize<List<Deck>>(json, _jsonOptions)
+                ?? throw new InvalidOperationException("decks.json in the backup is empty or invalid.");
+        }
+
+        foreach (var importedDeck in importedDecks)
+        {
+            var target = currentDecks.FirstOrDefault(d =>
+                string.Equals(d.Name, importedDeck.Name, StringComparison.OrdinalIgnoreCase));
+
+            bool isNew = target is null;
+            if (isNew)
+            {
+                target = new Deck
+                {
+                    Name             = importedDeck.Name,
+                    CustomCategories = importedDeck.CustomCategories.ToList()
+                };
+                currentDecks.Add(target);
+                result.DecksAdded++;
+            }
+            else
+            {
+                // Merge any new categories.
+                foreach (var cat in importedDeck.CustomCategories)
+                {
+                    if (!target!.CustomCategories.Any(c =>
+                            string.Equals(c, cat, StringComparison.OrdinalIgnoreCase)))
+                        target.CustomCategories.Add(cat);
+                }
+                result.DecksMerged++;
+            }
+
+            // Per-deck conflict sets so hotkeys between different decks don't interfere.
+            var takenHotkeys = BuildTakenHotkeys(target!.Sounds, stopAllHotkey);
+            var existingIds  = new HashSet<Guid>(target.Sounds.Select(x => x.Id));
+
+            foreach (var item in importedDeck.Sounds)
+                ImportSoundItem(zip, item, target, existingIds, takenHotkeys, result);
+        }
+    }
+
+    private static void ImportOldFormat(ZipArchive zip, ZipArchiveEntry soundsEntry,
+                                        Deck activeDeck, List<Deck> currentDecks,
+                                        HotkeyBinding? stopAllHotkey,
+                                        ImportResult result)
+    {
         List<SoundItem> imported;
-        using (var reader = new StreamReader(jsonEntry.Open()))
+        using (var reader = new StreamReader(soundsEntry.Open()))
         {
             var json = reader.ReadToEnd();
             imported = JsonSerializer.Deserialize<List<SoundItem>>(json, _jsonOptions)
                 ?? throw new InvalidOperationException("sounds.json in the backup is empty or invalid.");
         }
 
-        // Build conflict-detection sets from the current library + existing StopAll hotkey.
-        var existingIds  = new HashSet<Guid>(currentLibrary.Select(x => x.Id));
-        var takenHotkeys = new HashSet<(uint Mod, uint Key)>();
-        foreach (var existing in currentLibrary)
-        {
-            if (existing.Hotkey is not null)
-                takenHotkeys.Add((existing.Hotkey.Modifiers, existing.Hotkey.Key));
-        }
-        if (stopAllHotkey is not null)
-            takenHotkeys.Add((stopAllHotkey.Modifiers, stopAllHotkey.Key));
-
-        Directory.CreateDirectory(AppPaths.SoundsDirectory);
+        var takenHotkeys = BuildTakenHotkeys(activeDeck.Sounds, stopAllHotkey);
+        // Check cross-deck duplicates: a GUID that exists in any deck is skipped,
+        // even though the sound would be added to activeDeck only.
+        var existingIds  = new HashSet<Guid>(currentDecks.SelectMany(d => d.Sounds).Select(x => x.Id));
 
         foreach (var item in imported)
+            ImportSoundItem(zip, item, activeDeck, existingIds, takenHotkeys, result);
+    }
+
+    private static void ImportSoundItem(ZipArchive zip, SoundItem item, Deck targetDeck,
+                                        HashSet<Guid> existingIds,
+                                        HashSet<(uint Mod, uint Key)> takenHotkeys,
+                                        ImportResult result)
+    {
+        if (existingIds.Contains(item.Id))
         {
-            // Skip sounds already in the library (same Guid).
-            if (existingIds.Contains(item.Id))
-            {
-                result.SkippedDuplicates++;
-                continue;
-            }
-
-            var audioFileName = Path.GetFileName(item.FilePath);
-            if (string.IsNullOrEmpty(audioFileName))
-            {
-                result.Errors.Add($"Skipped '{item.DisplayName}': no audio filename.");
-                continue;
-            }
-
-            var audioEntry = zip.GetEntry($"Sounds/{audioFileName}");
-            if (audioEntry is null)
-            {
-                result.Errors.Add($"Skipped '{item.DisplayName}': audio file missing from backup.");
-                continue;
-            }
-
-            string destPath;
-            try
-            {
-                destPath = DeduplicatePath(Path.Combine(AppPaths.SoundsDirectory, audioFileName));
-                audioEntry.ExtractToFile(destPath, overwrite: false);
-                item.FilePath = destPath;
-            }
-            catch (Exception ex)
-            {
-                result.Errors.Add($"Skipped '{item.DisplayName}': {ex.Message}");
-                continue;
-            }
-
-            // Check hotkey conflicts against both existing library and already-accepted imports.
-            if (item.Hotkey is not null)
-            {
-                var hk = (item.Hotkey.Modifiers, item.Hotkey.Key);
-                if (takenHotkeys.Contains(hk))
-                {
-                    item.Hotkey = null;
-                    result.ClearedHotkeys++;
-                }
-                else
-                {
-                    takenHotkeys.Add(hk);
-                }
-            }
-
-            result.NewItems.Add(item);
-            existingIds.Add(item.Id);
+            result.SkippedDuplicates++;
+            return;
         }
 
-        return result;
+        var audioFileName = Path.GetFileName(item.FilePath);
+        if (string.IsNullOrEmpty(audioFileName))
+        {
+            result.Errors.Add($"Skipped '{item.DisplayName}': no audio filename.");
+            return;
+        }
+
+        var audioEntry = zip.GetEntry($"Sounds/{audioFileName}");
+        if (audioEntry is null)
+        {
+            result.Errors.Add($"Skipped '{item.DisplayName}': audio file missing from backup.");
+            return;
+        }
+
+        string destPath;
+        try
+        {
+            destPath = DeduplicatePath(Path.Combine(AppPaths.SoundsDirectory, audioFileName));
+            audioEntry.ExtractToFile(destPath, overwrite: false);
+            item.FilePath = destPath;
+        }
+        catch (Exception ex)
+        {
+            result.Errors.Add($"Skipped '{item.DisplayName}': {ex.Message}");
+            return;
+        }
+
+        if (item.Hotkey is not null)
+        {
+            var hk = (item.Hotkey.Modifiers, item.Hotkey.Key);
+            if (takenHotkeys.Contains(hk))
+            {
+                item.Hotkey = null;
+                result.ClearedHotkeys++;
+            }
+            else
+            {
+                takenHotkeys.Add(hk);
+            }
+        }
+
+        targetDeck.Sounds.Add(item);
+        result.AllNewSounds.Add(item);
+        existingIds.Add(item.Id);
+    }
+
+    private static HashSet<(uint Mod, uint Key)> BuildTakenHotkeys(
+        IEnumerable<SoundItem> sounds, HotkeyBinding? stopAllHotkey)
+    {
+        var taken = new HashSet<(uint, uint)>();
+        foreach (var s in sounds)
+            if (s.Hotkey is not null)
+                taken.Add((s.Hotkey.Modifiers, s.Hotkey.Key));
+        if (stopAllHotkey is not null)
+            taken.Add((stopAllHotkey.Modifiers, stopAllHotkey.Key));
+        return taken;
     }
 
     private static string DeduplicatePath(string path)
@@ -160,8 +255,10 @@ public static class LibraryBackupService
 
 public class ImportResult
 {
-    public List<SoundItem> NewItems          { get; } = new();
+    public List<SoundItem> AllNewSounds      { get; } = new();
     public int             SkippedDuplicates { get; set; }
     public int             ClearedHotkeys   { get; set; }
+    public int             DecksAdded       { get; set; }
+    public int             DecksMerged      { get; set; }
     public List<string>    Errors           { get; } = new();
 }

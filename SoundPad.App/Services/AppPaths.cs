@@ -11,5 +11,6 @@ public static class AppPaths
     public static string AppDataDir      => _base;
     public static string SoundsDirectory  => Path.Combine(_base, "Sounds");
     public static string SoundsJsonPath   => Path.Combine(_base, "sounds.json");
+    public static string DecksJsonPath    => Path.Combine(_base, "decks.json");
     public static string SettingsJsonPath => Path.Combine(_base, "settings.json");
 }

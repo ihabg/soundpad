@@ -31,10 +31,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private AudioPlaybackEngine? _monitorEngine;
     private AudioPlaybackEngine? _virtualEngine;
 
-    // ── Sound library ──────────────────────────────────────────────────────────
-    // _library is the ordered list; the first four items map to hotkeys 0–3.
+    // ── Sound library / decks ─────────────────────────────────────────────────
+    // _decks holds all decks; _activeDeck is the currently visible one.
+    // _library is a computed shorthand for _activeDeck.Sounds so the rest of
+    // the code continues to work without a mass rename.
     // _cachedSounds maps each SoundItem's Guid to its preloaded float samples.
-    private List<SoundItem>                        _library      = new List<SoundItem>();
+    private List<Deck>                             _decks        = new();
+    private Deck                                   _activeDeck   = null!;
+    private List<SoundItem>                        _library      => _activeDeck.Sounds;
     private readonly Dictionary<Guid, CachedSound> _cachedSounds = new Dictionary<Guid, CachedSound>();
 
     // ── App-level settings (devices, mic state, hotkeys, window bounds) ─────────
@@ -875,16 +879,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     //  SOUND LIBRARY
     // ══════════════════════════════════════════════════════════════════════════
 
-    // Loads sounds.json, preloads all audio files into CachedSound objects,
-    // then renders the sound cards.
+    // Loads decks from decks.json (or migrates sounds.json on first run),
+    // sets the active deck, preloads audio, then renders the library UI.
     private void LoadLibrary()
     {
-        // _settings was already loaded in the constructor (so window bounds
-        // could be applied before the window was shown); reused here as-is.
-        _library = SoundLibraryService.Load();
+        _decks      = DeckService.Load(_settings);
+        _activeDeck = _decks.Find(d => d.Id == _settings.ActiveDeckId) ?? _decks[0];
 
-        // If the library is empty (first launch or cleared), copy the built-in
-        // sample sounds from the app's Sounds folder into AppData.
+        // On first launch the active deck has no sounds — seed from bundled samples.
         if (_library.Count == 0)
             SeedDefaultSounds();
 
@@ -910,8 +912,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         if (hotkeysMigrated)
-            SoundLibraryService.Save(_library);
+            DeckService.Save(_decks);
 
+        RebuildDeckBar();
         RefreshCategoryFilter();
         FilterSoundsPanel();
         RefreshStopAllHotkeyDisplay();
@@ -1036,7 +1039,161 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         if (_library.Count > 0)
-            SoundLibraryService.Save(_library);
+            DeckService.Save(_decks);
+    }
+
+    // ── Deck management ───────────────────────────────────────────────────────
+
+    private void RebuildDeckBar()
+    {
+        DeckChipsPanel.Children.Clear();
+
+        foreach (var deck in _decks)
+        {
+            var capturedDeck = deck;
+            var chip = new UiButton
+            {
+                Content    = deck.Name,
+                Appearance = deck.Id == _activeDeck.Id
+                    ? ControlAppearance.Primary
+                    : ControlAppearance.Secondary,
+                Margin  = new Thickness(0, 0, 4, 0),
+                Padding = new Thickness(14, 4, 14, 4)
+            };
+            chip.Click += (_, _) => SwitchToDeck(capturedDeck);
+
+            var renameItem = new MenuItem { Header = "Rename…" };
+            renameItem.Click += (_, _) => RenameDeck(capturedDeck);
+
+            var duplicateItem = new MenuItem { Header = "Duplicate" };
+            duplicateItem.Click += (_, _) => DuplicateDeck(capturedDeck);
+
+            var deleteItem = new MenuItem
+            {
+                Header     = "Delete",
+                Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"]
+            };
+            deleteItem.Click += (_, _) => DeleteDeck(capturedDeck);
+
+            var ctx = new ContextMenu();
+            ctx.Items.Add(renameItem);
+            ctx.Items.Add(duplicateItem);
+            ctx.Items.Add(new Separator());
+            ctx.Items.Add(deleteItem);
+            chip.ContextMenu = ctx;
+
+            DeckChipsPanel.Children.Add(chip);
+        }
+    }
+
+    private void SwitchToDeck(Deck deck)
+    {
+        if (deck.Id == _activeDeck.Id) return;
+
+        StopAllSounds();
+        _cachedSounds.Clear();
+        _rowControls.Clear();
+
+        _activeDeck            = deck;
+        _settings.ActiveDeckId = deck.Id;
+        AppSettingsService.Save(_settings);
+
+        foreach (var item in _library.ToList())
+        {
+            if (!File.Exists(item.FilePath)) continue;
+            try   { _cachedSounds[item.Id] = new CachedSound(item.FilePath); }
+            catch (Exception ex) { Debug.WriteLine($"[Deck] Could not load '{item.DisplayName}': {ex.Message}"); }
+        }
+
+        ReregisterAllHotkeysAndReport("deck-switch");
+        RebuildDeckBar();
+        RefreshCategoryFilter();
+        FilterSoundsPanel();
+        StatusText.Text = $"Switched to: {deck.Name}";
+    }
+
+    private void AddDeck_Click(object sender, RoutedEventArgs e)
+    {
+        var existingNames = _decks.Select(d => d.Name).ToList();
+        var dlg           = new Dialogs.DeckNameDialog(this, "", existingNames);
+        if (dlg.ShowDialog() != true) return;
+
+        var newDeck = new Deck { Name = dlg.ResultName };
+        _decks.Add(newDeck);
+        DeckService.Save(_decks);
+        SwitchToDeck(newDeck);
+    }
+
+    private void RenameDeck(Deck deck)
+    {
+        var existingNames = _decks.Where(d => d.Id != deck.Id).Select(d => d.Name).ToList();
+        var dlg           = new Dialogs.DeckNameDialog(this, deck.Name, existingNames);
+        if (dlg.ShowDialog() != true) return;
+
+        deck.Name = dlg.ResultName;
+        DeckService.Save(_decks);
+        RebuildDeckBar();
+        StatusText.Text = $"Deck renamed to: {deck.Name}";
+    }
+
+    private void DuplicateDeck(Deck source)
+    {
+        var existingNames = _decks.Select(d => d.Name).ToList();
+        var finalName     = source.Name + " (copy)";
+        int n = 2;
+        while (existingNames.Any(x => string.Equals(x, finalName, StringComparison.OrdinalIgnoreCase)))
+            finalName = $"{source.Name} (copy {n++})";
+
+        var copy = new Deck
+        {
+            Name             = finalName,
+            CustomCategories = source.CustomCategories.ToList(),
+            Sounds           = source.Sounds.Select(s => new SoundItem
+            {
+                Id                = Guid.NewGuid(), // new ID per sound
+                DisplayName       = s.DisplayName,
+                FilePath          = s.FilePath,
+                Category          = s.Category,
+                Volume            = s.Volume,
+                Hotkey            = s.Hotkey,
+                HotkeyInitialized = s.HotkeyInitialized,
+                IsFavorite        = s.IsFavorite,
+                LastPlayedAt      = s.LastPlayedAt,
+                TrimStartSeconds  = s.TrimStartSeconds,
+                TrimEndSeconds    = s.TrimEndSeconds,
+                FadeInSeconds     = s.FadeInSeconds,
+                FadeOutSeconds    = s.FadeOutSeconds,
+                CreatedAt         = DateTime.UtcNow
+            }).ToList()
+        };
+
+        _decks.Add(copy);
+        DeckService.Save(_decks);
+        SwitchToDeck(copy);
+    }
+
+    private void DeleteDeck(Deck deck)
+    {
+        if (_decks.Count <= 1)
+        {
+            MessageBox.Show("You cannot delete the last deck.", "Delete Deck",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            $"Delete deck \"{deck.Name}\"?\n\nThis removes the deck from SoundPad. Audio files on disk are not deleted.",
+            "Delete Deck", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        // If deleting the active deck, switch to another first.
+        if (deck.Id == _activeDeck.Id)
+            SwitchToDeck(_decks.First(d => d.Id != deck.Id));
+
+        _decks.Remove(deck);
+        DeckService.Save(_decks);
+        RebuildDeckBar();
+        StatusText.Text = $"Deleted deck: {deck.Name}";
     }
 
     // ── Filter / rebuild ──────────────────────────────────────────────────────
@@ -1109,7 +1266,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         foreach (var cat in _library
             .Select(x => string.IsNullOrWhiteSpace(x.Category) ? "General" : x.Category)
-            .Concat(_settings.CustomCategories.Where(c => !virtualNames.Contains(c)))
+            .Concat(_activeDeck.CustomCategories.Where(c => !virtualNames.Contains(c)))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(c => c, StringComparer.OrdinalIgnoreCase))
         {
@@ -1240,7 +1397,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             int pct             = (int)Math.Round(e.NewValue);
             volPct.Text         = $"{pct}%";
             capturedItem.Volume = pct / 100f;
-            SoundLibraryService.Save(_library);
+            DeckService.Save(_decks);
         };
 
         var volRow = new DockPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
@@ -1273,7 +1430,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         favBtn.Click += (_, _) =>
         {
             capturedItem.IsFavorite = !capturedItem.IsFavorite;
-            SoundLibraryService.Save(_library);
+            DeckService.Save(_decks);
             FilterSoundsPanel();
         };
 
@@ -1336,7 +1493,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         favMenuItem.Click += (_, _) =>
         {
             capturedItem.IsFavorite = !capturedItem.IsFavorite;
-            SoundLibraryService.Save(_library);
+            DeckService.Save(_decks);
             FilterSoundsPanel();
         };
 
@@ -1396,7 +1553,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
             _cachedSounds[item.Id] = sound;
             _library.Add(item);
-            SoundLibraryService.Save(_library);
+            DeckService.Save(_decks);
             RefreshCategoryFilter();
             FilterSoundsPanel();
             StatusText.Text = $"Added: {item.DisplayName}";
@@ -1415,7 +1572,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         var categories = _library
             .Select(x => string.IsNullOrWhiteSpace(x.Category) ? "General" : x.Category)
-            .Concat(_settings.CustomCategories)
+            .Concat(_activeDeck.CustomCategories)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -1462,7 +1619,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
         }
 
-        SoundLibraryService.Save(_library);
+        DeckService.Save(_decks);
         RefreshCategoryFilter();
         FilterSoundsPanel();
         StatusText.Text = $"Updated: {item.DisplayName}";
@@ -1479,7 +1636,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var name = item.DisplayName;
         _cachedSounds.Remove(item.Id);
         _library.Remove(item);
-        SoundLibraryService.Save(_library);
+        DeckService.Save(_decks);
         RefreshCategoryFilter();
         FilterSoundsPanel();
         StatusText.Text = $"Removed: {name}";
@@ -1506,7 +1663,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         };
         _cachedSounds[copy.Id] = cachedSound;
         _library.Add(copy);
-        SoundLibraryService.Save(_library);
+        DeckService.Save(_decks);
         RefreshCategoryFilter();
         FilterSoundsPanel();
         StatusText.Text = $"Duplicated: {copy.DisplayName}";
@@ -1525,7 +1682,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void CategoryManager_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new Dialogs.CategoryManagerDialog(this, _library, _settings.CustomCategories);
+        var dlg = new Dialogs.CategoryManagerDialog(this, _library, _activeDeck.CustomCategories);
         if (dlg.ShowDialog() != true) return;
 
         if (dlg.SoundCategoryRemap.Count > 0)
@@ -1542,14 +1699,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
         }
 
-        // Persist categories that have no sounds yet (user created them empty).
-        _settings.CustomCategories = dlg.FinalCategories
+        // Persist empty categories that have no sounds assigned yet.
+        _activeDeck.CustomCategories = dlg.FinalCategories
             .Where(c => !_library.Any(s =>
                 string.Equals(s.Category, c, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
-        SoundLibraryService.Save(_library);
-        SaveSettings();
+        DeckService.Save(_decks);
         RefreshCategoryFilter();
         FilterSoundsPanel();
         StatusText.Text = "Categories updated.";
@@ -1593,7 +1749,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             item.Hotkey = null;
             ReregisterAllHotkeysAndReport("hotkey-clear");
-            SoundLibraryService.Save(_library);
+            DeckService.Save(_decks);
             FilterSoundsPanel();
             StatusText.Text = $"Hotkey cleared: {item.DisplayName}";
             return;
@@ -1630,7 +1786,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        SoundLibraryService.Save(_library);
+        DeckService.Save(_decks);
         FilterSoundsPanel();
         StatusText.Text = $"Hotkey set: {item.DisplayName} → {newBinding.DisplayText}";
     }
@@ -1820,7 +1976,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         item.LastPlayedAt = DateTime.UtcNow;
-        SoundLibraryService.Save(_library);
+        DeckService.Save(_decks);
 
         if (CategoryFilter?.SelectedItem as string == "Recent")
             FilterSoundsPanel();
@@ -2327,7 +2483,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         try
         {
-            LibraryBackupService.Export(_library, dialog.FileName);
+            LibraryBackupService.Export(_decks, dialog.FileName);
             StatusText.Text = $"Backup exported: {Path.GetFileName(dialog.FileName)}";
         }
         catch (Exception ex)
@@ -2349,7 +2505,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         ImportResult result;
         try
         {
-            result = LibraryBackupService.Import(dialog.FileName, _library, _settings.StopAllHotkey);
+            result = LibraryBackupService.Import(dialog.FileName, _decks, _activeDeck, _settings.StopAllHotkey);
         }
         catch (Exception ex)
         {
@@ -2357,31 +2513,33 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        foreach (var item in result.NewItems)
+        // Preload audio for all newly added sounds (already inserted into decks by the service).
+        foreach (var item in result.AllNewSounds)
         {
             if (File.Exists(item.FilePath))
             {
                 try   { _cachedSounds[item.Id] = new CachedSound(item.FilePath); }
                 catch (Exception ex) { Debug.WriteLine($"[Import] Could not preload '{item.DisplayName}': {ex.Message}"); }
             }
-            _library.Add(item);
         }
 
-        if (result.NewItems.Count > 0)
+        if (result.AllNewSounds.Count > 0 || result.DecksAdded > 0)
         {
-            SoundLibraryService.Save(_library);
+            DeckService.Save(_decks);
+            RebuildDeckBar();
             RefreshCategoryFilter();
             FilterSoundsPanel();
             ReregisterAllHotkeysAndReport("import");
         }
 
-        var parts = new List<string> { $"Imported {result.NewItems.Count} sound(s)" };
-        if (result.SkippedDuplicates > 0)
-            parts.Add($"skipped {result.SkippedDuplicates} duplicate(s)");
-        if (result.ClearedHotkeys > 0)
-            parts.Add($"cleared {result.ClearedHotkeys} conflicting hotkey(s)");
+        var parts = new List<string>();
+        if (result.DecksAdded > 0)        parts.Add($"added {result.DecksAdded} deck(s)");
+        if (result.DecksMerged > 0)       parts.Add($"merged {result.DecksMerged} deck(s)");
+        if (result.AllNewSounds.Count > 0) parts.Add($"imported {result.AllNewSounds.Count} sound(s)");
+        if (result.SkippedDuplicates > 0) parts.Add($"skipped {result.SkippedDuplicates} duplicate(s)");
+        if (result.ClearedHotkeys > 0)    parts.Add($"cleared {result.ClearedHotkeys} conflicting hotkey(s)");
 
-        StatusText.Text = string.Join(". ", parts) + ".";
+        StatusText.Text = (parts.Count > 0 ? string.Join(", ", parts) : "Nothing to import") + ".";
     }
 
     // ── Drag and drop ──────────────────────────────────────────────────────────
@@ -2471,7 +2629,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (added > 0)
         {
-            SoundLibraryService.Save(_library);
+            DeckService.Save(_decks);
             RefreshCategoryFilter();
             FilterSoundsPanel();
         }

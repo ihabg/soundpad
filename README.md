@@ -20,7 +20,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 - **Microphone passthrough** — your mic audio is mixed into the virtual output so Discord hears both you and the sounds
 - **Discord / Game Routing Wizard** — step-by-step guide with live status dots and auto-detect for VB-CABLE / Voicemeeter
 - **Audio Performance Presets** — choose between Stable (300 ms), Balanced (100 ms), and Low Latency (60 ms) buffer sizes
-- **Update checking** — manual "Check for Updates" button; optional once-per-day startup check (off by default)
+- **In-app updater** — when a new release is detected, a panel appears with release notes and a **Download & Install** button; the installer downloads to a safe temp path, verifies the file, asks for confirmation, and launches the installer — the app never overwrites its own running executable; auto-check only notifies and never downloads automatically
 - **Tray mode** — minimise or close to the system tray; hotkeys keep working
 - **Start with Windows** — one toggle to register SoundPad in the current-user Run key (no admin required)
 - **Settings persistence** — devices, volume, window position, and all hotkeys survive restarts
@@ -34,7 +34,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.2.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.3.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -190,14 +190,35 @@ Changing the preset recreates the audio engines and stops any playing sounds. Yo
 
 ---
 
-## Update checking
+## In-app updater
 
 **Settings tab → Updates**
 
-- **Check for Updates now** — queries the GitHub Releases API immediately and shows a banner if a newer version is available.
-- **Check automatically on startup** — when enabled, runs the check once per 24 hours in the background at app startup. Disabled by default; no network requests are made unless you turn this on.
+- **Check for Updates** — queries the GitHub Releases API immediately. If a newer version is available, an update panel appears below the Updates card.
+- **Automatic check on startup** — when enabled, runs silently once per 24 hours at startup. Disabled by default; no network requests are made unless you opt in. Automatic checks only notify — they never download anything automatically.
 
-If an update is found, a message appears in the status bar with a link to the **Open Releases Page** button.
+### Update available panel
+
+When an update is detected, a panel shows the version number, release title, and a truncated release notes excerpt. The panel offers three actions:
+
+| Button | What it does |
+|---|---|
+| **Download & Install** | Downloads the installer to a safe temp path and prompts you before launching it |
+| **Open Release Page** | Opens the GitHub release in your browser — always available as a fallback |
+| **Later** | Dismisses the panel for this session |
+
+### Download & Install
+
+- The installer (`SoundPad-Setup-*.exe`) is downloaded from the official GitHub release asset, streamed in chunks with a live progress bar.
+- The download is saved to `%TEMP%\SoundPad\Updates\` — never to the application directory or next to the running executable.
+- You can cancel the download at any time with the **Cancel** button.
+- After a successful download, SoundPad asks: **"Install now?"** You must confirm before anything happens.
+- If you click **Yes**, SoundPad launches the installer and closes itself. The installer runs normally and may trigger a Windows SmartScreen prompt (per-user install, no UAC required).
+- If you click **No**, the download is kept and you can start again without re-downloading.
+- If the installer cannot be launched, SoundPad stays open, shows an error with the file path, and keeps the **Open Release Page** button available.
+- If the release has no matching installer asset, the **Download & Install** button is hidden and a message directs you to **Open Release Page** instead.
+
+> **SoundPad never overwrites its own running executable.** The installer is a separate process that replaces the files after SoundPad exits normally.
 
 ---
 

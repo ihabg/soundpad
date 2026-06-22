@@ -1,4 +1,4 @@
-# SoundPad v1.2.0 — Release Checklist
+# SoundPad v1.3.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.2.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.3.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.2.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.2.0), and publisher
+- [ ] Run `SoundPad-Setup-1.3.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.3.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -246,6 +246,95 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.3.0 new features
+
+### Update check — already on latest
+
+- [ ] Settings → Check for Updates (while running v1.3.0) → status bar shows "SoundPad is up to date."
+- [ ] No update panel appears when already on latest
+- [ ] CheckUpdatesButton re-enables immediately after result
+
+### Update available panel (simulate by temporarily lowering csproj version to 1.0.0, rebuild, run)
+
+- [ ] Check for Updates → update panel appears below the Updates card
+- [ ] Panel shows the version number (e.g. "Version v1.3.0 is available")
+- [ ] Panel shows the release title when it differs from the tag
+- [ ] Panel shows a truncated excerpt of release notes when the GitHub release body is non-empty
+- [ ] Panel does not show release notes area when the release body is empty
+- [ ] Download & Install button is visible when the release has a matching `SoundPad-Setup-*.exe` asset
+- [ ] Open Release Page button is always visible in the panel
+- [ ] Later button is always visible in the panel
+- [ ] Auto-check on startup shows the same panel (notify only — no download starts automatically)
+
+### Download & Install
+
+- [ ] Click Download & Install → download progress bar appears and updates as bytes arrive
+- [ ] Status text shows "Downloading… X.X MB / Y.Y MB" while download is in progress
+- [ ] Download & Install button is disabled during the download
+- [ ] Later button is disabled during the download
+- [ ] Check for Updates button is disabled during the download
+- [ ] Cancel button appears in the progress panel during the download
+- [ ] File is downloaded to `%TEMP%\SoundPad\Updates\` (verify in File Explorer during download)
+- [ ] App never writes to its own install directory during the download
+
+### Cancel download
+
+- [ ] Click Cancel during an active download → download stops, progress panel hides, all buttons re-enable
+- [ ] No error dialog appears after a clean cancel
+- [ ] Can start another download immediately after cancelling (retry works)
+- [ ] Partially downloaded file in `%TEMP%\SoundPad\Updates\` is overwritten on next attempt (no conflict)
+
+### Download complete — user clicks No
+
+- [ ] Download completes → "Install now?" confirmation dialog appears
+- [ ] Click No → dialog dismisses, progress panel hides, all buttons re-enable
+- [ ] App remains open and functional
+- [ ] Can click Download & Install again without restarting the app
+
+### Download complete — user clicks Yes
+
+- [ ] Download completes → "Install now?" dialog appears
+- [ ] Click Yes → installer launches (SmartScreen / UAC if applicable)
+- [ ] App closes after installer is successfully launched
+- [ ] Installer proceeds independently; app is no longer running
+
+### Installer launch failure
+
+- [ ] If the downloaded installer cannot be launched (e.g. file renamed/deleted before clicking Yes):
+  - Error dialog appears with the file path
+  - App remains open
+  - Download & Install, Later, and Check for Updates buttons all re-enable
+  - Open Release Page button remains usable
+
+### Open Release Page fallback
+
+- [ ] Click Open Release Page from inside the update panel → correct GitHub release URL opens in browser
+- [ ] Click Open Releases Page from the top-level button (before any check) → GitHub releases page opens
+- [ ] Open Release Page works even when Download & Install is hidden (no-asset release)
+
+### No installer asset in release
+
+- [ ] When the GitHub release has no `SoundPad-Setup-*.exe` asset:
+  - Download & Install button is hidden
+  - A "No installer file found" message is shown
+  - Open Release Page button remains visible and functional
+
+### Auto-check — notify only, no auto-download
+
+- [ ] With auto-check enabled and an update available, app starts → update panel appears
+- [ ] No download begins automatically on startup
+- [ ] Download only starts when the user explicitly clicks Download & Install
+- [ ] Auto-check does not run again within the same 24-hour window
+
+### Safety constraints
+
+- [ ] App executable is never overwritten while running
+- [ ] Downloads always land in `%TEMP%\SoundPad\Updates\` regardless of asset filename
+- [ ] A malformed asset filename (e.g. containing path separators) does not escape the temp directory
+- [ ] Closing the app during an active download shuts down cleanly (no hung process, no crash)
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -261,12 +350,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.2.0
-  git push origin v1.2.0
+  git tag v1.3.0
+  git push origin v1.3.0
   ```
-- [ ] Create GitHub Release from tag `v1.2.0`
-- [ ] Add release notes summarising v1.2.0 features
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.2.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.3.0`
+- [ ] Add release notes summarising v1.3.0 features
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.3.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

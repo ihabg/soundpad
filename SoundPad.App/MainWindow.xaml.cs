@@ -233,10 +233,29 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void RestoreBehaviorSettings()
     {
-        InterruptSoundsSwitch.IsChecked = _settings.InterruptPreviousSounds;
-        AutoUpdateSwitch.IsChecked      = _settings.EnableAutoUpdateChecks;
+        InterruptSoundsSwitch.Checked   -= InterruptSoundsSwitch_Checked;
+        InterruptSoundsSwitch.Unchecked -= InterruptSoundsSwitch_Unchecked;
+        InterruptSoundsSwitch.IsChecked  = _settings.InterruptPreviousSounds;
+        InterruptSoundsSwitch.Checked   += InterruptSoundsSwitch_Checked;
+        InterruptSoundsSwitch.Unchecked += InterruptSoundsSwitch_Unchecked;
+
+        AutoUpdateSwitch.Checked   -= AutoUpdateSwitch_Checked;
+        AutoUpdateSwitch.Unchecked -= AutoUpdateSwitch_Unchecked;
+        AutoUpdateSwitch.IsChecked  = _settings.EnableAutoUpdateChecks;
+        AutoUpdateSwitch.Checked   += AutoUpdateSwitch_Checked;
+        AutoUpdateSwitch.Unchecked += AutoUpdateSwitch_Unchecked;
+
+        MinimizeToTraySwitch.Checked   -= MinimizeToTraySwitch_Checked;
+        MinimizeToTraySwitch.Unchecked -= MinimizeToTraySwitch_Unchecked;
         MinimizeToTraySwitch.IsChecked  = _settings.MinimizeToTray;
-        CloseToTraySwitch.IsChecked     = _settings.CloseToTray;
+        MinimizeToTraySwitch.Checked   += MinimizeToTraySwitch_Checked;
+        MinimizeToTraySwitch.Unchecked += MinimizeToTraySwitch_Unchecked;
+
+        CloseToTraySwitch.Checked   -= CloseToTraySwitch_Checked;
+        CloseToTraySwitch.Unchecked -= CloseToTraySwitch_Unchecked;
+        CloseToTraySwitch.IsChecked  = _settings.CloseToTray;
+        CloseToTraySwitch.Checked   += CloseToTraySwitch_Checked;
+        CloseToTraySwitch.Unchecked += CloseToTraySwitch_Unchecked;
 
         // Sync the toggle with the actual registry state so it stays accurate
         // even if the user manually edited the registry or moved the exe.

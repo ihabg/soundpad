@@ -249,7 +249,6 @@
                                                  GroupName="AudioPreset"
                                                  Tag="Balanced"
                                                  Margin="0,0,20,0"
-                                                 IsChecked="True"
                                                  Checked="PresetRadio_Checked"/>
                                     <RadioButton x:Name="PresetLowLatencyRadio"
                                                  Content="Low Latency"

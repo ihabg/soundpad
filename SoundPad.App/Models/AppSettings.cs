@@ -20,7 +20,17 @@ public class AppSettings
     public bool MicPassthroughEnabled { get; set; } = false;
     public int  MicVolume             { get; set; } = 80;
 
+    // "Stable" | "Balanced" | "Low Latency"
+    // Default "Balanced" applies to both new installs and old settings.json files
+    // that pre-date this field (System.Text.Json uses the property initializer).
+    public string AudioPerformancePreset { get; set; } = "Balanced";
+
     public int SelectedTabIndex { get; set; } = 0;
+
+    public bool InterruptPreviousSounds { get; set; } = false;
+
+    public bool      EnableAutoUpdateChecks { get; set; } = false;
+    public DateTime? LastUpdateCheckUtc     { get; set; }
 
     public bool MinimizeToTray   { get; set; } = false;
     public bool CloseToTray      { get; set; } = false;

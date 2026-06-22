@@ -7,11 +7,20 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Features
 
-- **Sound library** — add any MP3/WAV file, give it a display name and category, set per-sound volume
+- **Sound library** — add any MP3/WAV/OGG/FLAC/AAC file, give it a display name and category, set per-sound volume
+- **Favorites** — star any sound to pin it in the Favorites filter
+- **Recent sounds** — filter to the last 7 days of played sounds, ordered by most recently played
+- **Drag-and-drop import** — drag audio files directly onto the Sound Library panel to add them instantly
+- **Library backup** — export your entire sound library (sounds + metadata) to a ZIP, and import it on another machine
 - **Dual output** — Monitor Output (hear it yourself) and Virtual Output (send to Discord/VB-CABLE) run simultaneously
+- **Active sound controls** — each playing sound shows a live Stop button on its row; the row highlights while active
+- **Playback mode** — choose between **Mix** (all sounds play simultaneously) or **Interrupt** (each new sound stops the previous one)
 - **Global hotkeys** — assign Ctrl+Alt+1…N (or any combo) to sounds; they fire even when the app is minimised or hidden
 - **Stop All hotkey** — a single global key stops every playing sound instantly
 - **Microphone passthrough** — your mic audio is mixed into the virtual output so Discord hears both you and the sounds
+- **Discord / Game Routing Wizard** — step-by-step guide with live status dots and auto-detect for VB-CABLE / Voicemeeter
+- **Audio Performance Presets** — choose between Stable (300 ms), Balanced (100 ms), and Low Latency (60 ms) buffer sizes
+- **Update checking** — manual "Check for Updates" button; optional once-per-day startup check (off by default)
 - **Tray mode** — minimise or close to the system tray; hotkeys keep working
 - **Start with Windows** — one toggle to register SoundPad in the current-user Run key (no admin required)
 - **Settings persistence** — devices, volume, window position, and all hotkeys survive restarts
@@ -21,7 +30,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.0.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.1.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -37,6 +46,8 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 SoundPad can send sounds directly into Discord (or any other voice chat) without a physical cable.
 
+> **Note:** SoundPad does not include its own virtual audio driver yet. You need to install a third-party virtual cable (VB-CABLE or Voicemeeter) for Discord / game microphone routing.
+
 1. Download and install **VB-CABLE Virtual Audio Device** from [vb-audio.com](https://vb-audio.com/Cable/).
 2. Restart your PC after installing VB-CABLE.
 3. In SoundPad → **Settings** tab:
@@ -44,6 +55,17 @@ SoundPad can send sounds directly into Discord (or any other voice chat) without
    - Set **Monitor Output** to your real speakers/headphones.
 4. In Discord → **Voice & Video** → **Input Device**: choose `CABLE Output (VB-Audio Virtual Cable)`.
 5. Press a sound hotkey — you will hear it in your headphones (Monitor Output) and Discord will hear it through CABLE.
+
+---
+
+## Discord / Game Routing Wizard
+
+The **Settings** tab includes a Routing Wizard that removes the guesswork from the setup above.
+
+- **Live status dots** show Monitor Output, Virtual Output, and Mic Passthrough state at a glance.
+- If no virtual cable is selected, a warning banner appears with a **Use Recommended Setup** button that auto-selects the best detected device (VB-CABLE, Voicemeeter, etc.).
+- **Test Virtual Output** plays a 1.5-second 440 Hz tone directly to the virtual device so you can confirm Discord hears it before playing a real sound.
+- Warning banners also flag same-device conflicts (Monitor = Virtual) and mic-with-no-device conditions.
 
 ---
 
@@ -61,6 +83,76 @@ When mic passthrough is enabled, your microphone is mixed into the virtual outpu
 
 > Passthrough adds roughly 20 ms of latency. This is intentional to keep the buffer stable  
 > while still being imperceptible in voice chat.
+
+---
+
+## Favorites and Recent sounds
+
+**Favorites** — Click the star (☆) on any sound row to mark it as a favourite. Select **Favorites** in the category filter to see only starred sounds.
+
+**Recent** — Select **Recent** in the category filter to see sounds played in the last 7 days, ordered by most recently played.
+
+---
+
+## Drag-and-drop import
+
+Drag one or more audio files (MP3, WAV, OGG, FLAC, AAC) from File Explorer directly onto the Sound Library panel. SoundPad copies the files to its app-data folder and adds them to the library immediately — no dialog needed.
+
+---
+
+## Library backup import / export
+
+**Export**: Settings tab → **Export Backup** → choose a save location. SoundPad creates a ZIP containing `sounds.json` (your metadata) and a `Sounds/` folder with all audio files.
+
+**Import**: Settings tab → **Import Backup** → select a `.zip` file. SoundPad adds any sounds not already in your library (matched by ID), copies their audio files, and clears hotkeys that conflict with your existing ones.
+
+Backup ZIPs are self-contained and portable — you can copy a library to another machine.
+
+---
+
+## Active sound controls
+
+While a sound is playing, its row highlights with an accent-coloured background and the Play button becomes a **Stop** button. Click it to stop that sound individually without affecting anything else playing.
+
+The **Stop All** button (and its global hotkey) stops every active sound at once.
+
+---
+
+## Playback mode
+
+**Settings tab → Behavior → Playback Mode**
+
+| Mode | Behaviour |
+|---|---|
+| **Mix** (default) | Every Play adds a new sound to the mix — multiple sounds can play at once |
+| **Interrupt previous** | Starting a new sound automatically stops the previous one |
+
+The chosen mode persists across restarts.
+
+---
+
+## Audio Performance Presets
+
+**Settings tab → Audio Performance**
+
+| Preset | Buffer | When to use |
+|---|---|---|
+| **Stable** | 300 ms | Most reliable; use if you hear drop-outs on older hardware |
+| **Balanced** | 100 ms | Recommended for most systems (default) |
+| **Low Latency** | 60 ms | Fastest response; may crackle on slower machines |
+
+Changing the preset recreates the audio engines and stops any playing sounds. Your mic passthrough is automatically restarted after the change.
+
+---
+
+## Update checking
+
+**Settings tab → Updates**
+
+- **Check for Updates now** — queries the GitHub Releases API immediately and shows a banner if a newer version is available.
+- **Check automatically on startup** — when enabled, runs the check once per 24 hours in the background at app startup. Disabled by default; no network requests are made unless you turn this on.
+
+If an update is found, a message appears in the status bar with a link to the **Open Releases Page** button.
 
 ---
 
@@ -108,6 +200,8 @@ All user data (sound library, settings, imported audio files) is stored in:
 Typically: `C:\Users\<you>\AppData\Roaming\SoundPad\`
 
 This folder is **not** touched by the installer or uninstaller, so your library survives uninstall + reinstall.
+
+A `startup.log` file in this folder records app startup events and is overwritten on each launch — useful for diagnosing startup crashes.
 
 ---
 

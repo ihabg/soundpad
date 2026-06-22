@@ -104,7 +104,7 @@
                                 <ColumnDefinition Width="140"/>
                                 <ColumnDefinition Width="170"/>
                                 <ColumnDefinition Width="95"/>
-                                <ColumnDefinition Width="84"/>
+                                <ColumnDefinition Width="120"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="1" Text="NAME" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                             <TextBlock Grid.Column="2" Text="CATEGORY" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
@@ -116,11 +116,17 @@
                     </Border>
 
                     <!-- Scrollable rows -->
-                    <Border Grid.Row="2"
+                    <Border x:Name="SoundsAreaBorder"
+                            Grid.Row="2"
                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{DynamicResource CardBorderBrush}"
                             BorderThickness="1,0,1,1"
-                            CornerRadius="0,0,6,6">
+                            CornerRadius="0,0,6,6"
+                            AllowDrop="True"
+                            DragEnter="SoundsArea_DragEnter"
+                            DragOver="SoundsArea_DragOver"
+                            DragLeave="SoundsArea_DragLeave"
+                            Drop="SoundsArea_Drop">
                         <ScrollViewer VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
                             <StackPanel>
@@ -220,6 +226,264 @@
                             </ui:Card>
                         </Grid>
 
+                        <!-- ── Audio Performance Presets ──────────────────────────────────── -->
+                        <ui:Card Padding="20" Margin="0,0,0,14">
+                            <StackPanel>
+
+                                <TextBlock Text="AUDIO PERFORMANCE"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Opacity="0.55"
+                                           Margin="0,0,0,12"/>
+
+                                <!-- Radio buttons -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                    <RadioButton x:Name="PresetStableRadio"
+                                                 Content="Stable"
+                                                 GroupName="AudioPreset"
+                                                 Tag="Stable"
+                                                 Margin="0,0,20,0"
+                                                 Checked="PresetRadio_Checked"/>
+                                    <RadioButton x:Name="PresetBalancedRadio"
+                                                 Content="Balanced (Recommended)"
+                                                 GroupName="AudioPreset"
+                                                 Tag="Balanced"
+                                                 Margin="0,0,20,0"
+                                                 Checked="PresetRadio_Checked"/>
+                                    <RadioButton x:Name="PresetLowLatencyRadio"
+                                                 Content="Low Latency"
+                                                 GroupName="AudioPreset"
+                                                 Tag="Low Latency"
+                                                 Checked="PresetRadio_Checked"/>
+                                </StackPanel>
+
+                                <!-- Dynamic description -->
+                                <TextBlock x:Name="PresetDescriptionText"
+                                           Text="100 ms buffer — recommended for most systems."
+                                           Opacity="0.7"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,8"/>
+
+                                <!-- Caution note -->
+                                <TextBlock Text="⚠  Changing the preset recreates the audio engines and stops all playing sounds."
+                                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                           TextWrapping="Wrap"
+                                           FontSize="12"/>
+
+                            </StackPanel>
+                        </ui:Card>
+
+                        <!-- ── Discord / Game Routing Wizard ──────────────────────────────── -->
+                        <ui:Card Padding="20" Margin="0,0,0,14">
+                            <StackPanel>
+
+                                <TextBlock Text="DISCORD / GAME ROUTING"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,16"/>
+
+                                <!-- Routing status rows -->
+                                <TextBlock Text="ROUTING STATUS"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,10"/>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock x:Name="WizardMonitorDot"
+                                               Text="●"
+                                               FontSize="12"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0"/>
+                                    <TextBlock Text="Monitor Output"
+                                               FontSize="12"
+                                               Width="130"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="WizardMonitorStatusText"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock x:Name="WizardVirtualDot"
+                                               Text="●"
+                                               FontSize="12"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0"/>
+                                    <TextBlock Text="Virtual Output"
+                                               FontSize="12"
+                                               Width="130"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="WizardVirtualStatusText"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+
+                                <StackPanel x:Name="WizardMicStatusRow"
+                                            Orientation="Horizontal"
+                                            Margin="0,0,0,6"
+                                            Visibility="Collapsed">
+                                    <TextBlock x:Name="WizardMicDot"
+                                               Text="●"
+                                               FontSize="12"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0"/>
+                                    <TextBlock Text="Mic Passthrough"
+                                               FontSize="12"
+                                               Width="130"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="WizardMicStatusText"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+
+                                <!-- Warning banners (collapsed by default) -->
+                                <TextBlock x:Name="WizardNoVirtualWarning"
+                                           Visibility="Collapsed"
+                                           Text="⚠  Virtual Output is None — Discord and games will not hear SoundPad. Select a virtual cable device such as CABLE Input."
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,8,0,0"/>
+
+                                <TextBlock x:Name="WizardConflictWarning"
+                                           Visibility="Collapsed"
+                                           Text="⚠  Monitor and Virtual Output appear to be the same device — sounds will play twice."
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,0"/>
+
+                                <TextBlock x:Name="WizardMicNoDeviceWarning"
+                                           Visibility="Collapsed"
+                                           Text="⚠  Mic Passthrough is enabled but no microphone is selected."
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,0"/>
+
+                                <TextBlock x:Name="WizardNoCableWarning"
+                                           Visibility="Collapsed"
+                                           Text="⚠  No virtual cable device detected. Install VB-CABLE or Voicemeeter so Discord can hear SoundPad."
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,0"/>
+
+                                <Border Height="1"
+                                        Background="{DynamicResource CardBorderBrush}"
+                                        Margin="0,16,0,16"/>
+
+                                <!-- Recommended Setup (hidden when no virtual cable found) -->
+                                <StackPanel x:Name="WizardRecommendedPanel"
+                                            Visibility="Collapsed"
+                                            Margin="0,0,0,16">
+                                    <TextBlock Text="RECOMMENDED SETUP"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               Margin="0,0,0,10"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:Button Content="Use Recommended Discord Setup"
+                                                   Appearance="Secondary"
+                                                   Click="UseRecommendedSetup_Click"/>
+                                        <TextBlock x:Name="WizardRecommendedDeviceName"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="12,0,0,0"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Discord setup instructions -->
+                                <TextBlock Text="HOW TO SET UP DISCORD"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,10"/>
+
+                                <StackPanel Margin="0,0,0,16">
+                                    <TextBlock Text="1.  SoundPad Virtual Output  →  CABLE Input"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock Text="2.  Discord: Settings → Voice → Input Device  →  CABLE Output"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock Text="3.  Enable Mic Passthrough in SoundPad to include your voice in Discord"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock Text="4.  In Discord: disable Noise Suppression and Auto Gain Control if sounds are cut off"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+
+                                <Border Height="1"
+                                        Background="{DynamicResource CardBorderBrush}"
+                                        Margin="0,0,0,16"/>
+
+                                <!-- Test tone -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <ui:Button x:Name="WizardTestButton"
+                                               Content="Test Discord Output"
+                                               Appearance="Secondary"
+                                               Click="TestVirtualOutput_Click"/>
+                                    <TextBlock FontSize="11"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="12,0,0,0"
+                                               TextWrapping="Wrap"
+                                               Text="Plays a 440 Hz tone to Virtual Output only — check that Discord hears it"/>
+                                </StackPanel>
+
+                                <Border Height="1"
+                                        Background="{DynamicResource CardBorderBrush}"
+                                        Margin="0,0,0,16"/>
+
+                                <!-- Performance tips -->
+                                <TextBlock Text="PERFORMANCE TIPS"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,10"/>
+
+                                <StackPanel>
+                                    <TextBlock Text="•   Recommended sample rate: 48 kHz (matches Discord and VB-CABLE natively)"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock Text="•   If Discord cuts sounds: disable Noise Suppression and Auto Gain Control in Discord Voice settings"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock Text="•   Keep SoundPad open or minimized to tray for global hotkeys to work"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+
+                            </StackPanel>
+                        </ui:Card>
+
                         <ui:Card Padding="20" Margin="0,0,0,14">
                             <StackPanel>
                                 <TextBlock Text="GLOBAL SHORTCUTS"
@@ -266,6 +530,27 @@
 
                         <ui:Card Padding="20" Margin="0,0,0,14">
                             <StackPanel>
+                                <TextBlock Text="SOUND PLAYBACK"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,16"/>
+
+                                <ui:ToggleSwitch x:Name="InterruptSoundsSwitch"
+                                                 Content="Interrupt previous sound"
+                                                 Checked="InterruptSoundsSwitch_Checked"
+                                                 Unchecked="InterruptSoundsSwitch_Unchecked"/>
+
+                                <TextBlock Text="When on, playing a sound stops any currently playing sounds first. Mic passthrough is unaffected."
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </ui:Card>
+
+                        <ui:Card Padding="20" Margin="0,0,0,14">
+                            <StackPanel>
                                 <TextBlock Text="BEHAVIOR"
                                            FontSize="11"
                                            FontWeight="SemiBold"
@@ -289,6 +574,78 @@
                                                  Checked="StartWithWindowsSwitch_Checked"
                                                  Unchecked="StartWithWindowsSwitch_Unchecked"/>
                             </StackPanel>
+                        </ui:Card>
+
+                        <ui:Card Padding="20" Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="LIBRARY BACKUP"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,8"/>
+                                <TextBlock Text="Export your sound library and restore it on any device."
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Margin="0,0,0,16"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:Button Content="Export Backup"
+                                               Appearance="Secondary"
+                                               Click="ExportBackup_Click">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="ArrowDownload20"/>
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                    <ui:Button Content="Import Backup"
+                                               Appearance="Secondary"
+                                               Margin="12,0,0,0"
+                                               Click="ImportBackup_Click">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="ArrowUpload20"/>
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                </StackPanel>
+                            </StackPanel>
+                        </ui:Card>
+
+                        <ui:Card Padding="20" Margin="0,0,0,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                    <TextBlock Text="UPDATES"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               Margin="0,0,0,8"/>
+                                    <TextBlock Text="Check for new SoundPad releases on GitHub."
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               Margin="0,0,0,12"/>
+                                    <ui:ToggleSwitch x:Name="AutoUpdateSwitch"
+                                                     Content="Enable automatic update checks"
+                                                     Checked="AutoUpdateSwitch_Checked"
+                                                     Unchecked="AutoUpdateSwitch_Unchecked"/>
+                                    <TextBlock Text="Automatic checks run once per day when SoundPad opens."
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,6,0,0"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <ui:Button x:Name="CheckUpdatesButton"
+                                               Content="Check for Updates"
+                                               Appearance="Secondary"
+                                               Click="CheckUpdates_Click"/>
+                                    <ui:Button Content="Open Releases Page"
+                                               Appearance="Secondary"
+                                               Margin="0,8,0,0"
+                                               Click="OpenReleases_Click"/>
+                                </StackPanel>
+                            </Grid>
                         </ui:Card>
 
                         <ui:Card Padding="20">

@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using NAudio.Wave.SampleProviders;
 using SoundPad.App.Audio;
 using SoundPad.App.Dialogs;
 using SoundPad.App.Hotkeys;
@@ -49,18 +50,64 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // rather than hide to tray when CloseToTray is enabled.
     private bool _isExiting;
 
+    // Tracks an in-progress test tone so it can be stopped by Stop All or replaced
+    // when the user clicks Test Discord Output again. Null when no tone is playing.
+    private OffsetSampleProvider? _virtualTestToneProvider;
+
+    // URL of the latest GitHub release, populated when an update check returns UpdateAvailable.
+    private string? _lastReleaseUrl;
+
+    // ── Active playback tracking ──────────────────────────────────────────────
+    private sealed record RowControls(Border Row, UiButton PlayStopButton);
+
+    private sealed class ActivePlayback
+    {
+        public Guid            SoundId       { get; init; }
+        public PlaybackHandle? MonitorHandle { get; init; }
+        public PlaybackHandle? VirtualHandle { get; init; }
+
+        public bool IsFinished =>
+            (MonitorHandle is null || MonitorHandle.IsFinished) &&
+            (VirtualHandle is null || VirtualHandle.IsFinished);
+    }
+
+    private readonly Dictionary<Guid, ActivePlayback> _activePlaybacks = new();
+    private readonly Dictionary<Guid, RowControls>    _rowControls     = new();
+    private DispatcherTimer?                           _playbackMonitor;
+
     // ── Constructor ────────────────────────────────────────────────────────────
     // Settings are loaded before InitializeComponent so the saved window
     // bounds can be applied before the window is ever shown (no visible jump).
     public MainWindow()
     {
-        Debug.WriteLine("[Startup] Constructor start");
-        _settings = AppSettingsService.Load();
-        Debug.WriteLine("[Startup] Settings loaded");
-        InitializeComponent();
-        Debug.WriteLine("[Startup] InitializeComponent done");
+        StartupLogger.Log("Constructor begin");
+
+        try
+        {
+            _settings = AppSettingsService.Load();
+            StartupLogger.Log("Settings loaded");
+        }
+        catch (Exception ex)
+        {
+            StartupLogger.Log($"Settings load FAILED ({ex.GetType().Name}): {ex.Message} — using defaults");
+            _settings = new AppSettings();
+        }
+
+        try
+        {
+            StartupLogger.Log("InitializeComponent begin");
+            InitializeComponent();
+            StartupLogger.Log("InitializeComponent done");
+        }
+        catch (Exception ex)
+        {
+            StartupLogger.Log($"InitializeComponent FAILED ({ex.GetType().Name}): {ex.Message}");
+            StartupLogger.Log($"  Stack: {ex.StackTrace}");
+            throw; // propagate so App_Startup shows an error dialog
+        }
+
         RestoreWindowBounds();
-        Debug.WriteLine("[Startup] Constructor end");
+        StartupLogger.Log("Constructor end");
     }
 
     private void RestoreWindowBounds()
@@ -186,8 +233,29 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void RestoreBehaviorSettings()
     {
-        MinimizeToTraySwitch.IsChecked = _settings.MinimizeToTray;
-        CloseToTraySwitch.IsChecked    = _settings.CloseToTray;
+        InterruptSoundsSwitch.Checked   -= InterruptSoundsSwitch_Checked;
+        InterruptSoundsSwitch.Unchecked -= InterruptSoundsSwitch_Unchecked;
+        InterruptSoundsSwitch.IsChecked  = _settings.InterruptPreviousSounds;
+        InterruptSoundsSwitch.Checked   += InterruptSoundsSwitch_Checked;
+        InterruptSoundsSwitch.Unchecked += InterruptSoundsSwitch_Unchecked;
+
+        AutoUpdateSwitch.Checked   -= AutoUpdateSwitch_Checked;
+        AutoUpdateSwitch.Unchecked -= AutoUpdateSwitch_Unchecked;
+        AutoUpdateSwitch.IsChecked  = _settings.EnableAutoUpdateChecks;
+        AutoUpdateSwitch.Checked   += AutoUpdateSwitch_Checked;
+        AutoUpdateSwitch.Unchecked += AutoUpdateSwitch_Unchecked;
+
+        MinimizeToTraySwitch.Checked   -= MinimizeToTraySwitch_Checked;
+        MinimizeToTraySwitch.Unchecked -= MinimizeToTraySwitch_Unchecked;
+        MinimizeToTraySwitch.IsChecked  = _settings.MinimizeToTray;
+        MinimizeToTraySwitch.Checked   += MinimizeToTraySwitch_Checked;
+        MinimizeToTraySwitch.Unchecked += MinimizeToTraySwitch_Unchecked;
+
+        CloseToTraySwitch.Checked   -= CloseToTraySwitch_Checked;
+        CloseToTraySwitch.Unchecked -= CloseToTraySwitch_Unchecked;
+        CloseToTraySwitch.IsChecked  = _settings.CloseToTray;
+        CloseToTraySwitch.Checked   += CloseToTraySwitch_Checked;
+        CloseToTraySwitch.Unchecked += CloseToTraySwitch_Unchecked;
 
         // Sync the toggle with the actual registry state so it stays accurate
         // even if the user manually edited the registry or moved the exe.
@@ -208,6 +276,89 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     }
 
     // ── Behavior toggle handlers ───────────────────────────────────────────────
+
+    private void InterruptSoundsSwitch_Checked(object sender, RoutedEventArgs e)
+    {
+        _settings.InterruptPreviousSounds = true;
+        SaveSettings();
+    }
+
+    private void InterruptSoundsSwitch_Unchecked(object sender, RoutedEventArgs e)
+    {
+        _settings.InterruptPreviousSounds = false;
+        SaveSettings();
+    }
+
+    private void AutoUpdateSwitch_Checked(object sender, RoutedEventArgs e)
+    {
+        _settings.EnableAutoUpdateChecks = true;
+        SaveSettings();
+    }
+
+    private void AutoUpdateSwitch_Unchecked(object sender, RoutedEventArgs e)
+    {
+        _settings.EnableAutoUpdateChecks = false;
+        SaveSettings();
+    }
+
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        CheckUpdatesButton.IsEnabled = false;
+        StatusText.Text = "Checking for updates...";
+
+        var result = await UpdateCheckService.CheckAsync(GetAppVersion());
+
+        switch (result.Status)
+        {
+            case UpdateStatus.UpdateAvailable:
+                _lastReleaseUrl = result.ReleaseUrl;
+                StatusText.Text = $"Update available: {result.LatestTag}  — click Open Releases Page to download.";
+                break;
+            case UpdateStatus.UpToDate:
+                StatusText.Text = "SoundPad is up to date.";
+                break;
+            default:
+                StatusText.Text = "Could not check for updates. Check your internet connection.";
+                break;
+        }
+
+        CheckUpdatesButton.IsEnabled = true;
+    }
+
+    private void OpenReleases_Click(object sender, RoutedEventArgs e)
+    {
+        var url = _lastReleaseUrl ?? "https://github.com/ihabg/soundpad/releases";
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch { }
+    }
+
+    private async Task RunAutoUpdateCheckAsync()
+    {
+        StartupLogger.Log("Auto update check begin");
+        try
+        {
+            var result = await UpdateCheckService.CheckAsync(GetAppVersion());
+
+            // Continuation runs back on the UI thread (SynchronizationContext captured at call site).
+            _settings.LastUpdateCheckUtc = DateTime.UtcNow;
+            SaveSettings();
+
+            StartupLogger.Log($"Auto update check result: {result.Status}");
+
+            if (result.Status == UpdateStatus.UpdateAvailable)
+            {
+                _lastReleaseUrl = result.ReleaseUrl;
+                StatusText.Text = $"Update available: {result.LatestTag}  — click Open Releases Page to download.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StartupLogger.Log($"Auto update check unexpected error: {ex.Message}");
+        }
+    }
 
     private void MinimizeToTraySwitch_Checked(object sender, RoutedEventArgs e)
     {
@@ -378,33 +529,33 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // deferred until ContextIdle in MainWindow_Loaded.
     protected override void OnSourceInitialized(EventArgs e)
     {
-        Debug.WriteLine("[Startup] OnSourceInitialized start");
+        StartupLogger.Log("OnSourceInitialized begin");
         base.OnSourceInitialized(e);
         try
         {
             var helper = new System.Windows.Interop.WindowInteropHelper(this);
             var hwnd   = helper.Handle;
-            Debug.WriteLine($"[Startup] HWND = 0x{hwnd:X16} {(hwnd == IntPtr.Zero ? "— ZERO, hotkeys will fail" : "OK")}");
+            StartupLogger.Log($"HWND = 0x{hwnd:X16} {(hwnd == IntPtr.Zero ? "— ZERO, hotkeys will fail" : "OK")}");
 
             var src = System.Windows.Interop.HwndSource.FromHwnd(hwnd);
-            Debug.WriteLine($"[Startup] HwndSource = {(src is null ? "NULL — hotkeys will fail" : "OK")}");
+            StartupLogger.Log($"HwndSource = {(src is null ? "NULL — hotkeys will fail" : "OK")}");
 
             _hotkeys = new HotkeyManager(this);
-            Debug.WriteLine("[Startup] HotkeyManager created");
+            StartupLogger.Log("HotkeyManager created");
 
             _hotkeyService = new HotkeyService(_hotkeys);
             _hotkeyService.HotkeyTriggered        += OnSoundHotkeyTriggered;
             _hotkeyService.StopAllHotkeyTriggered += OnStopAllHotkeyTriggered;
-            Debug.WriteLine("[Startup] HotkeyService ready");
+            StartupLogger.Log("HotkeyService ready");
         }
         catch (Exception ex)
         {
             _hotkeys       = null;
             _hotkeyService = null;
-            Debug.WriteLine($"[Startup] Hotkey init FAILED ({ex.GetType().Name}): {ex.Message}");
-            Debug.WriteLine($"[Startup] {ex.StackTrace}");
+            StartupLogger.Log($"Hotkey init FAILED ({ex.GetType().Name}): {ex.Message}");
+            StartupLogger.Log($"  Stack: {ex.StackTrace}");
         }
-        Debug.WriteLine("[Startup] OnSourceInitialized end");
+        StartupLogger.Log("OnSourceInitialized end");
     }
 
     private void OnSoundHotkeyTriggered(Guid soundId)
@@ -419,59 +570,72 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // ── Loaded: sound library + device lists ──────────────────────────────────
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        Debug.WriteLine("[Startup] Loaded start");
+        StartupLogger.Log("MainWindow_Loaded begin");
         try
         {
+            StartupLogger.Log("LoadLibrary begin");
             LoadLibrary();
-            Debug.WriteLine("[Startup] LoadLibrary done");
+            StartupLogger.Log("LoadLibrary done");
 
+            StartupLogger.Log("PopulateDeviceLists begin");
             PopulateDeviceLists();
-            Debug.WriteLine("[Startup] PopulateDeviceLists done");
+            StartupLogger.Log("PopulateDeviceLists done");
 
+            StartupLogger.Log("PopulateMicList begin");
             PopulateMicList();
-            Debug.WriteLine("[Startup] PopulateMicList done");
+            StartupLogger.Log("PopulateMicList done");
 
-            // Mic passthrough depends on both the virtual engine and the mic
-            // device list being ready, so it's restored only after both calls above.
+            StartupLogger.Log("RestoreMicPassthroughState begin");
             RestoreMicPassthroughState();
+            StartupLogger.Log("RestoreSelectedTab begin");
             RestoreSelectedTab();
+            StartupLogger.Log("RestoreBehaviorSettings begin");
             RestoreBehaviorSettings();
+            RestoreAudioPerformancePreset();
+            StartupLogger.Log("SyncStartupRegistryPath begin");
             SyncStartupRegistryPath();
+            StartupLogger.Log("InitializeTrayIcon begin");
             InitializeTrayIcon();
+            StartupLogger.Log("InitializeTrayIcon done");
             AboutVersionText.Text    = $"Version {GetAppVersion()}";
             AboutDataFolderText.Text = AppPaths.AppDataDir;
 
-            // Defer hotkey registration until the dispatcher is idle so that
-            // WPF-UI (Mica backdrop, DWM attributes, title-bar composition) has
-            // fully finished its own Loaded/Render work.  RegisterHotKey called
-            // during the Loaded burst can fail transiently; ContextIdle fires
-            // only after all pending Render/DataBind/Normal priority items drain.
-            // The lambda has its own try/catch so an exception here never
-            // crashes the process — only a status-bar message is shown.
-            Debug.WriteLine("[Startup] Loaded end — queuing deferred hotkey registration");
+            StartupLogger.Log("MainWindow_Loaded end — queuing deferred hotkey registration");
             Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
             {
-                Debug.WriteLine("[Startup] Deferred hotkey registration start");
+                StartupLogger.Log("Deferred hotkey registration begin");
                 try
                 {
                     ReregisterAllHotkeysAndReport("startup");
-                    Debug.WriteLine("[Startup] Deferred hotkey registration complete");
+                    StartupLogger.Log("Deferred hotkey registration done");
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[Startup] Deferred hotkey registration FAILED ({ex.GetType().Name}): {ex.Message}");
-                    Debug.WriteLine($"[Startup] {ex.StackTrace}");
+                    StartupLogger.Log($"Deferred hotkey registration FAILED ({ex.GetType().Name}): {ex.Message}");
+                    StartupLogger.Log($"  Stack: {ex.StackTrace}");
                     try { StatusText.Text = $"Hotkey startup error: {ex.Message}"; } catch { }
                 }
             }));
+
+            // Auto update check: only when enabled, and only once per 24 hours.
+            // Runs at ApplicationIdle so it never competes with startup rendering.
+            if (_settings.EnableAutoUpdateChecks)
+            {
+                var lastCheck = _settings.LastUpdateCheckUtc;
+                if (lastCheck is null || (DateTime.UtcNow - lastCheck.Value).TotalHours >= 24)
+                {
+                    Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,
+                        new Action(() => _ = RunAutoUpdateCheckAsync()));
+                }
+            }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[Startup] Loaded FAILED ({ex.GetType().Name}): {ex.Message}");
-            Debug.WriteLine($"[Startup] {ex.StackTrace}");
+            StartupLogger.Log($"MainWindow_Loaded FAILED ({ex.GetType().Name}): {ex.Message}");
+            StartupLogger.Log($"  Stack: {ex.StackTrace}");
             try { StatusText.Text = $"Startup error: {ex.Message}"; } catch { }
         }
-        Debug.WriteLine("[Startup] Loaded handler returning");
+        StartupLogger.Log("MainWindow_Loaded handler returning");
     }
 
     private void RestoreMicPassthroughState()
@@ -672,17 +836,28 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // text and selected category.  Called after any library or filter change.
     private void FilterSoundsPanel()
     {
-        // SearchBox and CategoryFilter may not exist yet during early startup calls.
-        var search   = SearchBox?.Text.Trim().ToLowerInvariant() ?? "";
+        var search   = SearchBox?.Text.Trim() ?? "";
         var category = CategoryFilter?.SelectedItem as string ?? "All";
 
+        IEnumerable<SoundItem> source = category == "Recent"
+            ? _library.OrderByDescending(x => x.LastPlayedAt ?? DateTime.MinValue)
+            : _library;
+
+        _rowControls.Clear();
         SoundsPanel.Children.Clear();
 
-        foreach (var item in _library)
+        foreach (var item in source)
         {
-            bool matchSearch   = string.IsNullOrEmpty(search)
-                              || item.DisplayName.ToLowerInvariant().Contains(search);
-            bool matchCategory = category == "All" || item.Category == category;
+            bool matchSearch = string.IsNullOrEmpty(search)
+                            || item.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase);
+            bool matchCategory = category switch
+            {
+                "All"       => true,
+                "Favorites" => item.IsFavorite,
+                "Recent"    => item.LastPlayedAt.HasValue
+                            && (DateTime.UtcNow - item.LastPlayedAt.Value).TotalDays <= 7,
+                _           => item.Category == category
+            };
 
             if (!matchSearch || !matchCategory)
                 continue;
@@ -690,11 +865,18 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             SoundsPanel.Children.Add(BuildSoundRow(item));
         }
 
+        foreach (var id in _activePlaybacks.Keys)
+            UpdateRowState(id, active: true);
+
         bool panelEmpty = SoundsPanel.Children.Count == 0;
         EmptyLibraryText.Visibility = panelEmpty ? Visibility.Visible : Visibility.Collapsed;
         EmptyLibraryText.Text = _library.Count == 0
             ? "No sounds yet — click \"+ Add Sound\" to import an audio file."
-            : "No sounds match your search or filter.";
+            : category == "Favorites"
+                ? "No favorites yet — click the star on a sound to mark it as a favorite."
+                : category == "Recent"
+                    ? "No sounds played in the last 7 days."
+                    : "No sounds match your search or filter.";
 
         if (LibraryCountText is not null)
             LibraryCountText.Content = $"{SoundsPanel.Children.Count}";
@@ -710,6 +892,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         CategoryFilter.SelectionChanged -= CategoryFilter_SelectionChanged;
         CategoryFilter.Items.Clear();
         CategoryFilter.Items.Add("All");
+        CategoryFilter.Items.Add("Favorites");
+        CategoryFilter.Items.Add("Recent");
 
         foreach (var cat in _library
             .Select(x => string.IsNullOrWhiteSpace(x.Category) ? "General" : x.Category)
@@ -736,7 +920,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(95) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(84) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
     }
 
     // Creates one details-list row for a SoundItem. Hotkey display now comes
@@ -750,8 +934,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var grid = new Grid();
         AddRowColumns(grid);
 
-        // ── Col 0: Play ──────────────────────────────────────────────────
-        var playBtn = new UiButton
+        // ── Col 0: Play / Stop toggle ────────────────────────────────────
+        var playStopBtn = new UiButton
         {
             Appearance          = ControlAppearance.Transparent,
             Padding             = new Thickness(8),
@@ -759,9 +943,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             VerticalAlignment   = VerticalAlignment.Center,
             Icon                = new UiSymbolIcon { Symbol = SymbolRegular.Play20 }
         };
-        playBtn.Click += (_, _) => PlayLibraryItem(capturedItem);
-        Grid.SetColumn(playBtn, 0);
-        grid.Children.Add(playBtn);
+        playStopBtn.Click += (_, _) =>
+        {
+            if (_activePlaybacks.ContainsKey(capturedItem.Id))
+                StopSoundById(capturedItem.Id);
+            else
+                PlayLibraryItem(capturedItem);
+        };
+        Grid.SetColumn(playStopBtn, 0);
+        grid.Children.Add(playStopBtn);
 
         // ── Col 1: Name ──────────────────────────────────────────────────
         var nameBlock = new TextBlock
@@ -859,10 +1049,26 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         grid.Children.Add(createdText);
 
         // ── Col 6: Actions (subtle icon buttons) ────────────────────────
+        var favBtn = new UiButton
+        {
+            Appearance = ControlAppearance.Transparent,
+            Padding    = new Thickness(6),
+            ToolTip    = item.IsFavorite ? "Remove from favorites" : "Add to favorites",
+            Foreground = item.IsFavorite ? accentBrush : (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            Icon       = new UiSymbolIcon { Symbol = item.IsFavorite ? SymbolRegular.Star16 : SymbolRegular.StarOff16 }
+        };
+        favBtn.Click += (_, _) =>
+        {
+            capturedItem.IsFavorite = !capturedItem.IsFavorite;
+            SoundLibraryService.Save(_library);
+            FilterSoundsPanel();
+        };
+
         var editBtn = new UiButton
         {
             Appearance = ControlAppearance.Transparent,
             Padding    = new Thickness(6),
+            Margin     = new Thickness(4, 0, 0, 0),
             ToolTip    = "Edit",
             Icon       = new UiSymbolIcon { Symbol = SymbolRegular.Edit16 }
         };
@@ -885,6 +1091,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment   = VerticalAlignment.Center
         };
+        actionsPanel.Children.Add(favBtn);
         actionsPanel.Children.Add(editBtn);
         actionsPanel.Children.Add(removeBtn);
         Grid.SetColumn(actionsPanel, 6);
@@ -900,13 +1107,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             Child           = grid
         };
         var hoverBg = (Brush)Application.Current.Resources["ControlFillColorDefaultBrush"];
-        row.MouseEnter += (_, _) => row.Background = hoverBg;
-        row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+        row.MouseEnter += (_, _) => { if (!_activePlaybacks.ContainsKey(capturedItem.Id)) row.Background = hoverBg; };
+        row.MouseLeave += (_, _) => { if (!_activePlaybacks.ContainsKey(capturedItem.Id)) row.Background = Brushes.Transparent; };
         row.MouseLeftButtonDown += (_, e) =>
         {
             if (e.ClickCount == 2)
                 PlayLibraryItem(capturedItem);
         };
+
+        _rowControls[item.Id] = new RowControls(row, playStopBtn);
         return row;
     }
 
@@ -1160,6 +1369,92 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     //  PLAYBACK
     // ══════════════════════════════════════════════════════════════════════════
 
+    // ── Active playback helpers ────────────────────────────────────────────────
+
+    private void EnsurePlaybackMonitor()
+    {
+        if (_playbackMonitor is not null)
+            return;
+
+        _playbackMonitor = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        _playbackMonitor.Tick += PlaybackMonitor_Tick;
+        _playbackMonitor.Start();
+    }
+
+    private void PlaybackMonitor_Tick(object? sender, EventArgs e)
+    {
+        var finished = _activePlaybacks
+            .Where(kv => kv.Value.IsFinished)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        foreach (var id in finished)
+        {
+            _activePlaybacks.Remove(id);
+            UpdateRowState(id, active: false);
+        }
+
+        if (_activePlaybacks.Count == 0)
+        {
+            _playbackMonitor?.Stop();
+            _playbackMonitor = null;
+        }
+    }
+
+    private static readonly Color _fallbackAccent = Color.FromRgb(0, 120, 215);
+
+    private void UpdateRowState(Guid soundId, bool active)
+    {
+        if (!_rowControls.TryGetValue(soundId, out var ctrl))
+            return;
+
+        if (active)
+        {
+            var accent = (Application.Current.Resources["SystemAccentColorPrimaryBrush"] as SolidColorBrush)?.Color ?? _fallbackAccent;
+            ctrl.Row.Background = new SolidColorBrush(accent) { Opacity = 0.15 };
+        }
+        else
+        {
+            ctrl.Row.Background = Brushes.Transparent;
+        }
+
+        ctrl.PlayStopButton.Icon = new UiSymbolIcon { Symbol = active ? SymbolRegular.Stop20 : SymbolRegular.Play20 };
+    }
+
+    private void StopSoundById(Guid soundId)
+    {
+        if (!_activePlaybacks.TryGetValue(soundId, out var playback))
+            return;
+
+        if (playback.MonitorHandle is not null)
+            _monitorEngine?.StopOne(playback.MonitorHandle.TopProvider);
+        if (playback.VirtualHandle is not null)
+            _virtualEngine?.StopOne(playback.VirtualHandle.TopProvider);
+
+        _activePlaybacks.Remove(soundId);
+        UpdateRowState(soundId, active: false);
+
+        if (_activePlaybacks.Count == 0)
+        {
+            _playbackMonitor?.Stop();
+            _playbackMonitor = null;
+        }
+    }
+
+    private void ClearAllActivePlaybacks()
+    {
+        _monitorEngine?.StopAll();
+        _virtualEngine?.StopAll();
+
+        var ids = _activePlaybacks.Keys.ToList();
+        _activePlaybacks.Clear();
+        foreach (var id in ids)
+            UpdateRowState(id, active: false);
+
+        _playbackMonitor?.Stop();
+        _playbackMonitor = null;
+    }
+
     private void PlayLibraryItem(SoundItem item)
     {
         if (!_cachedSounds.TryGetValue(item.Id, out var sound))
@@ -1168,7 +1463,16 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        PlaySound(sound, item.DisplayName, ConvertUiVolumeToGain(item.Volume));
+        item.LastPlayedAt = DateTime.UtcNow;
+        SoundLibraryService.Save(_library);
+
+        if (CategoryFilter?.SelectedItem as string == "Recent")
+            FilterSoundsPanel();
+
+        if (_settings.InterruptPreviousSounds)
+            ClearAllActivePlaybacks();
+
+        PlaySound(item.Id, sound, item.DisplayName, ConvertUiVolumeToGain(item.Volume));
     }
 
     // Maps a 0–1 UI volume to a 0–1 audio gain using a squared (power-2) curve.
@@ -1181,7 +1485,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private static float ConvertUiVolumeToGain(float uiVolume)
         => uiVolume * uiVolume;
 
-    private void PlaySound(CachedSound sound, string label, float volume = 1.0f)
+    private void PlaySound(Guid soundId, CachedSound sound, string label, float volume = 1.0f)
     {
         if (_monitorEngine is null && _virtualEngine is null)
         {
@@ -1191,7 +1495,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         try
         {
-            _monitorEngine?.Play(sound, volume);
+            PlaybackHandle? monitorHandle = _monitorEngine?.Play(sound, volume);
 
             var monitorDevice = MonitorComboBox.SelectedItem as AudioDevice;
             var virtualDevice = VirtualComboBox.SelectedItem as AudioDevice;
@@ -1199,8 +1503,28 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             bool sameDevice = _virtualEngine is not null
                            && AudioDevice.AreSameOutputDevice(monitorDevice, virtualDevice);
 
-            if (!sameDevice)
-                _virtualEngine?.Play(sound, volume);
+            PlaybackHandle? virtualHandle = sameDevice ? null : _virtualEngine?.Play(sound, volume);
+
+            // Stop the previous instance of this same sound before registering the new one.
+            if (_activePlaybacks.TryGetValue(soundId, out var previous))
+            {
+                if (previous.MonitorHandle is not null)
+                    _monitorEngine?.StopOne(previous.MonitorHandle.TopProvider);
+                if (previous.VirtualHandle is not null)
+                    _virtualEngine?.StopOne(previous.VirtualHandle.TopProvider);
+            }
+
+            if (monitorHandle is not null || virtualHandle is not null)
+            {
+                _activePlaybacks[soundId] = new ActivePlayback
+                {
+                    SoundId       = soundId,
+                    MonitorHandle = monitorHandle,
+                    VirtualHandle = virtualHandle,
+                };
+                UpdateRowState(soundId, active: true);
+                EnsurePlaybackMonitor();
+            }
 
             StatusText.Text = sameDevice
                 ? $"▶ {label}  (Virtual = Monitor, playing once)"
@@ -1216,13 +1540,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void StopButton_Click(object sender, RoutedEventArgs e) => StopAllSounds();
 
-    // Stops every active sound effect on both engines. Mic passthrough is a
-    // persistent mixer input (added via AddMixerInput, not tracked in the
-    // engine's _active list), so it is unaffected and keeps working.
+    // Public stop-all entry point: clears active sounds, stops the test tone,
+    // and updates the status bar.  Mic passthrough is unaffected (it uses
+    // AddMixerInput, not the engine's tracked _active list).
     private void StopAllSounds()
     {
-        _monitorEngine?.StopAll();
-        _virtualEngine?.StopAll();
+        ClearAllActivePlaybacks();
+        StopVirtualTestTone();
         StatusText.Text = "Stopped";
     }
 
@@ -1269,6 +1593,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 StatusText.Text = $"Saved virtual device \"{_settings.VirtualDeviceName}\" not found — using None.";
             else if (!selectedVirtual.IsNone && IsVirtualAudioRouterDevice(selectedVirtual.Name))
                 StatusText.Text = $"Virtual: {selectedVirtual.Name} — set as Microphone input in Discord to route audio";
+
+            RefreshRoutingWizard();
         }
         catch (Exception ex)
         {
@@ -1281,7 +1607,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (MonitorComboBox.SelectedItem is not AudioDevice device)
             return;
 
-        _monitorEngine?.StopAll();
+        ClearAllActivePlaybacks();
         _monitorEngine?.Dispose();
         _monitorEngine = null;
 
@@ -1295,6 +1621,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _settings.MonitorDeviceName   = device.Name;
         _settings.MonitorDeviceNumber = device.Number;
         SaveSettings();
+        RefreshRoutingWizard();
     }
 
     private void VirtualComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1303,8 +1630,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
 
         StopMicPassthrough();
+        StopVirtualTestTone();
 
-        _virtualEngine?.StopAll();
+        ClearAllActivePlaybacks();
         _virtualEngine?.Dispose();
         _virtualEngine = null;
 
@@ -1328,11 +1656,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (MicPassthroughCheckBox.IsChecked == true)
                 StartMicPassthrough();
         }
+
+        RefreshRoutingWizard();
     }
 
     private void CreateMonitorEngine(int deviceNumber)
     {
-        try   { _monitorEngine = new AudioPlaybackEngine(deviceNumber); }
+        var (latency, buffers) = GetPresetParams();
+        try   { _monitorEngine = new AudioPlaybackEngine(deviceNumber, latency, buffers); }
         catch (Exception ex)
         {
             _monitorEngine  = null;
@@ -1342,12 +1673,139 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void CreateVirtualEngine(int deviceNumber)
     {
-        try   { _virtualEngine = new AudioPlaybackEngine(deviceNumber); }
+        var (latency, buffers) = GetPresetParams();
+        try   { _virtualEngine = new AudioPlaybackEngine(deviceNumber, latency, buffers); }
         catch (Exception ex)
         {
             _virtualEngine  = null;
             StatusText.Text = $"Virtual device error: {ex.Message}";
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  AUDIO PERFORMANCE PRESETS
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private (int desiredLatency, int numberOfBuffers) GetPresetParams() =>
+        _settings.AudioPerformancePreset switch
+        {
+            "Stable"      => (300, 3),
+            "Low Latency" => (60,  2),
+            _             => (100, 2),  // "Balanced" and unknown values
+        };
+
+    private void UpdatePresetDescription(string preset)
+    {
+        if (PresetDescriptionText is null) return;
+        PresetDescriptionText.Text = preset switch
+        {
+            "Stable"      => "300 ms buffer — most reliable, slight delay before sound starts.",
+            "Low Latency" => "60 ms buffer — fastest response, may crackle on slow systems.",
+            _             => "100 ms buffer — recommended for most systems.",
+        };
+    }
+
+    private void RestoreAudioPerformancePreset()
+    {
+        PresetStableRadio.Checked      -= PresetRadio_Checked;
+        PresetBalancedRadio.Checked    -= PresetRadio_Checked;
+        PresetLowLatencyRadio.Checked  -= PresetRadio_Checked;
+
+        PresetStableRadio.IsChecked     = _settings.AudioPerformancePreset == "Stable";
+        PresetBalancedRadio.IsChecked   = _settings.AudioPerformancePreset == "Balanced";
+        PresetLowLatencyRadio.IsChecked = _settings.AudioPerformancePreset == "Low Latency";
+
+        if (!PresetStableRadio.IsChecked.GetValueOrDefault() &&
+            !PresetBalancedRadio.IsChecked.GetValueOrDefault() &&
+            !PresetLowLatencyRadio.IsChecked.GetValueOrDefault())
+            PresetBalancedRadio.IsChecked = true;
+
+        UpdatePresetDescription(_settings.AudioPerformancePreset);
+
+        PresetStableRadio.Checked      += PresetRadio_Checked;
+        PresetBalancedRadio.Checked    += PresetRadio_Checked;
+        PresetLowLatencyRadio.Checked  += PresetRadio_Checked;
+    }
+
+    private void PresetRadio_Checked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.RadioButton rb) return;
+        string newPreset = rb.Tag as string ?? "Balanced";
+        ApplyAudioPerformancePreset(newPreset);
+    }
+
+    private void ApplyAudioPerformancePreset(string newPreset)
+    {
+        string previousPreset = _settings.AudioPerformancePreset;
+        if (newPreset == previousPreset) return;
+
+        // Remember mic passthrough state; stop it before touching engines.
+        bool micWasActive = _micPassthrough is not null;
+        if (micWasActive) StopMicPassthrough();
+
+        // Stop all playing sounds and the test tone.
+        ClearAllActivePlaybacks();
+        StopVirtualTestTone();
+
+        // Commit the new preset so GetPresetParams() picks it up.
+        _settings.AudioPerformancePreset = newPreset;
+        UpdatePresetDescription(newPreset);
+
+        // Recreate monitor engine.
+        int? monitorNum = (_monitorEngine is not null)
+            ? (MonitorComboBox.SelectedItem as AudioDevice)?.Number
+            : null;
+        _monitorEngine?.StopAll();
+        _monitorEngine?.Dispose();
+        _monitorEngine = null;
+
+        if (monitorNum.HasValue)
+            CreateMonitorEngine(monitorNum.Value);
+
+        // Recreate virtual engine.
+        int? virtualNum = (_virtualEngine is not null)
+            ? (VirtualComboBox.SelectedItem as AudioDevice)?.Number
+            : null;
+        _virtualEngine?.StopAll();
+        _virtualEngine?.Dispose();
+        _virtualEngine = null;
+
+        if (virtualNum.HasValue)
+            CreateVirtualEngine(virtualNum.Value);
+
+        // If either required engine failed to create, roll back.
+        bool monitorFailed = monitorNum.HasValue && _monitorEngine is null;
+        bool virtualFailed = virtualNum.HasValue && _virtualEngine is null;
+
+        if (monitorFailed || virtualFailed)
+        {
+            StatusText.Text = $"Preset '{newPreset}' failed — reverting to '{previousPreset}'.";
+            _settings.AudioPerformancePreset = previousPreset;
+
+            // Recreate with original preset values.
+            if (monitorNum.HasValue)
+            {
+                _monitorEngine?.Dispose();
+                _monitorEngine = null;
+                CreateMonitorEngine(monitorNum.Value);
+            }
+            if (virtualNum.HasValue)
+            {
+                _virtualEngine?.Dispose();
+                _virtualEngine = null;
+                CreateVirtualEngine(virtualNum.Value);
+            }
+
+            RestoreAudioPerformancePreset();
+        }
+        else
+        {
+            SaveSettings();
+        }
+
+        // Restore mic passthrough if it was running.
+        if (micWasActive && _virtualEngine is not null)
+            StartMicPassthrough();
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -1381,6 +1839,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
 
             MicComboBox.SelectionChanged += MicComboBox_SelectionChanged;
+            RefreshRoutingWizard();
         }
         catch (Exception ex)
         {
@@ -1399,6 +1858,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (MicPassthroughCheckBox.IsChecked == true)
             RestartMicPassthrough();
+
+        RefreshRoutingWizard();
     }
 
     private void MicPassthroughCheckBox_Checked(object sender, RoutedEventArgs e)
@@ -1406,6 +1867,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StartMicPassthrough();
         _settings.MicPassthroughEnabled = MicPassthroughCheckBox.IsChecked == true;
         SaveSettings();
+        RefreshRoutingWizard();
     }
 
     private void MicPassthroughCheckBox_Unchecked(object sender, RoutedEventArgs e)
@@ -1413,6 +1875,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StopMicPassthrough();
         _settings.MicPassthroughEnabled = MicPassthroughCheckBox.IsChecked == true;
         SaveSettings();
+        RefreshRoutingWizard();
     }
 
     private void MicVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -1468,6 +1931,319 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         StopMicPassthrough();
         StartMicPassthrough();
+    }
+
+    // ── Import / Export Library Backup ────────────────────────────────────────
+
+    private void ExportBackup_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title           = "Export Sound Library Backup",
+            Filter          = "SoundPad Backup (*.zip)|*.zip",
+            FileName        = $"SoundPad-Backup-{DateTime.Now:yyyy-MM-dd}.zip",
+            DefaultExt      = ".zip",
+            AddExtension    = true,
+            OverwritePrompt = true
+        };
+
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            LibraryBackupService.Export(_library, dialog.FileName);
+            StatusText.Text = $"Backup exported: {Path.GetFileName(dialog.FileName)}";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Export failed: {ex.Message}";
+        }
+    }
+
+    private void ImportBackup_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title  = "Import Sound Library Backup",
+            Filter = "SoundPad Backup (*.zip)|*.zip"
+        };
+
+        if (dialog.ShowDialog() != true) return;
+
+        ImportResult result;
+        try
+        {
+            result = LibraryBackupService.Import(dialog.FileName, _library, _settings.StopAllHotkey);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Import failed: {ex.Message}";
+            return;
+        }
+
+        foreach (var item in result.NewItems)
+        {
+            if (File.Exists(item.FilePath))
+            {
+                try   { _cachedSounds[item.Id] = new CachedSound(item.FilePath); }
+                catch (Exception ex) { Debug.WriteLine($"[Import] Could not preload '{item.DisplayName}': {ex.Message}"); }
+            }
+            _library.Add(item);
+        }
+
+        if (result.NewItems.Count > 0)
+        {
+            SoundLibraryService.Save(_library);
+            RefreshCategoryFilter();
+            FilterSoundsPanel();
+            ReregisterAllHotkeysAndReport("import");
+        }
+
+        var parts = new List<string> { $"Imported {result.NewItems.Count} sound(s)" };
+        if (result.SkippedDuplicates > 0)
+            parts.Add($"skipped {result.SkippedDuplicates} duplicate(s)");
+        if (result.ClearedHotkeys > 0)
+            parts.Add($"cleared {result.ClearedHotkeys} conflicting hotkey(s)");
+
+        StatusText.Text = string.Join(". ", parts) + ".";
+    }
+
+    // ── Drag and drop ──────────────────────────────────────────────────────────
+
+    private static readonly HashSet<string> _audioExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp3", ".wav", ".ogg", ".flac", ".aac"
+    };
+
+    private static bool HasAudioFiles(IDataObject data)
+    {
+        if (!data.GetDataPresent(DataFormats.FileDrop)) return false;
+        var files = data.GetData(DataFormats.FileDrop) as string[];
+        return files?.Any(f => _audioExtensions.Contains(Path.GetExtension(f))) is true;
+    }
+
+    private void SoundsArea_DragEnter(object sender, DragEventArgs e)
+    {
+        if (HasAudioFiles(e.Data))
+        {
+            e.Effects = DragDropEffects.Copy;
+            SoundsAreaBorder.BorderBrush = (Brush)Application.Current.Resources["SystemAccentColorPrimaryBrush"];
+        }
+        else
+        {
+            e.Effects = DragDropEffects.None;
+        }
+        e.Handled = true;
+    }
+
+    private void SoundsArea_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = HasAudioFiles(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void SoundsArea_DragLeave(object sender, DragEventArgs e)
+    {
+        var pos = e.GetPosition(SoundsAreaBorder);
+        if (pos.X < 0 || pos.Y < 0 ||
+            pos.X > SoundsAreaBorder.ActualWidth ||
+            pos.Y > SoundsAreaBorder.ActualHeight)
+        {
+            SoundsAreaBorder.BorderBrush = (Brush)Application.Current.Resources["CardBorderBrush"];
+        }
+    }
+
+    private void SoundsArea_Drop(object sender, DragEventArgs e)
+    {
+        SoundsAreaBorder.BorderBrush = (Brush)Application.Current.Resources["CardBorderBrush"];
+
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+        var files = e.Data.GetData(DataFormats.FileDrop) as string[];
+        if (files is null) return;
+
+        var audioFiles = files.Where(f => _audioExtensions.Contains(Path.GetExtension(f))).ToList();
+        if (audioFiles.Count == 0) return;
+
+        int added  = 0;
+        var failed = new List<string>();
+
+        foreach (var filePath in audioFiles)
+        {
+            try
+            {
+                var destPath = SoundLibraryService.ImportFile(filePath);
+                var sound    = new CachedSound(destPath);
+                var item     = new SoundItem
+                {
+                    DisplayName = Path.GetFileNameWithoutExtension(filePath),
+                    FilePath    = destPath,
+                    Category    = "General",
+                    Volume      = 1.0f,
+                    CreatedAt   = DateTime.UtcNow
+                };
+
+                _cachedSounds[item.Id] = sound;
+                _library.Add(item);
+                added++;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Drop] Failed to import {filePath}: {ex.Message}");
+                failed.Add(Path.GetFileName(filePath));
+            }
+        }
+
+        if (added > 0)
+        {
+            SoundLibraryService.Save(_library);
+            RefreshCategoryFilter();
+            FilterSoundsPanel();
+        }
+
+        if (failed.Count > 0 && added > 0)
+            StatusText.Text = $"Added {added} sound(s). Failed: {string.Join(", ", failed)}";
+        else if (failed.Count > 0)
+            StatusText.Text = $"Could not import: {string.Join(", ", failed)}";
+        else if (added == 1)
+            StatusText.Text = $"Added: {Path.GetFileNameWithoutExtension(audioFiles[0])}";
+        else
+            StatusText.Text = $"Added {added} sound(s)";
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  DISCORD / GAME ROUTING WIZARD
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Updates every wizard UI element to reflect the current routing state.
+    // Safe to call at any time; the null-guard on WizardMonitorDot protects
+    // against edge-case calls before InitializeComponent completes.
+    private void RefreshRoutingWizard()
+    {
+        if (WizardMonitorDot is null) return;
+
+        var successBrush = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"];
+        var cautionBrush  = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"];
+
+        // ── Monitor status ──────────────────────────────────────────────────
+        var monitorDevice = MonitorComboBox.SelectedItem as AudioDevice;
+        WizardMonitorDot.Foreground  = successBrush;
+        WizardMonitorStatusText.Text = monitorDevice?.Name ?? "Not selected";
+
+        // ── Virtual output status ───────────────────────────────────────────
+        var virtualDevice  = VirtualComboBox.SelectedItem as AudioDevice;
+        bool virtualIsNone = virtualDevice is null || virtualDevice.IsNone;
+
+        WizardVirtualDot.Foreground  = virtualIsNone ? cautionBrush : successBrush;
+        WizardVirtualStatusText.Text = virtualIsNone ? "None" : virtualDevice!.Name;
+
+        // ── Mic passthrough status ──────────────────────────────────────────
+        bool micEnabled = MicPassthroughCheckBox.IsChecked == true;
+        WizardMicStatusRow.Visibility = micEnabled ? Visibility.Visible : Visibility.Collapsed;
+        if (micEnabled)
+        {
+            var micDevice = MicComboBox.SelectedItem as MicDevice;
+            bool micOk    = micDevice is not null;
+            WizardMicDot.Foreground  = micOk ? successBrush : cautionBrush;
+            WizardMicStatusText.Text = micOk ? micDevice!.Name : "No microphone selected";
+        }
+
+        // ── Warning banners and recommended panel ───────────────────────────
+        bool sameDevice  = !virtualIsNone && AudioDevice.AreSameOutputDevice(monitorDevice, virtualDevice);
+        bool micNoDevice = micEnabled && MicComboBox.SelectedItem is null;
+        var  best        = FindBestVirtualCableDevice();
+        bool noCable     = best is null;
+
+        WizardNoVirtualWarning.Visibility   = virtualIsNone ? Visibility.Visible : Visibility.Collapsed;
+        WizardConflictWarning.Visibility    = sameDevice    ? Visibility.Visible : Visibility.Collapsed;
+        WizardMicNoDeviceWarning.Visibility = micNoDevice   ? Visibility.Visible : Visibility.Collapsed;
+        WizardNoCableWarning.Visibility     = noCable       ? Visibility.Visible : Visibility.Collapsed;
+
+        WizardRecommendedPanel.Visibility = best is not null ? Visibility.Visible : Visibility.Collapsed;
+        if (best is not null)
+            WizardRecommendedDeviceName.Text = $"Will select: {best.Name}";
+    }
+
+    // Returns the highest-priority virtual cable device found in the current
+    // VirtualComboBox list, or null when no virtual cable is installed.
+    private AudioDevice? FindBestVirtualCableDevice()
+    {
+        if (VirtualComboBox.ItemsSource is not IEnumerable<AudioDevice> devices)
+            return null;
+
+        var list = devices.Where(d => !d.IsNone).ToList();
+
+        var found = list.FirstOrDefault(d =>
+            d.Name.Contains("CABLE Input", StringComparison.OrdinalIgnoreCase));
+        if (found is not null) return found;
+
+        found = list.FirstOrDefault(d =>
+            d.Name.Contains("Voicemeeter Input", StringComparison.OrdinalIgnoreCase));
+        if (found is not null) return found;
+
+        found = list.FirstOrDefault(d =>
+            d.Name.Contains("VoiceMeeter VAIO", StringComparison.OrdinalIgnoreCase) ||
+            d.Name.Contains("Voicemeeter AUX",  StringComparison.OrdinalIgnoreCase));
+        if (found is not null) return found;
+
+        found = list.FirstOrDefault(d =>
+            d.Name.Contains("CABLE", StringComparison.OrdinalIgnoreCase));
+        if (found is not null) return found;
+
+        return list.FirstOrDefault(d =>
+            d.Name.Contains("Voicemeeter", StringComparison.OrdinalIgnoreCase) ||
+            d.Name.Contains("VoiceMeeter", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void UseRecommendedSetup_Click(object sender, RoutedEventArgs e)
+    {
+        var best = FindBestVirtualCableDevice();
+        if (best is null)
+        {
+            StatusText.Text = "No virtual cable device found.";
+            return;
+        }
+
+        // Setting SelectedItem triggers VirtualComboBox_SelectionChanged which
+        // recreates the virtual engine, saves settings, and calls RefreshRoutingWizard.
+        VirtualComboBox.SelectedItem = best;
+        StatusText.Text = $"Virtual Output set to: {best.Name}";
+    }
+
+    // Removes the current test tone from the virtual engine's mixer.
+    // Safe to call when no tone is active or when the tone has already
+    // self-terminated (MixingSampleProvider ignores unknown inputs).
+    private void StopVirtualTestTone()
+    {
+        if (_virtualTestToneProvider is null) return;
+        _virtualEngine?.RemoveMixerInput(_virtualTestToneProvider);
+        _virtualTestToneProvider = null;
+    }
+
+    private void TestVirtualOutput_Click(object sender, RoutedEventArgs e)
+    {
+        if (_virtualEngine is null)
+        {
+            StatusText.Text = "Virtual Output is None — select a virtual cable device first.";
+            return;
+        }
+
+        StopVirtualTestTone(); // stop / replace any previous test tone
+
+        var generator = new SignalGenerator(CachedSound.TargetFormat.SampleRate,
+                                             CachedSound.TargetFormat.Channels)
+        {
+            Type      = SignalGeneratorType.Sin,
+            Frequency = 440,
+            Gain      = 0.25f
+        };
+
+        // 1.5 seconds of interleaved stereo samples at 48 kHz
+        int totalSamples = (int)(CachedSound.TargetFormat.SampleRate * 1.5 *
+                                  CachedSound.TargetFormat.Channels);
+        _virtualTestToneProvider = new OffsetSampleProvider(generator) { TakeSamples = totalSamples };
+
+        _virtualEngine.AddMixerInput(_virtualTestToneProvider);
+        StatusText.Text = "Test tone playing to Virtual Output...";
     }
 
     // ── Window closing ────────────────────────────────────────────────────────

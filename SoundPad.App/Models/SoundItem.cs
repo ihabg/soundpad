@@ -14,4 +14,7 @@ public class SoundItem
     // once (whether or not a hotkey ended up bound). Prevents re-seeding a
     // default hotkey after the user deliberately clears it.
     public bool            HotkeyInitialized { get; set; } = false;
+
+    public bool            IsFavorite        { get; set; } = false;
+    public DateTime?       LastPlayedAt      { get; set; }
 }

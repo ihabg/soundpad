@@ -531,6 +531,27 @@
 
                         <ui:Card Padding="20" Margin="0,0,0,14">
                             <StackPanel>
+                                <TextBlock Text="SOUND PLAYBACK"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,16"/>
+
+                                <ui:ToggleSwitch x:Name="InterruptSoundsSwitch"
+                                                 Content="Interrupt previous sound"
+                                                 Checked="InterruptSoundsSwitch_Checked"
+                                                 Unchecked="InterruptSoundsSwitch_Unchecked"/>
+
+                                <TextBlock Text="When on, playing a sound stops any currently playing sounds first. Mic passthrough is unaffected."
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </ui:Card>
+
+                        <ui:Card Padding="20" Margin="0,0,0,14">
+                            <StackPanel>
                                 <TextBlock Text="BEHAVIOR"
                                            FontSize="11"
                                            FontWeight="SemiBold"
@@ -554,6 +575,78 @@
                                                  Checked="StartWithWindowsSwitch_Checked"
                                                  Unchecked="StartWithWindowsSwitch_Unchecked"/>
                             </StackPanel>
+                        </ui:Card>
+
+                        <ui:Card Padding="20" Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="LIBRARY BACKUP"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,8"/>
+                                <TextBlock Text="Export your sound library and restore it on any device."
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Margin="0,0,0,16"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:Button Content="Export Backup"
+                                               Appearance="Secondary"
+                                               Click="ExportBackup_Click">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="ArrowDownload20"/>
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                    <ui:Button Content="Import Backup"
+                                               Appearance="Secondary"
+                                               Margin="12,0,0,0"
+                                               Click="ImportBackup_Click">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="ArrowUpload20"/>
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                </StackPanel>
+                            </StackPanel>
+                        </ui:Card>
+
+                        <ui:Card Padding="20" Margin="0,0,0,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                    <TextBlock Text="UPDATES"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               Margin="0,0,0,8"/>
+                                    <TextBlock Text="Check for new SoundPad releases on GitHub."
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               Margin="0,0,0,12"/>
+                                    <ui:ToggleSwitch x:Name="AutoUpdateSwitch"
+                                                     Content="Enable automatic update checks"
+                                                     Checked="AutoUpdateSwitch_Checked"
+                                                     Unchecked="AutoUpdateSwitch_Unchecked"/>
+                                    <TextBlock Text="Automatic checks run once per day when SoundPad opens."
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,6,0,0"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <ui:Button x:Name="CheckUpdatesButton"
+                                               Content="Check for Updates"
+                                               Appearance="Secondary"
+                                               Click="CheckUpdates_Click"/>
+                                    <ui:Button Content="Open Releases Page"
+                                               Appearance="Secondary"
+                                               Margin="0,8,0,0"
+                                               Click="OpenReleases_Click"/>
+                                </StackPanel>
+                            </Grid>
                         </ui:Card>
 
                         <ui:Card Padding="20">

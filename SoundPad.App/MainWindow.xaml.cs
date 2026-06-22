@@ -1308,7 +1308,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private static void RevealInFolder(SoundItem item)
     {
         if (!File.Exists(item.FilePath)) return;
-        Process.Start("explorer.exe", $"/select,\"{item.FilePath}\"");
+        try { Process.Start("explorer.exe", $"/select,\"{item.FilePath}\""); }
+        catch { }
     }
 
     // ── Category Manager ─────────────────────────────────────────────────────
@@ -1323,8 +1324,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             foreach (var item in _library)
             {
                 var cat = string.IsNullOrWhiteSpace(item.Category) ? "General" : item.Category;
-                if (dlg.SoundCategoryRemap.TryGetValue(cat, out var newCat))
-                    item.Category = newCat;
+                string resolved = cat;
+                int guard = 0;
+                while (dlg.SoundCategoryRemap.TryGetValue(resolved, out var next) && ++guard < 50)
+                    resolved = next;
+                if (!string.Equals(resolved, cat, StringComparison.OrdinalIgnoreCase))
+                    item.Category = resolved;
             }
         }
 

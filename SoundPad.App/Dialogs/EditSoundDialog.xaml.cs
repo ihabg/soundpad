@@ -35,6 +35,8 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
     // ── Waveform data ─────────────────────────────────────────────────────────
     private const int WaveformBuckets = 360;
+    private static readonly Brush            WaveformBrush = new SolidColorBrush(Color.FromRgb(100, 149, 237));
+    private static readonly DoubleCollection PlayheadDash  = new DoubleCollection { 4, 3 };
     private float[]  _peaks    = Array.Empty<float>();
     private double   _duration; // total seconds
 
@@ -294,7 +296,6 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         // 1 ── Waveform peaks (behind overlays)
         if (_peaks.Length > 0)
         {
-            var wfPen   = new Pen(new SolidColorBrush(Color.FromRgb(100, 149, 237)), 1.0); // cornflower blue
             for (int b = 0; b < _peaks.Length; b++)
             {
                 double x   = b / (double)(_peaks.Length - 1) * w;
@@ -303,7 +304,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
                 {
                     X1 = x, Y1 = cy - amp,
                     X2 = x, Y2 = cy + amp,
-                    Stroke = wfPen.Brush, StrokeThickness = 1.0
+                    Stroke = WaveformBrush, StrokeThickness = 1.0
                 });
             }
         }
@@ -373,7 +374,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         {
             X1 = phX, Y1 = 0, X2 = phX, Y2 = h,
             Stroke = Brushes.White, StrokeThickness = 1.5,
-            StrokeDashArray = new DoubleCollection { 4, 3 }
+            StrokeDashArray = PlayheadDash
         };
         canvas.Children.Add(ph);
     }
@@ -471,7 +472,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         int sr       = _sound.SampleRate * _sound.Channels;
         int startS   = (int)(startPos  * sr);
         int endS     = _vTrimEnd < _duration ? (int)(_vTrimEnd * sr) : -1;
-        int fadeInS  = _vFadeIn  > 0         ? (int)(_vFadeIn  * sr) : 0;
+        int fadeInS  = (_vFadeIn > 0 && startPos <= _vTrimStart) ? (int)(_vFadeIn * sr) : 0;
         int fadeOutS = _vFadeOut > 0         ? (int)(_vFadeOut * sr) : 0;
 
         bool useDefault = startS == 0 && endS < 0 && fadeInS == 0 && fadeOutS == 0;
@@ -550,9 +551,10 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        if (trimStart.HasValue && trimEnd.HasValue && trimEnd.Value <= trimStart.Value)
+        double effectiveEnd = trimEnd ?? _duration;
+        if (trimStart.HasValue && trimStart.Value >= effectiveEnd)
         {
-            TrimErrorText.Text       = "Trim End must be greater than Trim Start.";
+            TrimErrorText.Text       = "Trim Start must be less than Trim End.";
             TrimErrorText.Visibility = Visibility.Visible;
             return;
         }

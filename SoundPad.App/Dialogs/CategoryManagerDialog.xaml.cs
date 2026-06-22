@@ -70,10 +70,13 @@ public partial class CategoryManagerDialog : Wpf.Ui.Controls.FluentWindow
         RefreshList();
     }
 
-    private void RefreshList()
+    private void RefreshList(string? reselect = null)
     {
         CategoryListBox.ItemsSource = null;
         CategoryListBox.ItemsSource = _entries;
+        if (reselect is not null)
+            CategoryListBox.SelectedItem = _entries
+                .FirstOrDefault(x => x.Name.Equals(reselect, StringComparison.OrdinalIgnoreCase));
     }
 
     private string FormatCount(string workingName)
@@ -207,7 +210,7 @@ public partial class CategoryManagerDialog : Wpf.Ui.Controls.FluentWindow
 
         _workingToOriginal[name] = name;
         _entries.Add(new CategoryEntry { Name = name, CountText = "empty" });
-        RefreshList();
+        RefreshList(reselect: name);
         CloseZone();
     }
 
@@ -239,7 +242,7 @@ public partial class CategoryManagerDialog : Wpf.Ui.Controls.FluentWindow
 
         entry.Name      = newName;
         entry.CountText = FormatCount(newName);
-        RefreshList();
+        RefreshList(reselect: newName);
         CloseZone();
     }
 
@@ -255,7 +258,8 @@ public partial class CategoryManagerDialog : Wpf.Ui.Controls.FluentWindow
             { ShowError("Select a category to move sounds to."); return; }
 
         var original = _workingToOriginal.TryGetValue(entry.Name, out var o) ? o : entry.Name;
-        _originalToFinal[original] = moveTo ?? "General";
+        if (n > 0)
+            _originalToFinal[original] = moveTo!;
 
         if (moveTo is not null)
         {

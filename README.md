@@ -25,12 +25,16 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 - **Start with Windows** — one toggle to register SoundPad in the current-user Run key (no admin required)
 - **Settings persistence** — devices, volume, window position, and all hotkeys survive restarts
 - **Perceptual volume curve** — the volume slider feels natural (power-2 curve: 50 % UI = −12 dB)
+- **Sound Editor** — non-destructive trim (Trim Start / Trim End) and Fade In / Fade Out per sound; original audio files are never modified; settings stored in sounds.json
+- **Waveform timeline** — draggable Trim Start / Trim End handles, click-to-seek playhead, animated preview playhead, fade-in / fade-out gradient overlays, and numeric fields synced bidirectionally with the canvas
+- **Category Manager** — create, rename, and delete custom sound categories; deleting a category with sounds prompts where to move them; chained operations resolve correctly
+- **Sound row context menu** — right-click any sound: Edit, Favourite/Unfavourite, Duplicate (same audio file, same trim/fade/volume, no hotkey), Reveal in Folder, Remove
 
 ---
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.1.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.2.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -107,6 +111,47 @@ Drag one or more audio files (MP3, WAV, OGG, FLAC, AAC) from File Explorer direc
 **Import**: Settings tab → **Import Backup** → select a `.zip` file. SoundPad adds any sounds not already in your library (matched by ID), copies their audio files, and clears hotkeys that conflict with your existing ones.
 
 Backup ZIPs are self-contained and portable — you can copy a library to another machine.
+
+---
+
+## Sound Editor
+
+Click **Edit** on any sound row (or right-click → Edit) to open the Sound Editor.
+
+- **Trim Start / Trim End** — drag the green and orange-red handles on the waveform to set the play region. Only the selected region plays — in preview, in the library, and through the virtual output. The original audio file is never modified.
+- **Fade In / Fade Out** — type a duration in seconds to smoothly ramp volume up at the start and down at the end of the trimmed region.
+- **Waveform timeline** — the full audio waveform is drawn on a canvas. Regions outside the trim zone are dimmed. Fade zones show coloured gradient overlays so you can see the ramp at a glance.
+- **Playhead** — click anywhere on the canvas to position the preview start point. During playback, a white dashed line moves in real time and stops at Trim End.
+- **Numeric fields** — Trim Start, Trim End, Fade In, and Fade Out fields stay in sync with the handles. Typing a value moves the handle; dragging the handle updates the field.
+- **Play Preview** — plays the trimmed, faded clip through your Monitor Output from the playhead position (or Trim Start if the playhead is outside the trim range).
+
+All settings save to `sounds.json`. Old `sounds.json` files without trim/fade fields load normally — missing values default to no trim and no fade. Library backup ZIPs preserve trim, fade, and category data.
+
+---
+
+## Category Manager
+
+Click the **Categories** button in the toolbar to open the Category Manager.
+
+- **Create** — add a new empty category. Useful to set one up before you have sounds for it.
+- **Rename** — rename any category; all sounds in that category update automatically.
+- **Delete** — delete a category. If it contains sounds, choose which remaining category to move them to. Empty categories are removed immediately.
+
+The virtual categories **All**, **Favorites**, and **Recent** cannot be created, renamed, or deleted.
+
+---
+
+## Sound row context menu
+
+Right-click any sound row for quick actions:
+
+| Action | Description |
+|---|---|
+| **Edit** | Opens the Sound Editor for that sound |
+| **Favourite / Unfavourite** | Toggles the favourite star |
+| **Duplicate** | Creates a copy with the same audio file, trim/fade, and volume — no hotkey assigned |
+| **Reveal in Folder** | Opens File Explorer with the source audio file selected |
+| **Remove** | Removes the sound from the library; the audio file is not deleted |
 
 ---
 

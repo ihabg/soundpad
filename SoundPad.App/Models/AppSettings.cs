@@ -40,4 +40,10 @@ public class AppSettings
     public double? WindowTop    { get; set; }
     public double? WindowWidth  { get; set; }
     public double? WindowHeight { get; set; }
+
+    // User-created categories that have no sounds assigned yet.
+    // Categories derived from SoundItem.Category are always shown; this list
+    // keeps empty/new categories alive between launches.
+    // Defaults to empty list so old settings.json files deserialize cleanly.
+    public List<string> CustomCategories { get; set; } = new();
 }

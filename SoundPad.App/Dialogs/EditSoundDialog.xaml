@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Edit Sound"
-        Width="400" Height="380"
-        MinWidth="400" MinHeight="380"
-        MaxWidth="400" MaxHeight="380"
+        Width="490" Height="740"
+        MinWidth="490" MinHeight="740"
+        MaxWidth="490" MaxHeight="740"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         FontFamily="Segoe UI"
@@ -28,48 +28,252 @@
             </ui:TitleBar.Icon>
         </ui:TitleBar>
 
-        <StackPanel Grid.Row="1" Margin="24,18,24,20">
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24,16,24,20">
 
-            <TextBlock Text="Name"
-                       FontSize="12"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Margin="0,0,0,6"/>
-            <ui:TextBox x:Name="NameBox" Margin="0,0,0,18"/>
-
-            <TextBlock Text="Category"
-                       FontSize="12"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Margin="0,0,0,6"/>
-            <ComboBox x:Name="CategoryBox" IsEditable="True" Margin="0,0,0,18"/>
-
-            <TextBlock Text="Hotkey"
-                       FontSize="12"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Margin="0,0,0,6"/>
-            <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="12,9"
-                    Margin="0,0,0,26">
-                <TextBlock x:Name="HotkeyDisplayText"
-                           Text="No hotkey assigned"
+                <!-- ── DETAILS ──────────────────────────────────────────────── -->
+                <TextBlock Text="DETAILS"
+                           FontSize="11"
+                           FontWeight="SemiBold"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           FontSize="12"/>
-            </Border>
+                           Margin="0,0,0,10"/>
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <ui:Button Content="Cancel"
-                           Appearance="Secondary"
-                           Width="100"
-                           Margin="0,0,10,0"
-                           Click="Cancel_Click"/>
-                <ui:Button Content="Save"
-                           Appearance="Primary"
-                           Width="100"
-                           Click="Save_Click"/>
+                <TextBlock Text="Name"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,0,0,5"/>
+                <ui:TextBox x:Name="NameBox" Margin="0,0,0,14"/>
+
+                <TextBlock Text="Category"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,0,0,5"/>
+                <ComboBox x:Name="CategoryBox" IsEditable="True" Margin="0,0,0,14"/>
+
+                <TextBlock Text="Volume"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,0,0,5"/>
+                <DockPanel Margin="0,0,0,6">
+                    <TextBlock x:Name="VolumePctText"
+                               DockPanel.Dock="Right"
+                               Text="100%"
+                               FontSize="12"
+                               Width="40"
+                               TextAlignment="Right"
+                               VerticalAlignment="Center"/>
+                    <Slider x:Name="VolumeSlider"
+                            Minimum="0"
+                            Maximum="100"
+                            VerticalAlignment="Center"
+                            Margin="0,0,8,0"/>
+                </DockPanel>
+
+                <Separator Margin="0,10,0,14"
+                           Background="{DynamicResource CardBorderBrush}"/>
+
+                <!-- ── HOTKEY ────────────────────────────────────────────────── -->
+                <TextBlock Text="HOTKEY"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Margin="0,0,0,10"/>
+
+                <DockPanel Margin="0,0,0,6" LastChildFill="True">
+                    <ui:Button x:Name="ClearHotkeyButton"
+                               DockPanel.Dock="Right"
+                               Content="Clear"
+                               Appearance="Secondary"
+                               Margin="6,0,0,0"
+                               Click="ClearHotkey_Click"/>
+                    <ui:Button x:Name="ChangeHotkeyButton"
+                               DockPanel.Dock="Right"
+                               Content="Change"
+                               Appearance="Secondary"
+                               Click="ChangeHotkey_Click"/>
+                    <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="12,9"
+                            Margin="0,0,8,0">
+                        <TextBlock x:Name="HotkeyDisplayText"
+                                   Text="No hotkey assigned"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   FontSize="12"/>
+                    </Border>
+                </DockPanel>
+
+                <Separator Margin="0,14,0,14"
+                           Background="{DynamicResource CardBorderBrush}"/>
+
+                <!-- ── TRIM &amp; FADE ─────────────────────────────────────── -->
+                <TextBlock Text="TRIM &amp; FADE"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Margin="0,0,0,4"/>
+
+                <TextBlock x:Name="DurationText"
+                           Text="Duration: —"
+                           FontSize="11"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,0,0,10"/>
+
+                <Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="10"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Column="0" Grid.Row="0">
+                        <TextBlock Text="Trim Start (s)"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,5"/>
+                        <ui:TextBox x:Name="TrimStartBox"
+                                    PlaceholderText="0.0 (play from start)"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Grid.Row="0">
+                        <TextBlock Text="Trim End (s)"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,5"/>
+                        <ui:TextBox x:Name="TrimEndBox"
+                                    PlaceholderText="Empty = end of file"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="0" Grid.Row="2">
+                        <TextBlock Text="Fade In (s)"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,5"/>
+                        <ui:TextBox x:Name="FadeInBox"
+                                    PlaceholderText="0.0 (no fade)"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Grid.Row="2">
+                        <TextBlock Text="Fade Out (s)"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,5"/>
+                        <ui:TextBox x:Name="FadeOutBox"
+                                    PlaceholderText="0.0 (no fade)"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Trim/fade validation error -->
+                <TextBlock x:Name="TrimErrorText"
+                           Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Visibility="Collapsed"
+                           Margin="0,4,0,4"/>
+
+                <!-- ── WAVEFORM TIMELINE ─────────────────────────────────────── -->
+                <Border Height="88"
+                        Background="#1A1A1A"
+                        BorderBrush="{DynamicResource CardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        ClipToBounds="True"
+                        Margin="0,4,0,0">
+                    <Canvas x:Name="WaveformCanvas"
+                            Background="Transparent"
+                            Cursor="Cross"
+                            SizeChanged="WaveformCanvas_SizeChanged"
+                            MouseLeftButtonDown="Waveform_MouseDown"
+                            MouseLeftButtonUp="Waveform_MouseUp"
+                            MouseMove="Waveform_MouseMove"/>
+                </Border>
+
+                <!-- timeline legend -->
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Ellipse Grid.Column="0" Width="8" Height="8" Fill="LimeGreen" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text=" Trim Start   " FontSize="10"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"/>
+                    <Ellipse Grid.Column="2" Width="8" Height="8" Fill="OrangeRed" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="3" Text=" Trim End   " FontSize="10"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"/>
+                    <Rectangle Grid.Column="4" Width="12" Height="8" VerticalAlignment="Center">
+                        <Rectangle.Fill>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#5A32C832" Offset="0"/>
+                                <GradientStop Color="#0032C832" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Rectangle.Fill>
+                    </Rectangle>
+                    <TextBlock Grid.Column="5" Text=" Fade In/Out   " FontSize="10"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"/>
+                    <Line Grid.Column="6" X1="0" Y1="4" X2="12" Y2="4"
+                          Stroke="White" StrokeThickness="1.5"
+                          StrokeDashArray="3,2" VerticalAlignment="Center"/>
+                </Grid>
+
+                <Separator Margin="0,12,0,14"
+                           Background="{DynamicResource CardBorderBrush}"/>
+
+                <!-- ── PREVIEW ───────────────────────────────────────────────── -->
+                <TextBlock Text="PREVIEW"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Margin="0,0,0,10"/>
+
+                <DockPanel LastChildFill="False">
+                    <ui:Button x:Name="PreviewButton"
+                               DockPanel.Dock="Left"
+                               Appearance="Secondary"
+                               Content="Play Preview"
+                               Click="Preview_Click">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="Play20"/>
+                        </ui:Button.Icon>
+                    </ui:Button>
+                    <TextBlock x:Name="PreviewStatusText"
+                               DockPanel.Dock="Left"
+                               Text=""
+                               FontSize="11"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="12,0,0,0"/>
+                </DockPanel>
+
+                <Separator Margin="0,16,0,14"
+                           Background="{DynamicResource CardBorderBrush}"/>
+
+                <!-- ── ACTIONS ───────────────────────────────────────────────── -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <ui:Button Content="Cancel"
+                               Appearance="Secondary"
+                               Width="100"
+                               Margin="0,0,10,0"
+                               Click="Cancel_Click"/>
+                    <ui:Button Content="Save"
+                               Appearance="Primary"
+                               Width="100"
+                               Click="Save_Click"/>
+                </StackPanel>
+
             </StackPanel>
-
-        </StackPanel>
+        </ScrollViewer>
     </Grid>
 </ui:FluentWindow>

@@ -53,6 +53,15 @@
                                     <ui:SymbolIcon Symbol="AddCircle20"/>
                                 </ui:Button.Icon>
                             </ui:Button>
+                            <ui:Button DockPanel.Dock="Right"
+                                       Content="Categories"
+                                       Appearance="Secondary"
+                                       Margin="0,0,8,0"
+                                       Click="CategoryManager_Click">
+                                <ui:Button.Icon>
+                                    <ui:SymbolIcon Symbol="Tag20"/>
+                                </ui:Button.Icon>
+                            </ui:Button>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="SOUND LIBRARY"
                                            FontSize="11"

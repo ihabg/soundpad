@@ -17,6 +17,16 @@ public class CachedSound
     public float[]    AudioData  { get; }
     public WaveFormat WaveFormat => TargetFormat;
 
+    // Format-derived helpers used by trim/fade calculations.
+    // All values come from the actual decoded WaveFormat rather than
+    // hard-coded constants so they stay correct if TargetFormat ever changes.
+    public int      SampleRate   => WaveFormat.SampleRate;
+    public int      Channels     => WaveFormat.Channels;
+    public int      TotalSamples => AudioData.Length;
+    public int      TotalFrames  => AudioData.Length / WaveFormat.Channels;
+    public TimeSpan Duration     => TimeSpan.FromSeconds(
+        (double)AudioData.Length / ((double)WaveFormat.SampleRate * WaveFormat.Channels));
+
     public CachedSound(string filePath)
     {
         using var reader = new AudioFileReader(filePath);

@@ -17,4 +17,13 @@ public class SoundItem
 
     public bool            IsFavorite        { get; set; } = false;
     public DateTime?       LastPlayedAt      { get; set; }
+
+    // Non-destructive edit settings — applied at playback time only.
+    // The original audio file is never modified.
+    // All four fields are nullable so old sounds.json files that omit them
+    // deserialize to null, preserving v1.1.0 playback behaviour exactly.
+    public double? TrimStartSeconds { get; set; }
+    public double? TrimEndSeconds   { get; set; }
+    public double? FadeInSeconds    { get; set; }
+    public double? FadeOutSeconds   { get; set; }
 }

@@ -895,10 +895,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         CategoryFilter.Items.Add("Favorites");
         CategoryFilter.Items.Add("Recent");
 
+        var virtualNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { "All", "Favorites", "Recent" };
+
         foreach (var cat in _library
             .Select(x => string.IsNullOrWhiteSpace(x.Category) ? "General" : x.Category)
-            .Distinct()
-            .OrderBy(c => c))
+            .Concat(_settings.CustomCategories.Where(c => !virtualNames.Contains(c)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(c => c, StringComparer.OrdinalIgnoreCase))
         {
             if (!CategoryFilter.Items.Contains(cat))
                 CategoryFilter.Items.Add(cat);
@@ -1115,6 +1119,42 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 PlayLibraryItem(capturedItem);
         };
 
+        // ── Context menu ──────────────────────────────────────────────────
+        var editMenuItem = new MenuItem { Header = "Edit…" };
+        editMenuItem.Click += (_, _) => EditSound(capturedItem);
+
+        var favMenuItem = new MenuItem();
+        favMenuItem.Click += (_, _) =>
+        {
+            capturedItem.IsFavorite = !capturedItem.IsFavorite;
+            SoundLibraryService.Save(_library);
+            FilterSoundsPanel();
+        };
+
+        var dupMenuItem = new MenuItem { Header = "Duplicate" };
+        dupMenuItem.Click += (_, _) => DuplicateSound(capturedItem);
+
+        var revealMenuItem = new MenuItem { Header = "Reveal in Folder" };
+        revealMenuItem.Click += (_, _) => RevealInFolder(capturedItem);
+
+        var removeCtxMenuItem = new MenuItem
+        {
+            Header     = "Remove",
+            Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"]
+        };
+        removeCtxMenuItem.Click += (_, _) => RemoveSound(capturedItem);
+
+        var ctx = new ContextMenu();
+        ctx.Items.Add(editMenuItem);
+        ctx.Items.Add(favMenuItem);
+        ctx.Items.Add(dupMenuItem);
+        ctx.Items.Add(revealMenuItem);
+        ctx.Items.Add(new Separator());
+        ctx.Items.Add(removeCtxMenuItem);
+        ctx.Opened += (_, _) =>
+            favMenuItem.Header = capturedItem.IsFavorite ? "Unfavorite" : "Favorite";
+        row.ContextMenu = ctx;
+
         _rowControls[item.Id] = new RowControls(row, playStopBtn);
         return row;
     }
@@ -1162,20 +1202,57 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void EditSound(SoundItem item)
     {
+        if (!_cachedSounds.TryGetValue(item.Id, out var sound)) return;
+
         var categories = _library
             .Select(x => string.IsNullOrWhiteSpace(x.Category) ? "General" : x.Category)
-            .Distinct()
-            .OrderBy(c => c)
+            .Concat(_settings.CustomCategories)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var hotkeyDisplay = item.Hotkey?.DisplayText ?? "";
+        var takenHotkeys = _library
+            .Where(x => x.Id != item.Id && x.Hotkey is not null)
+            .Select(x => (x.Hotkey!.Modifiers, x.Hotkey.Key))
+            .ToHashSet();
+        if (_settings.StopAllHotkey is not null)
+            takenHotkeys.Add((_settings.StopAllHotkey.Modifiers, _settings.StopAllHotkey.Key));
 
-        var dlg = new EditSoundDialog(this, item.DisplayName, item.Category, categories, hotkeyDisplay);
-        if (dlg.ShowDialog() != true)
-            return;
+        var dlg = new EditSoundDialog(this, item, sound, categories, takenHotkeys, _monitorEngine);
+        if (dlg.ShowDialog() != true) return;
 
-        item.DisplayName = dlg.ResultName;
-        item.Category    = dlg.ResultCategory;
+        item.DisplayName      = dlg.ResultName;
+        item.Category         = dlg.ResultCategory;
+        item.Volume           = dlg.ResultVolume;
+        item.TrimStartSeconds = dlg.ResultTrimStart;
+        item.TrimEndSeconds   = dlg.ResultTrimEnd;
+        item.FadeInSeconds    = dlg.ResultFadeIn;
+        item.FadeOutSeconds   = dlg.ResultFadeOut;
+
+        if (dlg.WasHotkeyChanged)
+        {
+            var previousHotkey = item.Hotkey;
+            item.Hotkey = dlg.ResultHotkey;
+
+            if (item.Hotkey is not null)
+            {
+                var result = ReregisterAllHotkeysAndReport("hotkey-edit");
+                if (result.FailedSoundIds.Contains(item.Id))
+                {
+                    item.Hotkey = previousHotkey;
+                    ReregisterAllHotkeysAndReport("hotkey-edit-rollback");
+                    MessageBox.Show(
+                        "Windows could not register the selected hotkey.\n\n" +
+                        "It may be in use by another application. Choose a different combination.",
+                        "Hotkey unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            else
+            {
+                ReregisterAllHotkeysAndReport("hotkey-clear");
+            }
+        }
+
         SoundLibraryService.Save(_library);
         RefreshCategoryFilter();
         FilterSoundsPanel();
@@ -1197,6 +1274,71 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         RefreshCategoryFilter();
         FilterSoundsPanel();
         StatusText.Text = $"Removed: {name}";
+    }
+
+    // ── Duplicate Sound ───────────────────────────────────────────────────────
+
+    private void DuplicateSound(SoundItem source)
+    {
+        if (!_cachedSounds.TryGetValue(source.Id, out var cachedSound)) return;
+
+        var copy = new SoundItem
+        {
+            DisplayName      = source.DisplayName + " (copy)",
+            FilePath         = source.FilePath,
+            Category         = source.Category,
+            Volume           = source.Volume,
+            TrimStartSeconds = source.TrimStartSeconds,
+            TrimEndSeconds   = source.TrimEndSeconds,
+            FadeInSeconds    = source.FadeInSeconds,
+            FadeOutSeconds   = source.FadeOutSeconds,
+            CreatedAt        = DateTime.UtcNow
+            // Hotkey intentionally not copied — would create a conflict
+        };
+        _cachedSounds[copy.Id] = cachedSound;
+        _library.Add(copy);
+        SoundLibraryService.Save(_library);
+        RefreshCategoryFilter();
+        FilterSoundsPanel();
+        StatusText.Text = $"Duplicated: {copy.DisplayName}";
+    }
+
+    // ── Reveal in Folder ─────────────────────────────────────────────────────
+
+    private static void RevealInFolder(SoundItem item)
+    {
+        if (!File.Exists(item.FilePath)) return;
+        Process.Start("explorer.exe", $"/select,\"{item.FilePath}\"");
+    }
+
+    // ── Category Manager ─────────────────────────────────────────────────────
+
+    private void CategoryManager_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Dialogs.CategoryManagerDialog(this, _library, _settings.CustomCategories);
+        if (dlg.ShowDialog() != true) return;
+
+        if (dlg.SoundCategoryRemap.Count > 0)
+        {
+            foreach (var item in _library)
+            {
+                var cat = string.IsNullOrWhiteSpace(item.Category) ? "General" : item.Category;
+                if (dlg.SoundCategoryRemap.TryGetValue(cat, out var newCat))
+                    item.Category = newCat;
+            }
+        }
+
+        // Persist categories that have no sounds yet (user created them empty).
+        _settings.CustomCategories = dlg.FinalCategories
+            .Where(c => !_library.Any(s =>
+                string.Equals(s.Category, c, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        SoundLibraryService.Save(_library);
+        SaveSettings();
+        RefreshCategoryFilter();
+        FilterSoundsPanel();
+        StatusText.Text = "Categories updated.";
     }
 
     // ── Hotkey assignment ────────────────────────────────────────────────────
@@ -1472,7 +1614,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (_settings.InterruptPreviousSounds)
             ClearAllActivePlaybacks();
 
-        PlaySound(item.Id, sound, item.DisplayName, ConvertUiVolumeToGain(item.Volume));
+        PlaySound(item.Id, sound, item);
     }
 
     // Maps a 0–1 UI volume to a 0–1 audio gain using a squared (power-2) curve.
@@ -1485,7 +1627,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private static float ConvertUiVolumeToGain(float uiVolume)
         => uiVolume * uiVolume;
 
-    private void PlaySound(Guid soundId, CachedSound sound, string label, float volume = 1.0f)
+    private void PlaySound(Guid soundId, CachedSound sound, SoundItem item)
     {
         if (_monitorEngine is null && _virtualEngine is null)
         {
@@ -1495,7 +1637,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         try
         {
-            PlaybackHandle? monitorHandle = _monitorEngine?.Play(sound, volume);
+            float volume = ConvertUiVolumeToGain(item.Volume);
+            var (startS, endS, fadeInS, fadeOutS) = GetTrimFadeParams(sound, item);
+            bool hasTrimFade = startS != 0 || endS >= 0 || fadeInS != 0 || fadeOutS != 0;
+
+            PlaybackHandle? monitorHandle = hasTrimFade
+                ? _monitorEngine?.Play(sound, volume, startS, endS, fadeInS, fadeOutS)
+                : _monitorEngine?.Play(sound, volume);
 
             var monitorDevice = MonitorComboBox.SelectedItem as AudioDevice;
             var virtualDevice = VirtualComboBox.SelectedItem as AudioDevice;
@@ -1503,7 +1651,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             bool sameDevice = _virtualEngine is not null
                            && AudioDevice.AreSameOutputDevice(monitorDevice, virtualDevice);
 
-            PlaybackHandle? virtualHandle = sameDevice ? null : _virtualEngine?.Play(sound, volume);
+            PlaybackHandle? virtualHandle = sameDevice ? null
+                : hasTrimFade
+                    ? _virtualEngine?.Play(sound, volume, startS, endS, fadeInS, fadeOutS)
+                    : _virtualEngine?.Play(sound, volume);
 
             // Stop the previous instance of this same sound before registering the new one.
             if (_activePlaybacks.TryGetValue(soundId, out var previous))
@@ -1527,13 +1678,24 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
 
             StatusText.Text = sameDevice
-                ? $"▶ {label}  (Virtual = Monitor, playing once)"
-                : $"▶ {label}";
+                ? $"▶ {item.DisplayName}  (Virtual = Monitor, playing once)"
+                : $"▶ {item.DisplayName}";
         }
         catch (Exception ex)
         {
             StatusText.Text = $"Playback error: {ex.Message}";
         }
+    }
+
+    private static (int Start, int End, int FadeIn, int FadeOut) GetTrimFadeParams(
+        CachedSound sound, SoundItem item)
+    {
+        int sr = sound.SampleRate * sound.Channels;
+        int start    = item.TrimStartSeconds.HasValue ? (int)(item.TrimStartSeconds.Value * sr) : 0;
+        int end      = item.TrimEndSeconds.HasValue   ? (int)(item.TrimEndSeconds.Value   * sr) : -1;
+        int fadeIn   = item.FadeInSeconds.HasValue    ? (int)(item.FadeInSeconds.Value    * sr) : 0;
+        int fadeOut  = item.FadeOutSeconds.HasValue   ? (int)(item.FadeOutSeconds.Value   * sr) : 0;
+        return (start, end, fadeIn, fadeOut);
     }
 
     // ── Stop All ──────────────────────────────────────────────────────────────

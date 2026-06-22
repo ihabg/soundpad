@@ -25,7 +25,11 @@ public static class LibraryBackupService
             Hotkey            = src.Hotkey,
             HotkeyInitialized = src.HotkeyInitialized,
             IsFavorite        = src.IsFavorite,
-            LastPlayedAt      = src.LastPlayedAt
+            LastPlayedAt      = src.LastPlayedAt,
+            TrimStartSeconds  = src.TrimStartSeconds,
+            TrimEndSeconds    = src.TrimEndSeconds,
+            FadeInSeconds     = src.FadeInSeconds,
+            FadeOutSeconds    = src.FadeOutSeconds
         }).ToList();
 
         if (File.Exists(zipPath)) File.Delete(zipPath);

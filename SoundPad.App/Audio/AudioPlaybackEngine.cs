@@ -81,6 +81,23 @@ public class AudioPlaybackEngine : IDisposable
         return new PlaybackHandle(top, source);
     }
 
+    // Overload with non-destructive trim and fade applied at playback time.
+    // Sample counts must use the sound's own SampleRate/Channels values.
+    // startSample / endSample define the audible region of AudioData.
+    // fadeInSamples / fadeOutSamples are linear ramp lengths inside that region.
+    public PlaybackHandle Play(CachedSound sound, float volume,
+        int startSample, int endSample, int fadeInSamples, int fadeOutSamples)
+    {
+        var source = new CachedSoundSampleProvider(
+            sound, startSample, endSample, fadeInSamples, fadeOutSamples);
+        ISampleProvider top = source;
+        if (volume < 0.999f)
+            top = new VolumeSampleProvider(source) { Volume = Math.Clamp(volume, 0f, 1f) };
+        _active.Add(top);
+        _mixer.AddMixerInput(top);
+        return new PlaybackHandle(top, source);
+    }
+
     // Removes every active provider from the mixer, silencing all sounds.
     // Does NOT affect persistent inputs added via AddMixerInput (e.g. mic passthrough).
     public void StopAll()

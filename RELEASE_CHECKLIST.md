@@ -1,4 +1,4 @@
-# SoundPad v1.1.0 — Release Checklist
+# SoundPad v1.2.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.1.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.2.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.1.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.1.0), and publisher
+- [ ] Run `SoundPad-Setup-1.2.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.2.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -184,6 +184,68 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.2.0 new features
+
+### Sound Editor — waveform and timeline
+- [ ] Open Edit Sound on any clip → waveform renders in the canvas (coloured bars fill the area)
+- [ ] Drag the green Trim Start handle → handle moves, Trim Start field updates in real time
+- [ ] Drag the orange-red Trim End handle → handle moves, Trim End field updates in real time
+- [ ] Trim Start handle cannot be dragged past Trim End; Trim End cannot be dragged before Trim Start
+- [ ] Type a value in Trim Start field → green handle moves to the new position on the canvas
+- [ ] Type a value in Trim End field → orange-red handle moves to the new position on the canvas
+- [ ] Click on the waveform canvas (not on a handle) → white dashed playhead moves to that position
+- [ ] Click Play Preview → audio plays from the playhead position (or Trim Start if playhead is outside trim range)
+- [ ] Playhead line animates left-to-right during preview and stops exactly at Trim End
+- [ ] Click Stop Preview while playing → audio stops; playhead stays at the stopped position
+- [ ] Close the Edit Sound dialog while preview is playing → audio stops immediately, no hung audio
+- [ ] Fade In = 0.5 s, start preview from Trim Start → audio ramps up from silence over 0.5 s
+- [ ] Fade In = 0.5 s, start preview from mid-track playhead → no fade-in ramp (starts at full volume)
+- [ ] Fade Out = 0.5 s → audio ramps to silence during the last 0.5 s of the trimmed clip
+- [ ] Fade-in / fade-out also apply during main library playback (not just in-editor preview)
+- [ ] Duration label shows the correct total duration of the sound
+
+### Sound Editor — validation
+- [ ] Trim Start > Trim End → Save blocked: "Trim Start must be less than Trim End."
+- [ ] Trim Start set to a value greater than the sound duration (Trim End left empty) → Save blocked
+- [ ] Trim End > sound duration → Save blocked: "Trim End cannot exceed the sound duration."
+- [ ] Non-numeric or negative value in any field → Save blocked with the field-name error
+- [ ] All fields empty → Save allowed (no trim, no fade — same as default)
+
+### Sound Editor — persistence
+- [ ] Save trim/fade values → restart app → Edit Sound shows the saved values
+- [ ] Trimmed sound plays only the trimmed region (not the full file) after restart
+- [ ] Faded sound applies fade-in/fade-out correctly after restart
+- [ ] Sound with no trim/fade saved plays in full from start to end (no regression)
+
+### Library backup — trim/fade/category data
+- [ ] Export a library containing trimmed and faded sounds → ZIP created
+- [ ] Import that ZIP on a clean library → sounds load with trim/fade/category intact
+- [ ] Trim/fade values play correctly after import
+- [ ] Import an older backup ZIP (without trim/fade fields in sounds.json) → no crash; sounds load with no trim/fade applied
+
+### Category Manager
+- [ ] Click **Categories** button in toolbar → Category Manager dialog opens
+- [ ] Create "TestCat" → appears in list and is automatically selected
+- [ ] Rename "TestCat" to "Sound FX" → renamed in list and still selected
+- [ ] Assign a sound to "Sound FX" via Edit Sound → sound appears under "Sound FX" filter in main window
+- [ ] Delete "Sound FX" (with sounds) → move-to dropdown appears; choose another category → Done → sounds now appear under chosen category
+- [ ] Delete an empty category → no move-to prompt; category removed immediately
+- [ ] Chained delete in one session (delete A → move to B, then delete B → move to C) → Done → sounds originally in A land in C, not in a ghost category B
+- [ ] All, Favorites, Recent do not appear as rename or delete targets
+- [ ] Category list refreshes correctly in the main window filter after closing the dialog
+
+### Right-click context menu
+- [ ] Right-click a sound row → context menu shows: Edit, Favourite / Unfavourite, Duplicate, Reveal in Folder, Remove
+- [ ] **Edit** → Sound Editor dialog opens for that sound
+- [ ] **Favourite** → star fills on the row; next right-click shows "Unfavourite"
+- [ ] **Unfavourite** → star clears; next right-click shows "Favourite"
+- [ ] **Duplicate** → new sound appears at the bottom of the library with the same name, same file, same trim/fade/volume, and **no hotkey assigned**
+- [ ] **Reveal in Folder** → File Explorer opens with the audio file highlighted
+- [ ] **Reveal in Folder** on a sound whose file has been manually deleted → no crash, nothing opens
+- [ ] **Remove** → confirmation dialog shows the sound name; confirm → sound removed; audio file on disk not deleted
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -199,12 +261,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.1.0
-  git push origin v1.1.0
+  git tag v1.2.0
+  git push origin v1.2.0
   ```
-- [ ] Create GitHub Release from tag `v1.1.0`
-- [ ] Add release notes summarising v1.1.0 features
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.1.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.2.0`
+- [ ] Add release notes summarising v1.2.0 features
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.2.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

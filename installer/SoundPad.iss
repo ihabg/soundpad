@@ -8,7 +8,7 @@
 ; Or manually:      ISCC.exe installer\SoundPad.iss
 
 #define AppName      "SoundPad"
-#define AppVersion   "1.1.0"
+#define AppVersion   "1.2.0"
 #define AppPublisher "Kebab"
 #define AppExeName   "SoundPad.App.exe"
 

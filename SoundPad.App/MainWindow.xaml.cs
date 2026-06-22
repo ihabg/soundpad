@@ -57,6 +57,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // URL of the latest GitHub release, populated when an update check returns UpdateAvailable.
     private string? _lastReleaseUrl;
 
+    // In-app updater state — populated when an update with a downloadable asset is found.
+    private string?                  _lastUpdateTag;
+    private string?                  _installerAssetUrl;
+    private string?                  _installerAssetName;
+    private CancellationTokenSource? _downloadCts;
+    private bool                     _isDownloading;
+
     // ── Active playback tracking ──────────────────────────────────────────────
     private sealed record RowControls(Border Row, UiButton PlayStopButton);
 
@@ -312,17 +319,20 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             case UpdateStatus.UpdateAvailable:
                 _lastReleaseUrl = result.ReleaseUrl;
-                StatusText.Text = $"Update available: {result.LatestTag}  — click Open Releases Page to download.";
+                StatusText.Text = $"Update available: {result.LatestTag}";
+                ShowUpdateAvailableUI(result);
                 break;
             case UpdateStatus.UpToDate:
                 StatusText.Text = "SoundPad is up to date.";
+                HideUpdateAvailablePanel();
                 break;
             default:
                 StatusText.Text = "Could not check for updates. Check your internet connection.";
                 break;
         }
 
-        CheckUpdatesButton.IsEnabled = true;
+        if (!_isDownloading)
+            CheckUpdatesButton.IsEnabled = true;
     }
 
     private void OpenReleases_Click(object sender, RoutedEventArgs e)
@@ -351,13 +361,212 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (result.Status == UpdateStatus.UpdateAvailable)
             {
                 _lastReleaseUrl = result.ReleaseUrl;
-                StatusText.Text = $"Update available: {result.LatestTag}  — click Open Releases Page to download.";
+                StatusText.Text = $"Update available: {result.LatestTag}";
+                ShowUpdateAvailableUI(result);
             }
         }
         catch (Exception ex)
         {
             StartupLogger.Log($"Auto update check unexpected error: {ex.Message}");
         }
+    }
+
+    private void ShowUpdateAvailableUI(UpdateCheckResult result)
+    {
+        _lastUpdateTag       = result.LatestTag;
+        _installerAssetUrl   = result.InstallerAssetUrl;
+        _installerAssetName  = result.InstallerAssetName;
+
+        UpdateVersionText.Text = $"Version {result.LatestTag} is available";
+
+        var title = result.ReleaseName;
+        if (!string.IsNullOrWhiteSpace(title) &&
+            !string.Equals(title, result.LatestTag, StringComparison.OrdinalIgnoreCase))
+        {
+            UpdateTitleText.Text       = title;
+            UpdateTitleText.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            UpdateTitleText.Visibility = Visibility.Collapsed;
+        }
+
+        var notes = TruncateNotes(result.ReleaseBody, 400);
+        if (!string.IsNullOrWhiteSpace(notes))
+        {
+            UpdateBodyText.Text         = notes;
+            UpdateBodyScroll.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            UpdateBodyScroll.Visibility = Visibility.Collapsed;
+        }
+
+        if (!string.IsNullOrEmpty(_installerAssetUrl))
+        {
+            DownloadInstallButton.Visibility = Visibility.Visible;
+            NoAssetText.Visibility           = Visibility.Collapsed;
+        }
+        else
+        {
+            DownloadInstallButton.Visibility = Visibility.Collapsed;
+            NoAssetText.Visibility           = Visibility.Visible;
+        }
+
+        if (!_isDownloading)
+            DownloadProgressPanel.Visibility = Visibility.Collapsed;
+        UpdateAvailablePanel.Visibility = Visibility.Visible;
+    }
+
+    private void HideUpdateAvailablePanel()
+    {
+        _downloadCts?.Cancel();
+        UpdateAvailablePanel.Visibility = Visibility.Collapsed;
+    }
+
+    private void LaterUpdate_Click(object sender, RoutedEventArgs e) => HideUpdateAvailablePanel();
+
+    private async void DownloadInstall_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_installerAssetUrl))
+            return;
+
+        var fileName = !string.IsNullOrEmpty(_installerAssetName)
+            ? _installerAssetName
+            : $"SoundPad-Setup-{_lastUpdateTag?.TrimStart('v') ?? "latest"}.exe";
+
+        _downloadCts?.Dispose();
+        _downloadCts   = new CancellationTokenSource();
+        _isDownloading = true;
+
+        CheckUpdatesButton.IsEnabled     = false;
+        DownloadInstallButton.IsEnabled  = false;
+        LaterButton.IsEnabled            = false;
+        DownloadProgressPanel.Visibility = Visibility.Visible;
+        DownloadStatusText.Text          = "Starting download…";
+        DownloadProgressBar.Value        = 0;
+        DownloadProgressBar.IsIndeterminate = false;
+
+        var progress = new Progress<(long Downloaded, long Total)>(UpdateDownloadProgress);
+
+        string localPath;
+        try
+        {
+            localPath = await UpdateDownloadService.DownloadAsync(
+                _installerAssetUrl,
+                fileName,
+                progress,
+                _downloadCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _isDownloading = false;
+            _downloadCts?.Dispose();
+            _downloadCts = null;
+            DownloadProgressPanel.Visibility = Visibility.Collapsed;
+            DownloadInstallButton.IsEnabled  = true;
+            LaterButton.IsEnabled            = true;
+            CheckUpdatesButton.IsEnabled     = true;
+            DownloadStatusText.Text          = "";
+            return;
+        }
+        catch (Exception ex)
+        {
+            _isDownloading = false;
+            _downloadCts?.Dispose();
+            _downloadCts = null;
+            DownloadProgressPanel.Visibility = Visibility.Collapsed;
+            DownloadInstallButton.IsEnabled  = true;
+            LaterButton.IsEnabled            = true;
+            CheckUpdatesButton.IsEnabled     = true;
+            MessageBox.Show(
+                $"Download failed: {ex.Message}\n\nUse Open Release Page to download manually.",
+                "Download Failed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        DownloadStatusText.Text = "Download complete. Ready to install.";
+
+        var confirm = MessageBox.Show(
+            $"SoundPad will close and the installer will launch.\n\nInstall {_lastUpdateTag} now?",
+            "Install Update",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirm != MessageBoxResult.Yes)
+        {
+            _isDownloading = false;
+            _downloadCts?.Dispose();
+            _downloadCts = null;
+            DownloadProgressPanel.Visibility = Visibility.Collapsed;
+            DownloadInstallButton.IsEnabled  = true;
+            LaterButton.IsEnabled            = true;
+            CheckUpdatesButton.IsEnabled     = true;
+            return;
+        }
+
+        LaunchInstallerAndExit(localPath);
+        // Only reached when Process.Start failed — ExitApp() closes the app on success.
+        _isDownloading = false;
+        _downloadCts?.Dispose();
+        _downloadCts = null;
+        DownloadProgressPanel.Visibility = Visibility.Collapsed;
+        DownloadInstallButton.IsEnabled  = true;
+        LaterButton.IsEnabled            = true;
+        CheckUpdatesButton.IsEnabled     = true;
+    }
+
+    private void CancelDownload_Click(object sender, RoutedEventArgs e) => _downloadCts?.Cancel();
+
+    private void UpdateDownloadProgress((long Downloaded, long Total) t)
+    {
+        if (t.Total > 0)
+        {
+            DownloadProgressBar.IsIndeterminate = false;
+            DownloadProgressBar.Value = (double)t.Downloaded / t.Total * 100.0;
+            DownloadStatusText.Text   = $"Downloading… {FormatBytes(t.Downloaded)} / {FormatBytes(t.Total)}";
+        }
+        else
+        {
+            DownloadProgressBar.IsIndeterminate = true;
+            DownloadStatusText.Text             = $"Downloading… {FormatBytes(t.Downloaded)}";
+        }
+    }
+
+    private void LaunchInstallerAndExit(string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Could not launch installer: {ex.Message}\n\nThe file is at:\n{path}",
+                "Launch Failed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return;
+        }
+        ExitApp();
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1_048_576)
+            return $"{bytes / 1_048_576.0:F1} MB";
+        if (bytes >= 1_024)
+            return $"{bytes / 1_024.0:F0} KB";
+        return $"{bytes} B";
+    }
+
+    private static string? TruncateNotes(string? body, int maxLen)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return null;
+        body = body.Trim();
+        return body.Length <= maxLen ? body : body[..maxLen] + "…";
     }
 
     private void MinimizeToTraySwitch_Checked(object sender, RoutedEventArgs e)
@@ -2436,6 +2645,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             _settings.WindowHeight = Height;
         }
         SaveSettings();
+
+        _downloadCts?.Cancel();
+        _downloadCts?.Dispose();
+        _downloadCts = null;
 
         _trayIcon?.Dispose();
         _trayIcon = null;

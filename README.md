@@ -9,6 +9,8 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 - **Sound library** — add any MP3/WAV/OGG/FLAC/AAC file, give it a display name and category, set per-sound volume
 - **Profiles / Decks** — organize sounds into named decks; create, rename, duplicate, and delete decks; the active deck persists across restarts; sounds, categories, and hotkeys are all per-deck; switching decks stops active sound effects but does not interrupt mic passthrough; the Stop All hotkey remains global
+- **Grid / Pad View** — toggle between List and Grid view using the toolbar buttons; List View shows the full editing table and is best for managing sounds; Grid View shows large clickable pads (name, category, hotkey, and favorite star) optimized for quick soundboard use during Discord sessions or gaming; active pads highlight and show a ▶ indicator; hotkey presses highlight the correct pad; Stop All clears all pad highlights; search and category filters work in Grid View; deck switching refreshes the grid; right-click any pad for the same actions as List View; selected view persists across restarts
+- **Sound colors** — right-click any sound in List View or Grid View → **Color** to assign one of 9 preset colors (Red, Orange, Yellow, Green, Blue, Purple, Pink, Gray, or Default); in List View the color appears as a 4 px vertical accent stripe on the left edge of the row; in Grid View the color fills the pad background; colors are stored per-sound as `PadColor`; old decks, settings, and backups without `PadColor` load correctly with the default appearance
 - **Favorites** — star any sound to pin it in the Favorites filter
 - **Recent sounds** — filter to the last 7 days of played sounds, ordered by most recently played
 - **Drag-and-drop import** — drag audio files directly onto the Sound Library panel to add them instantly
@@ -29,13 +31,13 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 - **Sound Editor** — non-destructive trim (Trim Start / Trim End) and Fade In / Fade Out per sound; original audio files are never modified; settings stored in sounds.json
 - **Waveform timeline** — draggable Trim Start / Trim End handles, click-to-seek playhead, animated preview playhead, fade-in / fade-out gradient overlays, and numeric fields synced bidirectionally with the canvas
 - **Category Manager** — create, rename, and delete custom sound categories; deleting a category with sounds prompts where to move them; chained operations resolve correctly
-- **Sound row context menu** — right-click any sound: Edit, Favourite/Unfavourite, Duplicate (same audio file, same trim/fade/volume, no hotkey), Reveal in Folder, Remove
+- **Sound row context menu** — right-click any sound row or pad card: Edit, Favourite/Unfavourite, Duplicate (same audio file, same trim/fade/volume, no hotkey), Color (9 preset colors), Reveal in Folder, Remove
 
 ---
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.4.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.5.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -120,6 +122,66 @@ On first launch after upgrading, SoundPad automatically migrates your existing `
 
 ---
 
+## Grid / Pad View
+
+SoundPad offers two views for the sound library, toggled by the **List** and **Grid** buttons in the toolbar.
+
+### List View (default)
+
+The full editing table with name, category, hotkey, volume slider, and created date columns. Best for managing, editing, and organising sounds.
+
+### Grid View
+
+Large clickable pads arranged in a wrap layout — ideal for quick soundboard use during a Discord session or while gaming.
+
+Each pad shows:
+- Sound name (center, bold)
+- Category badge (bottom left)
+- Hotkey label (top right, if assigned)
+- Favorite star (top left)
+- ▶ playing indicator (bottom right, while active)
+
+**Interaction in Grid View:**
+- **Click a pad** — plays the sound; click again to stop it
+- **Right-click a pad** — same context menu as List View (Edit, Favourite/Unfavourite, Duplicate, Color, Reveal in Folder, Remove)
+- **Active pad** — highlights with an accent-colour background and shows the ▶ indicator
+- **Hotkey press** — highlights the correct pad exactly as clicking would
+- **Stop All** — clears all pad highlights immediately
+- **Search and category filter** — both work in Grid View and refresh the pad layout
+- **Deck switching** — switching decks reloads the grid with the new deck's sounds
+
+### View persistence
+
+The last selected view (List or Grid) is saved to `settings.json` and restored on restart. Old `settings.json` files without this field default to List View.
+
+---
+
+## Sound / Pad colors
+
+Right-click any sound (in List View or Grid View) and choose **Color** to assign one of 9 preset colors to that sound.
+
+| Color | Hex |
+|---|---|
+| Default | — (uses the default card/row background) |
+| Red | `#E53935` |
+| Orange | `#F4511E` |
+| Yellow | `#F9AB00` |
+| Green | `#0F9D58` |
+| Blue | `#039BE5` |
+| Purple | `#7B1FA2` |
+| Pink | `#D81B60` |
+| Gray | `#546E7A` |
+
+**How colors appear:**
+- **List View** — a 4 px vertical accent stripe on the left edge of the row. The active/playing highlight covers the row background but the stripe remains visible alongside it.
+- **Grid View** — the color fills the pad card background. When the sound is active, the accent highlight replaces the color; the ▶ indicator makes the active state clear.
+
+Colors are stored per sound as `PadColor` in `decks.json`. Old decks, settings files, and backup ZIPs without `PadColor` load correctly — missing values default to the standard appearance. Duplicating a sound copies its color. Backup export preserves colors; old backup imports without `PadColor` restore with default colors.
+
+> **Drag reorder** (reordering sounds by dragging within the grid) is not included in this release and is deferred to a future version.
+
+---
+
 ## Favorites and Recent sounds
 
 **Favorites** — Click the star (☆) on any sound row to mark it as a favourite. Select **Favorites** in the category filter to see only starred sounds.
@@ -179,13 +241,14 @@ The virtual categories **All**, **Favorites**, and **Recent** cannot be created,
 
 ## Sound row context menu
 
-Right-click any sound row for quick actions:
+Right-click any sound row (List View) or pad card (Grid View) for quick actions:
 
 | Action | Description |
 |---|---|
 | **Edit** | Opens the Sound Editor for that sound |
 | **Favourite / Unfavourite** | Toggles the favourite star |
-| **Duplicate** | Creates a copy with the same audio file, trim/fade, and volume — no hotkey assigned |
+| **Duplicate** | Creates a copy with the same audio file, trim/fade, volume, and color — no hotkey assigned |
+| **Color** | Assign one of 9 preset colors (or Default to clear); color shows as a stripe in List View and as the pad background in Grid View |
 | **Reveal in Folder** | Opens File Explorer with the source audio file selected |
 | **Remove** | Removes the sound from the library; the audio file is not deleted |
 

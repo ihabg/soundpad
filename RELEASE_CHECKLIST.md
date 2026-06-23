@@ -1,4 +1,4 @@
-# SoundPad v1.4.0 — Release Checklist
+# SoundPad v1.5.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.4.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.5.0.exe` exists after installer build
 
 ---
 
@@ -37,7 +37,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.4.0.exe` — no UAC prompt (per-user install)
+- [ ] Run `SoundPad-Setup-1.5.0.exe` — no UAC prompt (per-user install)
 - [ ] Installer wizard shows correct app name, version (1.4.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
@@ -250,14 +250,14 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.4.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.5.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
 ### Update available panel (simulate by temporarily lowering csproj version to 1.0.0, rebuild, run)
 
 - [ ] Check for Updates → update panel appears below the Updates card
-- [ ] Panel shows the version number (e.g. "Version v1.4.0 is available")
+- [ ] Panel shows the version number (e.g. "Version v1.5.0 is available")
 - [ ] Panel shows the release title when it differs from the tag
 - [ ] Panel shows a truncated excerpt of release notes when the GitHub release body is non-empty
 - [ ] Panel does not show release notes area when the release body is empty
@@ -470,6 +470,110 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.5.0 new features
+
+### List / Grid view toggle
+
+- [ ] Toolbar shows **List View** (highlighted) and **Grid View** buttons
+- [ ] Click **Grid View** → button highlights; List View button de-highlights
+- [ ] Click **List View** → button highlights; Grid View button de-highlights
+- [ ] Toggle does not affect which deck is active or what sounds are loaded
+
+### Grid View — layout
+
+- [ ] Grid View renders pad cards in a horizontal wrap layout
+- [ ] Each pad shows: sound name (center), category badge (bottom left), hotkey (top right, if set), favorite star (top left)
+- [ ] Column header (NAME / CATEGORY / HOTKEY …) is hidden in Grid View
+- [ ] Sounds area container has fully rounded corners and a visible border on all 4 sides in Grid View
+- [ ] Switching back to List View restores the column header and the original area border style (square top, no top border line, connects to the header)
+
+### View persistence
+
+- [ ] Switch to Grid View → close and reopen app → Grid View is still active
+- [ ] Switch to List View → close and reopen app → List View is still active
+- [ ] Fresh install (no `settings.json`) defaults to List View
+
+### Grid View — playback
+
+- [ ] Click a pad → sound plays; pad background highlights with accent colour and ▶ indicator appears
+- [ ] Click the same pad again while playing → sound stops; pad returns to its color/default background; ▶ indicator disappears
+- [ ] Sound finishes naturally → pad deactivates automatically (background and indicator reset)
+
+### Grid View — active state sync
+
+- [ ] Press a hotkey for a sound visible in Grid View → correct pad highlights immediately
+- [ ] Click **Stop All** → all active pads deactivate simultaneously; ▶ indicators disappear
+- [ ] Switch from Grid to List while a sound is playing → List row for that sound highlights correctly
+- [ ] Switch from List to Grid while a sound is playing → pad for that sound highlights correctly
+
+### Grid View — search and filter
+
+- [ ] Type in the search box while in Grid View → only matching pads shown; count badge updates
+- [ ] Select a category filter while in Grid View → only pads in that category shown
+- [ ] Select "Favorites" filter → only starred pads shown
+- [ ] Select "Recent" filter → only recently played pads shown
+- [ ] Empty result state shows a helpful message in both views
+
+### Grid View — deck switching
+
+- [ ] Switch to a different deck while in Grid View → grid refreshes to show new deck's sounds
+- [ ] Any playing sounds stop when switching decks (in Grid View or List View)
+
+### Grid View — right-click context menu
+
+- [ ] Right-click a pad → context menu shows: Edit, Favourite/Unfavourite, Duplicate, Color, Reveal in Folder, Remove
+- [ ] **Edit** → Sound Editor opens for that sound
+- [ ] **Favourite** → star fills on the pad; filter badge updates; next right-click shows "Unfavourite"
+- [ ] **Unfavourite** → star clears on the pad; next right-click shows "Favourite"
+- [ ] **Duplicate** → new pad appears with same name, same color, no hotkey
+- [ ] **Reveal in Folder** → File Explorer opens with audio file selected
+- [ ] **Remove** → confirmation dialog; confirm → pad removed from grid
+
+### Color menu — List View
+
+- [ ] Right-click a sound row → Color submenu shows 9 options with color swatches
+- [ ] Select **Red** → a 4 px red stripe appears on the left edge of that row immediately
+- [ ] Select **Default** → stripe disappears; row returns to standard appearance
+- [ ] Stripe remains visible while a sound is actively playing (accent background + stripe both visible)
+- [ ] Stripe is not visible on rows that have no color set (PadColor = null)
+
+### Color menu — Grid View
+
+- [ ] Right-click a pad → Color submenu shows 9 options with color swatches
+- [ ] Select **Blue** → pad background changes to blue immediately
+- [ ] Select **Default** → pad returns to the standard card background
+- [ ] While a sound is playing, the accent highlight overrides the pad color; ▶ indicator still shown; color restores when sound stops
+
+### Color persistence
+
+- [ ] Assign a color to a sound in List View → switch to Grid View → pad shows the same color
+- [ ] Assign a color to a sound in Grid View → switch to List View → row shows the stripe
+- [ ] Close and reopen the app → colors are preserved on both rows and pads
+- [ ] Duplicate a colored sound → duplicate has the same color
+
+### Backup — PadColor
+
+- [ ] Export a backup containing sounds with colors → ZIP created
+- [ ] Import that backup on a clean library → colors are preserved on the imported sounds
+- [ ] Import an **old backup** (pre-v1.5, no `PadColor` fields) → import succeeds; sounds load with default appearance (no color, no crash)
+- [ ] Import an old `sounds.json`-only backup → sounds load with default appearance
+
+### File-drop import in Grid View
+
+- [ ] While in Grid View, drag an audio file onto the sounds area → new pad appears immediately
+- [ ] Dropped sound plays correctly
+
+### Regression — no v1.4 regressions
+
+- [ ] Sound Editor (Edit sound dialog) opens correctly in both views
+- [ ] Deck create / rename / duplicate / delete all work correctly after adding colors
+- [ ] Hotkeys registered on deck switch still fire correctly in Grid View
+- [ ] Mic passthrough unaffected by view switch
+- [ ] Tray icon and Stop All hotkey work while in Grid View
+- [ ] In-app updater panel still appears and functions correctly
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -485,12 +589,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.4.0
-  git push origin v1.4.0
+  git tag v1.5.0
+  git push origin v1.5.0
   ```
-- [ ] Create GitHub Release from tag `v1.4.0`
-- [ ] Add release notes summarising v1.4.0 features
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.4.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.5.0`
+- [ ] Add release notes summarising v1.5.0 features
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.5.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

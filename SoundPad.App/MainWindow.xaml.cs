@@ -69,7 +69,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private bool                     _isDownloading;
 
     // ── Active playback tracking ──────────────────────────────────────────────
-    private sealed record RowControls(Border Row, UiButton PlayStopButton);
+    private sealed record RowControls(Action<bool> SetActive);
 
     private sealed class ActivePlayback
     {
@@ -917,6 +917,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         RebuildDeckBar();
         RefreshCategoryFilter();
         FilterSoundsPanel();
+        ApplyLibraryViewButtons();
         RefreshStopAllHotkeyDisplay();
 
         int loaded = _cachedSounds.Count;
@@ -1163,6 +1164,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 TrimEndSeconds    = s.TrimEndSeconds,
                 FadeInSeconds     = s.FadeInSeconds,
                 FadeOutSeconds    = s.FadeOutSeconds,
+                PadColor          = s.PadColor,
                 CreatedAt         = DateTime.UtcNow
             }).ToList()
         };
@@ -1211,6 +1213,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         _rowControls.Clear();
         SoundsPanel.Children.Clear();
+        GridPanel.Children.Clear();
+
+        bool isGrid = _settings.LibraryView == "Grid";
 
         foreach (var item in source)
         {
@@ -1228,13 +1233,17 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (!matchSearch || !matchCategory)
                 continue;
 
-            SoundsPanel.Children.Add(BuildSoundRow(item));
+            if (isGrid)
+                GridPanel.Children.Add(BuildPadCard(item));
+            else
+                SoundsPanel.Children.Add(BuildSoundRow(item));
         }
 
         foreach (var id in _activePlaybacks.Keys)
             UpdateRowState(id, active: true);
 
-        bool panelEmpty = SoundsPanel.Children.Count == 0;
+        int visibleCount = isGrid ? GridPanel.Children.Count : SoundsPanel.Children.Count;
+        bool panelEmpty  = visibleCount == 0;
         EmptyLibraryText.Visibility = panelEmpty ? Visibility.Visible : Visibility.Collapsed;
         EmptyLibraryText.Text = _library.Count == 0
             ? "No sounds yet — click \"+ Add Sound\" to import an audio file."
@@ -1245,7 +1254,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                     : "No sounds match your search or filter.";
 
         if (LibraryCountText is not null)
-            LibraryCountText.Content = $"{SoundsPanel.Children.Count}";
+            LibraryCountText.Content = $"{visibleCount}";
     }
 
     // Repopulates the Category ComboBox from the distinct categories in the
@@ -1468,13 +1477,40 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         grid.Children.Add(actionsPanel);
 
         // ── Row container: hover highlight + double-click to play ──────────
+        // When PadColor is set: a 4px full-height stripe is docked to the left.
+        // Row left padding is zeroed so the stripe touches the row edge;
+        // the grid compensates with its own top/bottom margin.
+        UIElement rowContent = grid;
+        var rowPadding       = new Thickness(14, 8, 14, 8);
+        if (item.PadColor is not null)
+        {
+            try
+            {
+                var stripeColor = (Color)ColorConverter.ConvertFromString(item.PadColor);
+                var stripe      = new Border
+                {
+                    Width      = 4,
+                    Background = new SolidColorBrush(stripeColor),
+                    Margin     = new Thickness(0, 0, 10, 0)
+                };
+                grid.Margin = new Thickness(0, 8, 0, 8);
+                var dp      = new DockPanel { LastChildFill = true };
+                DockPanel.SetDock(stripe, Dock.Left);
+                dp.Children.Add(stripe);
+                dp.Children.Add(grid);
+                rowContent = dp;
+                rowPadding = new Thickness(0, 0, 14, 0);
+            }
+            catch { }
+        }
+
         var row = new Border
         {
-            Padding         = new Thickness(14, 8, 14, 8),
+            Padding         = rowPadding,
             Background      = Brushes.Transparent,
             BorderBrush     = (Brush)Application.Current.Resources["CardBorderBrush"],
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Child           = grid
+            Child           = rowContent
         };
         var hoverBg = (Brush)Application.Current.Resources["ControlFillColorDefaultBrush"];
         row.MouseEnter += (_, _) => { if (!_activePlaybacks.ContainsKey(capturedItem.Id)) row.Background = hoverBg; };
@@ -1485,44 +1521,291 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 PlayLibraryItem(capturedItem);
         };
 
+        // ── SetActive callback ────────────────────────────────────────────────
+        Action<bool> setActive = active =>
+        {
+            if (active)
+            {
+                var accent = (Application.Current.Resources["SystemAccentColorPrimaryBrush"] as SolidColorBrush)?.Color ?? _fallbackAccent;
+                row.Background = new SolidColorBrush(accent) { Opacity = 0.15 };
+            }
+            else
+            {
+                row.Background = Brushes.Transparent;
+            }
+            playStopBtn.Icon = new UiSymbolIcon { Symbol = active ? SymbolRegular.Stop20 : SymbolRegular.Play20 };
+        };
+        _rowControls[item.Id] = new RowControls(setActive);
+
         // ── Context menu ──────────────────────────────────────────────────
+        row.ContextMenu = BuildSoundContextMenu(capturedItem);
+
+        return row;
+    }
+
+    // ── Grid / Pad View ───────────────────────────────────────────────────────
+
+    private void ListViewButton_Click(object sender, RoutedEventArgs e) => SetLibraryView("List");
+    private void GridViewButton_Click(object sender, RoutedEventArgs e) => SetLibraryView("Grid");
+
+    private void SetLibraryView(string view)
+    {
+        if (_settings.LibraryView == view) return;
+        _settings.LibraryView = view;
+        SaveSettings();
+        ApplyLibraryViewButtons();
+        FilterSoundsPanel();
+    }
+
+    private void ApplyLibraryViewButtons()
+    {
+        bool isGrid = _settings.LibraryView == "Grid";
+        if (ListViewButton is not null)
+            ListViewButton.Appearance = isGrid ? ControlAppearance.Secondary : ControlAppearance.Primary;
+        if (GridViewButton is not null)
+            GridViewButton.Appearance = isGrid ? ControlAppearance.Primary : ControlAppearance.Secondary;
+        if (ColumnHeaderBorder is not null)
+            ColumnHeaderBorder.Visibility = isGrid ? Visibility.Collapsed : Visibility.Visible;
+        if (SoundsAreaBorder is not null)
+        {
+            SoundsAreaBorder.CornerRadius    = isGrid ? new CornerRadius(6) : new CornerRadius(0, 0, 6, 6);
+            SoundsAreaBorder.BorderThickness = isGrid ? new Thickness(1) : new Thickness(1, 0, 1, 1);
+        }
+    }
+
+    private static Brush GetPadBackground(string? padColor)
+    {
+        if (padColor is not null)
+        {
+            try
+            {
+                var color = (Color)ColorConverter.ConvertFromString(padColor);
+                return new SolidColorBrush(color) { Opacity = 0.75 };
+            }
+            catch { }
+        }
+        return (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
+    }
+
+    private Border BuildPadCard(SoundItem item)
+    {
+        var capturedItem = item;
+        var accentBrush  = (Brush)Application.Current.Resources["SystemAccentColorPrimaryBrush"];
+        var categoryText = string.IsNullOrWhiteSpace(item.Category) ? "General" : item.Category;
+
+        // ── Playing indicator ────────────────────────────────────────────────
+        var playingIndicator = new TextBlock
+        {
+            Text              = "▶",
+            FontSize          = 10,
+            Foreground        = accentBrush,
+            VerticalAlignment = VerticalAlignment.Center,
+            Visibility        = Visibility.Collapsed
+        };
+
+        // ── Top row: favorite (left) + hotkey (right) ─────────────────────
+        var hotkeyBlock = new TextBlock
+        {
+            Text              = item.Hotkey?.DisplayText ?? "",
+            FontSize          = 9,
+            Foreground        = accentBrush,
+            FontWeight        = FontWeights.SemiBold,
+            TextTrimming      = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var favBlock = new TextBlock
+        {
+            Text              = "★",
+            FontSize          = 11,
+            Foreground        = item.IsFavorite
+                ? accentBrush
+                : (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var topRow = new DockPanel();
+        DockPanel.SetDock(hotkeyBlock, Dock.Right);
+        topRow.Children.Add(hotkeyBlock);
+        topRow.Children.Add(favBlock);
+
+        // ── Center: sound name ───────────────────────────────────────────────
+        var nameBlock = new TextBlock
+        {
+            Text                = item.DisplayName,
+            FontSize            = 13,
+            FontWeight          = FontWeights.SemiBold,
+            TextWrapping        = TextWrapping.Wrap,
+            TextAlignment       = TextAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Foreground          = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"],
+            Margin              = new Thickness(0, 4, 0, 4)
+        };
+
+        // ── Bottom row: category badge + playing indicator ───────────────────
+        var catBadge = new UiBadge
+        {
+            Content           = categoryText,
+            Appearance        = ControlAppearance.Success,
+            FontSize          = 9,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var bottomRow = new DockPanel();
+        DockPanel.SetDock(playingIndicator, Dock.Right);
+        bottomRow.Children.Add(playingIndicator);
+        bottomRow.Children.Add(catBadge);
+
+        // ── Layout ───────────────────────────────────────────────────────────
+        var layout = new Grid();
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(topRow,    0);
+        Grid.SetRow(nameBlock, 1);
+        Grid.SetRow(bottomRow, 2);
+        layout.Children.Add(topRow);
+        layout.Children.Add(nameBlock);
+        layout.Children.Add(bottomRow);
+
+        // ── Card border ──────────────────────────────────────────────────────
+        var card = new Border
+        {
+            Width           = 160,
+            Height          = 130,
+            Margin          = new Thickness(4),
+            CornerRadius    = new CornerRadius(8),
+            Padding         = new Thickness(10),
+            Background      = GetPadBackground(item.PadColor),
+            BorderBrush     = (Brush)Application.Current.Resources["CardBorderBrush"],
+            BorderThickness = new Thickness(1),
+            Cursor          = Cursors.Hand,
+            Child           = layout
+        };
+
+        // ── SetActive callback ────────────────────────────────────────────────
+        Action<bool> setActive = active =>
+        {
+            if (active)
+            {
+                var accent = (Application.Current.Resources["SystemAccentColorPrimaryBrush"] as SolidColorBrush)?.Color ?? _fallbackAccent;
+                card.Background = new SolidColorBrush(accent) { Opacity = 0.30 };
+                playingIndicator.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                card.Background = GetPadBackground(capturedItem.PadColor);
+                playingIndicator.Visibility = Visibility.Collapsed;
+            }
+        };
+        _rowControls[item.Id] = new RowControls(setActive);
+
+        // ── Click: play / stop ───────────────────────────────────────────────
+        card.MouseLeftButtonDown += (_, _) =>
+        {
+            if (_activePlaybacks.ContainsKey(capturedItem.Id))
+                StopSoundById(capturedItem.Id);
+            else
+                PlayLibraryItem(capturedItem);
+        };
+
+        // ── Hover ────────────────────────────────────────────────────────────
+        card.MouseEnter += (_, _) => { if (!_activePlaybacks.ContainsKey(capturedItem.Id)) card.Opacity = 0.85; };
+        card.MouseLeave += (_, _) => card.Opacity = 1.0;
+
+        // ── Context menu ─────────────────────────────────────────────────────
+        card.ContextMenu = BuildSoundContextMenu(capturedItem);
+
+        return card;
+    }
+
+    private ContextMenu BuildSoundContextMenu(SoundItem item)
+    {
         var editMenuItem = new MenuItem { Header = "Edit…" };
-        editMenuItem.Click += (_, _) => EditSound(capturedItem);
+        editMenuItem.Click += (_, _) => EditSound(item);
 
         var favMenuItem = new MenuItem();
         favMenuItem.Click += (_, _) =>
         {
-            capturedItem.IsFavorite = !capturedItem.IsFavorite;
+            item.IsFavorite = !item.IsFavorite;
             DeckService.Save(_decks);
             FilterSoundsPanel();
         };
 
         var dupMenuItem = new MenuItem { Header = "Duplicate" };
-        dupMenuItem.Click += (_, _) => DuplicateSound(capturedItem);
+        dupMenuItem.Click += (_, _) => DuplicateSound(item);
 
         var revealMenuItem = new MenuItem { Header = "Reveal in Folder" };
-        revealMenuItem.Click += (_, _) => RevealInFolder(capturedItem);
+        revealMenuItem.Click += (_, _) => RevealInFolder(item);
 
-        var removeCtxMenuItem = new MenuItem
+        var removeMenuItem = new MenuItem
         {
             Header     = "Remove",
             Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"]
         };
-        removeCtxMenuItem.Click += (_, _) => RemoveSound(capturedItem);
+        removeMenuItem.Click += (_, _) => RemoveSound(item);
 
         var ctx = new ContextMenu();
         ctx.Items.Add(editMenuItem);
         ctx.Items.Add(favMenuItem);
         ctx.Items.Add(dupMenuItem);
+        ctx.Items.Add(BuildColorMenu(item));
         ctx.Items.Add(revealMenuItem);
         ctx.Items.Add(new Separator());
-        ctx.Items.Add(removeCtxMenuItem);
-        ctx.Opened += (_, _) =>
-            favMenuItem.Header = capturedItem.IsFavorite ? "Unfavorite" : "Favorite";
-        row.ContextMenu = ctx;
+        ctx.Items.Add(removeMenuItem);
+        ctx.Opened += (_, _) => favMenuItem.Header = item.IsFavorite ? "Unfavorite" : "Favorite";
+        return ctx;
+    }
 
-        _rowControls[item.Id] = new RowControls(row, playStopBtn);
-        return row;
+    private MenuItem BuildColorMenu(SoundItem item)
+    {
+        var colorMenu = new MenuItem { Header = "Color" };
+
+        var presets = new (string? Hex, string Label)[]
+        {
+            (null,      "Default"),
+            ("#E53935", "Red"),
+            ("#F4511E", "Orange"),
+            ("#F9AB00", "Yellow"),
+            ("#0F9D58", "Green"),
+            ("#039BE5", "Blue"),
+            ("#7B1FA2", "Purple"),
+            ("#D81B60", "Pink"),
+            ("#546E7A", "Gray"),
+        };
+
+        foreach (var (hex, label) in presets)
+        {
+            var swatchBg = hex is not null
+                ? (Brush)new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex))
+                : (Brush)Application.Current.Resources["ControlFillColorDefaultBrush"];
+            var swatch = new Border
+            {
+                Width             = 12,
+                Height            = 12,
+                CornerRadius      = new CornerRadius(2),
+                Background        = swatchBg,
+                BorderBrush       = hex is null
+                    ? (Brush)Application.Current.Resources["CardBorderBrush"]
+                    : Brushes.Transparent,
+                BorderThickness   = new Thickness(hex is null ? 1 : 0),
+                Margin            = new Thickness(0, 0, 6, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var header = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            header.Children.Add(swatch);
+            header.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
+
+            var capturedHex = hex;
+            var colorItem   = new MenuItem { Header = header };
+            colorItem.Click += (_, _) =>
+            {
+                item.PadColor = capturedHex;
+                DeckService.Save(_decks);
+                FilterSoundsPanel();
+            };
+            colorMenu.Items.Add(colorItem);
+        }
+
+        return colorMenu;
     }
 
     // ── Add Sound ──────────────────────────────────────────────────────────────
@@ -1658,6 +1941,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             TrimEndSeconds   = source.TrimEndSeconds,
             FadeInSeconds    = source.FadeInSeconds,
             FadeOutSeconds   = source.FadeOutSeconds,
+            PadColor         = source.PadColor,
             CreatedAt        = DateTime.UtcNow
             // Hotkey intentionally not copied — would create a conflict
         };
@@ -1919,18 +2203,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         if (!_rowControls.TryGetValue(soundId, out var ctrl))
             return;
-
-        if (active)
-        {
-            var accent = (Application.Current.Resources["SystemAccentColorPrimaryBrush"] as SolidColorBrush)?.Color ?? _fallbackAccent;
-            ctrl.Row.Background = new SolidColorBrush(accent) { Opacity = 0.15 };
-        }
-        else
-        {
-            ctrl.Row.Background = Brushes.Transparent;
-        }
-
-        ctrl.PlayStopButton.Icon = new UiSymbolIcon { Symbol = active ? SymbolRegular.Stop20 : SymbolRegular.Play20 };
+        ctrl.SetActive(active);
     }
 
     private void StopSoundById(Guid soundId)

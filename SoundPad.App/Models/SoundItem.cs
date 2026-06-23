@@ -26,4 +26,8 @@ public class SoundItem
     public double? TrimEndSeconds   { get; set; }
     public double? FadeInSeconds    { get; set; }
     public double? FadeOutSeconds   { get; set; }
+
+    // Optional pad color shown in Grid View — stored as "#RRGGBB" hex string, null = default card color.
+    // Nullable so old decks.json files without this field deserialize cleanly to null.
+    public string? PadColor { get; set; }
 }

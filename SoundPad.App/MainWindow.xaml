@@ -83,6 +83,28 @@
                                     <ui:SymbolIcon Symbol="Tag20"/>
                                 </ui:Button.Icon>
                             </ui:Button>
+                            <ui:Button x:Name="GridViewButton"
+                                       DockPanel.Dock="Right"
+                                       Appearance="Secondary"
+                                       Padding="6,4"
+                                       Margin="0,0,4,0"
+                                       ToolTip="Grid View"
+                                       Click="GridViewButton_Click">
+                                <ui:Button.Icon>
+                                    <ui:SymbolIcon Symbol="Grid20"/>
+                                </ui:Button.Icon>
+                            </ui:Button>
+                            <ui:Button x:Name="ListViewButton"
+                                       DockPanel.Dock="Right"
+                                       Appearance="Primary"
+                                       Padding="6,4"
+                                       Margin="0,0,4,0"
+                                       ToolTip="List View"
+                                       Click="ListViewButton_Click">
+                                <ui:Button.Icon>
+                                    <ui:SymbolIcon Symbol="AppsList20"/>
+                                </ui:Button.Icon>
+                            </ui:Button>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="SOUND LIBRARY"
                                            FontSize="11"
@@ -120,7 +142,8 @@
                     </StackPanel>
 
                     <!-- Column header (pinned above the scrollable rows) -->
-                    <Border Grid.Row="2"
+                    <Border x:Name="ColumnHeaderBorder"
+                            Grid.Row="2"
                             Background="{DynamicResource ControlFillColorDefaultBrush}"
                             BorderBrush="{DynamicResource CardBorderBrush}"
                             BorderThickness="1"
@@ -161,6 +184,9 @@
                                       HorizontalScrollBarVisibility="Disabled">
                             <StackPanel>
                                 <StackPanel x:Name="SoundsPanel"/>
+                                <WrapPanel x:Name="GridPanel"
+                                           Orientation="Horizontal"
+                                           Margin="8,8,4,8"/>
                                 <TextBlock x:Name="EmptyLibraryText"
                                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                            FontSize="13"

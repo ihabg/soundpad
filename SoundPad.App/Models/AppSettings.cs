@@ -49,4 +49,8 @@ public class AppSettings
 
     // Tracks which deck was active on last exit; null means use the first deck.
     public Guid? ActiveDeckId { get; set; }
+
+    // "List" | "Grid" — persisted so the chosen library view survives restarts.
+    // Default "List" applies to both new installs and old settings.json files.
+    public string LibraryView { get; set; } = "List";
 }

@@ -1,4 +1,4 @@
-# SoundPad v1.6.0 — Release Checklist
+# SoundPad v1.7.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.6.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.7.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.6.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.6.0), and publisher
+- [ ] Run `SoundPad-Setup-1.7.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.7.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -250,7 +250,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.6.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.7.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
@@ -652,6 +652,84 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.7.0 new features
+
+### Mini Mode — open and basic display
+
+- [ ] Click **Mini** button in the toolbar → Mini Mode floating window opens
+- [ ] Mini window shows all pads from the currently active deck
+- [ ] Mini pads appear in the same order as the main List and Grid views
+- [ ] Mini pads respect PadColor — a sound with a color set in the main window shows that color in Mini Mode
+- [ ] Mini window header shows the active deck name
+
+### Mini Mode — playback sync
+
+- [ ] Click a Mini pad → sound plays; that pad highlights with accent overlay and ▶ indicator
+- [ ] Click the same Mini pad while playing → sound stops; pad returns to normal appearance
+- [ ] Play a sound from the **main window** → the corresponding Mini pad highlights simultaneously
+- [ ] Play a sound from **Mini Mode** → the corresponding row/card in the main window highlights simultaneously
+- [ ] Press a **global hotkey** → Mini pad for that sound highlights correctly
+- [ ] Sound finishes naturally → Mini pad deactivates automatically; main window row/card also clears
+
+### Mini Mode — Stop All
+
+- [ ] Click ⏹ Stop All in Mini Mode footer → all sounds stop; all Mini pads and all main-window rows/cards deactivate simultaneously
+- [ ] Click Stop All in the **main window** → all Mini pads deactivate simultaneously
+- [ ] Press the **Stop All global hotkey** → all Mini pads deactivate simultaneously
+
+### Mini Mode — deck sync
+
+- [ ] Switch decks in the main window → Mini Mode header updates to the new deck name and pads rebuild immediately
+- [ ] Rename the **active deck** in the main window → Mini Mode header updates to the new name immediately
+- [ ] Rename a **non-active deck** → Mini Mode is unaffected
+- [ ] Delete the active deck → Mini Mode rebuilds with the replacement deck automatically (no crash)
+- [ ] Switch to an **empty deck** → Mini Mode shows no pads and does not crash
+
+### Mini Mode — window behavior
+
+- [ ] Drag Mini window by its header → repositions freely anywhere on screen
+- [ ] Click the **📌 pin button** → always-on-top toggles; pin button highlights (Primary) when active, Secondary when inactive
+- [ ] Click the **✕ close button** → Mini window hides; the main app remains running
+- [ ] Click **Mini** button again → Mini window reappears (was hidden, not destroyed)
+- [ ] Resize Mini window → pads wrap to fill the new width; scrollbar appears if pads overflow vertically
+
+### Mini Mode — settings persistence
+
+- [ ] Open Mini, drag it to a custom position, close it, reopen → restores to the same position
+- [ ] Toggle always-on-top on, close and reopen app → always-on-top is still on; pin button is highlighted
+- [ ] Toggle always-on-top off, close and reopen app → always-on-top is still off
+- [ ] Resize Mini, close and reopen app → window size is restored
+- [ ] Manually set `"MiniWindowLeft": -3000` in `settings.json`, reopen Mini → window clamps back onto the visible screen (not off-screen)
+- [ ] Fresh install (no `settings.json`) → Mini opens at a default WPF position; no crash
+
+### Mini Mode — app exit
+
+- [ ] Open Mini Mode, then exit the app via the main window ✕ → app exits cleanly; no hung process remains
+- [ ] Open Mini Mode, then exit via the tray icon → app exits cleanly
+- [ ] Mini window position and always-on-top state are saved before the app exits
+
+### Mini Mode — tray interaction
+
+- [ ] Enable **Minimize to Tray**; minimize the main window → Mini Mode remains visible on screen
+- [ ] Enable **Close to Tray**; click ✕ on the main window → main window hides to tray; Mini Mode remains visible
+- [ ] Double-click tray icon to restore main window → Mini Mode is unaffected
+
+### Mini Mode — hotkeys
+
+- [ ] Open Mini Mode so it has keyboard focus; press a sound hotkey → sound plays (hotkey fires globally)
+- [ ] Open Mini Mode so it has keyboard focus; press the Stop All hotkey → all sounds stop
+
+### Regression — v1.6 features unaffected by v1.7 changes
+
+- [ ] Drag-and-drop reorder in List View still works correctly
+- [ ] Drag-and-drop reorder in Grid View still works correctly
+- [ ] External file-drop import (dragging audio files from File Explorer) still works in both views
+- [ ] Grid pad size (Small / Medium / Large) still works and persists
+- [ ] Compact Grid Mode still works and persists
+- [ ] Pad colors still display correctly in both List and Grid views
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -667,12 +745,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.6.0
-  git push origin v1.6.0
+  git tag v1.7.0
+  git push origin v1.7.0
   ```
-- [ ] Create GitHub Release from tag `v1.6.0`
-- [ ] Add release notes summarising v1.6.0 features
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.6.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.7.0`
+- [ ] Add release notes summarising v1.7.0 features
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.7.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

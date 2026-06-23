@@ -1,4 +1,4 @@
-# SoundPad v1.5.0 — Release Checklist
+# SoundPad v1.6.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.5.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.6.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.5.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.4.0), and publisher
+- [ ] Run `SoundPad-Setup-1.6.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.6.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -250,14 +250,14 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.5.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.6.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
 ### Update available panel (simulate by temporarily lowering csproj version to 1.0.0, rebuild, run)
 
 - [ ] Check for Updates → update panel appears below the Updates card
-- [ ] Panel shows the version number (e.g. "Version v1.5.0 is available")
+- [ ] Panel shows the version number (e.g. "Version v1.6.0 is available")
 - [ ] Panel shows the release title when it differs from the tag
 - [ ] Panel shows a truncated excerpt of release notes when the GitHub release body is non-empty
 - [ ] Panel does not show release notes area when the release body is empty
@@ -574,6 +574,84 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.6.0 new features
+
+### Drag-and-drop reorder — List View
+
+- [ ] In List View with "All" selected and search box empty, drag a sound row by its non-interactive area → 2 px drop indicator line appears between rows as the cursor moves
+- [ ] Drop the sound at a new position → order updates immediately in the panel
+- [ ] Restart the app → sounds appear in the new order (order persisted to `decks.json`)
+- [ ] Switch to Grid View after reorder → Grid View shows the same new order
+
+### Drag-and-drop reorder — Grid View
+
+- [ ] In Grid View with "All" selected and search box empty, drag a pad card → card-sized placeholder appears at the insert position
+- [ ] Drop the pad at a new position → grid updates immediately
+- [ ] Restart the app → pads appear in the new order
+- [ ] Switch to List View after reorder → List View shows the same new order
+
+### Reorder guards
+
+- [ ] Change category filter to anything other than "All" → attempt to drag a row or pad → status bar shows "Reorder is only available in All view with no search filter."
+- [ ] Type text in the search box → attempt to drag → same status bar message
+- [ ] Drop indicator does not appear when reorder is blocked
+- [ ] Clearing the filter / search box restores reorder capability without restart
+
+### Reorder vs. interactive controls
+
+- [ ] Click the **Play/Stop** button on a List View row → sound plays/stops; no drag initiated
+- [ ] Click the **Volume slider** on a List View row → slider adjusts; no drag initiated
+- [ ] Click the **Hotkey** button on a List View row → hotkey dialog opens; no drag initiated
+- [ ] Click a pad card in Grid View without dragging → sound plays or stops; no reorder occurs
+- [ ] Drag only starts after the cursor moves past the system drag threshold (not on a quick click-and-release)
+
+### Reorder does not change sound properties
+
+- [ ] Reorder sounds, then verify: hotkeys still fire on the reordered sounds
+- [ ] Reorder sounds, then verify: pad colors remain correct after reorder
+- [ ] Reorder sounds, then press **Stop All** → all active states clear correctly
+- [ ] Reorder sounds, then switch decks → deck switch works without error; return to original deck shows the reordered order
+
+### External file-drop regression
+
+- [ ] While in List View, drag an audio file from File Explorer onto the sounds area → file imported and new row appears at the bottom
+- [ ] While in Grid View, drag an audio file onto the sounds area → new pad appears at the bottom
+- [ ] Drag a non-audio file onto the sounds area → nothing added, no crash
+- [ ] During an external file drop, drop indicator (2 px line / placeholder) does not appear — only the accent border highlight shows
+
+### Pad size — Small / Medium / Large
+
+- [ ] Switch to Grid View → **Pad Size** combo box is visible in the toolbar
+- [ ] Select **Small** → all pads resize to 120 × 100 px immediately
+- [ ] Select **Medium** → all pads resize to 160 × 130 px immediately (this is the default)
+- [ ] Select **Large** → all pads resize to 210 × 170 px immediately
+- [ ] Pad Size combo is **not** visible in List View
+- [ ] Close and reopen the app → pad size is restored to the last selected value
+- [ ] Fresh install (no `settings.json`) → pad size defaults to Medium
+
+### Compact Grid Mode
+
+- [ ] Switch to Grid View → **Compact** button is visible in the toolbar
+- [ ] Click **Compact** → category badges and favourite stars disappear; sound name font increases; Compact button highlights (Primary appearance)
+- [ ] Click **Compact** again → category badges and favourite stars reappear; Compact button returns to Secondary appearance
+- [ ] Compact button is **not** visible in List View
+- [ ] Close and reopen the app → compact mode is restored to the last state
+- [ ] A sound actively playing through a compact mode toggle continues playing and its pad re-highlights correctly after the rebuild
+
+### Pad size and compact — interaction
+
+- [ ] Toggle compact mode while Large pads are selected → layout is compact at Large size
+- [ ] Change pad size while compact is on → pads resize; compact state is preserved
+- [ ] Drop indicator placeholder matches the current pad size during a drag (not always Medium)
+
+### Backup — order preserved
+
+- [ ] Reorder sounds in the active deck, then export a backup ZIP
+- [ ] Import that backup on a clean library → sounds appear in the same reordered sequence
+- [ ] Old backup ZIPs (created before v1.6) import correctly; order follows `sounds.json` / `decks.json` as written
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -589,12 +667,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.5.0
-  git push origin v1.5.0
+  git tag v1.6.0
+  git push origin v1.6.0
   ```
-- [ ] Create GitHub Release from tag `v1.5.0`
-- [ ] Add release notes summarising v1.5.0 features
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.5.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.6.0`
+- [ ] Add release notes summarising v1.6.0 features
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.6.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

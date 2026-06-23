@@ -9,7 +9,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 - **Sound library** — add any MP3/WAV/OGG/FLAC/AAC file, give it a display name and category, set per-sound volume
 - **Profiles / Decks** — organize sounds into named decks; create, rename, duplicate, and delete decks; the active deck persists across restarts; sounds, categories, and hotkeys are all per-deck; switching decks stops active sound effects but does not interrupt mic passthrough; the Stop All hotkey remains global
-- **Grid / Pad View** — toggle between List and Grid view using the toolbar buttons; List View shows the full editing table and is best for managing sounds; Grid View shows large clickable pads (name, category, hotkey, and favorite star) optimized for quick soundboard use during Discord sessions or gaming; active pads highlight and show a ▶ indicator; hotkey presses highlight the correct pad; Stop All clears all pad highlights; search and category filters work in Grid View; deck switching refreshes the grid; right-click any pad for the same actions as List View; selected view persists across restarts
+- **Grid / Pad View** — toggle between List and Grid view using the toolbar buttons; List View shows the full editing table and is best for managing sounds; Grid View shows large clickable pads (name, category, hotkey, and favorite star) optimized for quick soundboard use during Discord sessions or gaming; active pads highlight and show a ▶ indicator; hotkey presses highlight the correct pad; Stop All clears all pad highlights; search and category filters work in Grid View; deck switching refreshes the grid; right-click any pad for the same actions as List View; selected view persists across restarts; drag pads or rows to reorder sounds within the active deck — order persists after restart and affects both views; Grid View pad size is configurable (Small / Medium / Large); Compact Grid Mode hides category badges and favorite stars for a denser layout
 - **Sound colors** — right-click any sound in List View or Grid View → **Color** to assign one of 9 preset colors (Red, Orange, Yellow, Green, Blue, Purple, Pink, Gray, or Default); in List View the color appears as a 4 px vertical accent stripe on the left edge of the row; in Grid View the color fills the pad background; colors are stored per-sound as `PadColor`; old decks, settings, and backups without `PadColor` load correctly with the default appearance
 - **Favorites** — star any sound to pin it in the Favorites filter
 - **Recent sounds** — filter to the last 7 days of played sounds, ordered by most recently played
@@ -37,7 +37,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.5.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.6.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -150,9 +150,41 @@ Each pad shows:
 - **Search and category filter** — both work in Grid View and refresh the pad layout
 - **Deck switching** — switching decks reloads the grid with the new deck's sounds
 
+### Drag-and-drop reorder
+
+Sounds can be reordered by dragging within the active deck. Reorder works in both List View and Grid View.
+
+- **List View** — drag any row by its non-interactive area (not the Play button, Volume slider, or Hotkey button). A 2 px drop indicator line shows the insert position.
+- **Grid View** — drag any pad card. A card-sized placeholder shows the insert position. The placeholder matches the current pad size.
+- **Order persists** — the new order is saved to `decks.json` immediately and is reflected in both views after the drop.
+- **Reorder is blocked** when a category filter other than **All** is active, or when the search box is non-empty. A message appears in the status bar explaining why.
+- **Deck.Sounds list order is the source of truth.** Reorder does not change sound IDs, hotkeys, colors, categories, trim/fade settings, or file paths.
+- External file-drop import (dragging audio files from File Explorer) is unaffected — it works in all views and filter states.
+
+### Pad size
+
+The **Pad Size** combo box appears in the toolbar when Grid View is active.
+
+| Size | Dimensions |
+|---|---|
+| Small | 120 × 100 px |
+| Medium | 160 × 130 px (default) |
+| Large | 210 × 170 px |
+
+The selected size is saved to `settings.json` and restored on restart.
+
+### Compact Grid Mode
+
+Click the **Compact** button in the toolbar (Grid View only) to toggle compact mode.
+
+- **Compact on** — hides the category badge and favorite star; increases the sound name font size for maximum name visibility in a dense layout
+- **Compact off** — full layout with category badge, favorite star, hotkey, and sound name
+
+Compact mode is saved to `settings.json` and restored on restart.
+
 ### View persistence
 
-The last selected view (List or Grid) is saved to `settings.json` and restored on restart. Old `settings.json` files without this field default to List View.
+The last selected view (List or Grid), pad size, and compact mode are all saved to `settings.json` and restored on restart. Old `settings.json` files without these fields default to List View, Medium pads, and compact off.
 
 ---
 
@@ -177,8 +209,6 @@ Right-click any sound (in List View or Grid View) and choose **Color** to assign
 - **Grid View** — the color fills the pad card background. When the sound is active, the accent highlight replaces the color; the ▶ indicator makes the active state clear.
 
 Colors are stored per sound as `PadColor` in `decks.json`. Old decks, settings files, and backup ZIPs without `PadColor` load correctly — missing values default to the standard appearance. Duplicating a sound copies its color. Backup export preserves colors; old backup imports without `PadColor` restore with default colors.
-
-> **Drag reorder** (reordering sounds by dragging within the grid) is not included in this release and is deferred to a future version.
 
 ---
 

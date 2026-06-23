@@ -70,4 +70,20 @@ public class AppSettings
     public double? MiniWindowTop     { get; set; }
     public double? MiniWindowWidth   { get; set; }
     public double? MiniWindowHeight  { get; set; }
+
+    // Instant Replay — OFF by default; no audio is captured unless the user enables it.
+    // Old settings.json files without these fields deserialize cleanly via initializers.
+    public bool           InstantReplayEnabled        { get; set; } = false;
+    public int            InstantReplayMinutes         { get; set; } = 1;
+    public HotkeyBinding? InstantReplayClipHotkey     { get; set; }
+    public HotkeyBinding? InstantReplayToggleHotkey   { get; set; }
+    // null = use Windows default render endpoint; otherwise a WASAPI device ID string.
+    public string?        InstantReplayCaptureDeviceId { get; set; }
+
+    // Microphone capture for Instant Replay — OFF by default (privacy default).
+    // Only active while Instant Replay is ON and IncludeMicrophone is true.
+    public bool    InstantReplayIncludeMicrophone { get; set; } = false;
+    public string? InstantReplayMicDeviceName     { get; set; }
+    public int?    InstantReplayMicDeviceNumber   { get; set; }
+    public float   InstantReplayMicVolume         { get; set; } = 1.0f;
 }

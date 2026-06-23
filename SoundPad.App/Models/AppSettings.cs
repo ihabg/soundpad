@@ -61,4 +61,13 @@ public class AppSettings
     // true = compact pads (name + hotkey only); false = full (name + category + hotkey + favorite).
     // Default false preserves the v1.5 layout for existing users.
     public bool GridCompact { get; set; } = false;
+
+    // Mini Mode / Floating Soundboard
+    // All nullable/defaulted so old settings.json files deserialize cleanly.
+    public bool    MiniAlwaysOnTop   { get; set; } = true;
+    public bool    MiniOpenOnStartup { get; set; } = false;
+    public double? MiniWindowLeft    { get; set; }
+    public double? MiniWindowTop     { get; set; }
+    public double? MiniWindowWidth   { get; set; }
+    public double? MiniWindowHeight  { get; set; }
 }

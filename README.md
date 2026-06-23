@@ -10,6 +10,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 - **Sound library** — add any MP3/WAV/OGG/FLAC/AAC file, give it a display name and category, set per-sound volume
 - **Profiles / Decks** — organize sounds into named decks; create, rename, duplicate, and delete decks; the active deck persists across restarts; sounds, categories, and hotkeys are all per-deck; switching decks stops active sound effects but does not interrupt mic passthrough; the Stop All hotkey remains global
 - **Grid / Pad View** — toggle between List and Grid view using the toolbar buttons; List View shows the full editing table and is best for managing sounds; Grid View shows large clickable pads (name, category, hotkey, and favorite star) optimized for quick soundboard use during Discord sessions or gaming; active pads highlight and show a ▶ indicator; hotkey presses highlight the correct pad; Stop All clears all pad highlights; search and category filters work in Grid View; deck switching refreshes the grid; right-click any pad for the same actions as List View; selected view persists across restarts; drag pads or rows to reorder sounds within the active deck — order persists after restart and affects both views; Grid View pad size is configurable (Small / Medium / Large); Compact Grid Mode hides category badges and favorite stars for a denser layout
+- **Mini Mode / Floating Soundboard** — click **Mini** in the toolbar to open a compact always-on-top floating window showing every pad in the active deck; play or stop sounds directly from Mini Mode; active state syncs bidirectionally with the main window — playing from either UI highlights the pad in both; Stop All works from either window; deck switching and active deck renames update Mini Mode automatically; the pin button toggles always-on-top; closing Mini Mode hides it without exiting the app; Mini Mode window size and position persist across restarts; hotkeys continue to work while Mini Mode has keyboard focus; designed for Discord and gaming use where the main window is hidden in the tray
 - **Sound colors** — right-click any sound in List View or Grid View → **Color** to assign one of 9 preset colors (Red, Orange, Yellow, Green, Blue, Purple, Pink, Gray, or Default); in List View the color appears as a 4 px vertical accent stripe on the left edge of the row; in Grid View the color fills the pad background; colors are stored per-sound as `PadColor`; old decks, settings, and backups without `PadColor` load correctly with the default appearance
 - **Favorites** — star any sound to pin it in the Favorites filter
 - **Recent sounds** — filter to the last 7 days of played sounds, ordered by most recently played
@@ -37,7 +38,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.6.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.7.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -185,6 +186,47 @@ Compact mode is saved to `settings.json` and restored on restart.
 ### View persistence
 
 The last selected view (List or Grid), pad size, and compact mode are all saved to `settings.json` and restored on restart. Old `settings.json` files without these fields default to List View, Medium pads, and compact off.
+
+---
+
+## Mini Mode / Floating Soundboard
+
+Click the **Mini** button in the toolbar to open a compact floating soundboard window alongside the main app.
+
+Mini Mode is designed for Discord and gaming use — keep it visible while the main window is minimised to the tray.
+
+### What Mini Mode shows
+
+Mini Mode displays every pad in the currently active deck as a compact 110 × 90 px card. Cards use the same pad color as Grid View. No search filtering or category filtering is applied — all sounds in the deck are always visible.
+
+### Playback
+
+- **Click a Mini pad** — plays the sound; click again while playing to stop it
+- **Active state syncs both ways** — playing from Mini highlights the pad in Mini and the row/card in the main window; playing from the main window highlights the pad in Mini
+- **Stop All** — click ⏹ Stop All in Mini Mode's footer, or use the main window's Stop All button or global hotkey; all highlights clear in both UIs simultaneously
+- **Sound finishes naturally** — Mini pad deactivates automatically, matching the main window
+
+### Deck and rename sync
+
+Switching decks or renaming the active deck in the main window updates Mini Mode immediately. The header shows the active deck name and updates live.
+
+### Window behavior
+
+| Control | Behavior |
+|---|---|
+| **Drag the header** | Moves the Mini window freely |
+| **📌 Pin button** | Toggles always-on-top; highlighted when active |
+| **✕ Close button** | Hides Mini Mode — the app keeps running |
+| **Resize edges** | Pads wrap to fill the window |
+| **Reopen** | Click **Mini** in the toolbar again |
+
+### Settings persistence
+
+Mini Mode window size, position, and always-on-top state are saved to `settings.json` and restored on next open. If the saved position is off-screen (e.g. a secondary monitor was disconnected), the window is clamped back onto the visible screen.
+
+### Architecture
+
+MainWindow remains the single owner of all playback and audio state. Mini Mode is UI-only and does not create a second audio engine. All play, stop, and active-state changes go through MainWindow's existing `PlayLibraryItem`, `StopSoundById`, and `StopAllSounds` methods. Active state propagates via the `PlaybackStateChanged` event fired from `UpdateRowState`. Deck changes propagate via the `ActiveDeckChanged` event. Old `settings.json` files without Mini Mode fields load correctly — all new fields default to sensible values (`MiniAlwaysOnTop = true`, `MiniOpenOnStartup = false`, position = null).
 
 ---
 

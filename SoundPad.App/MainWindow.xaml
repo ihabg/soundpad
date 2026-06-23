@@ -105,6 +105,15 @@
                                        ToolTip="Toggle compact pad mode"
                                        Visibility="Collapsed"
                                        Click="GridCompactButton_Click"/>
+                            <ui:Button x:Name="MiniModeButton"
+                                       DockPanel.Dock="Right"
+                                       Content="Mini"
+                                       Appearance="Secondary"
+                                       Padding="8,4"
+                                       FontSize="11"
+                                       Margin="0,0,4,0"
+                                       ToolTip="Open Mini Mode floating soundboard"
+                                       Click="MiniModeButton_Click"/>
                             <ui:Button x:Name="GridViewButton"
                                        DockPanel.Dock="Right"
                                        Appearance="Secondary"

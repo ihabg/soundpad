@@ -95,6 +95,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private        Border? _dropIndicator;
     private        int     _dropIndicatorIndex = -1;     // -1 = not in any panel
 
+    // ── Mini Mode ─────────────────────────────────────────────────────────────
+    // Events allow MiniWindow to react to playback and deck changes without
+    // MainWindow needing any direct reference to the Mini window's internals.
+    internal event Action<Guid, bool>? PlaybackStateChanged;
+    internal event Action<Deck>?       ActiveDeckChanged;
+    private  MiniWindow?               _miniWindow;
+
     // ── Constructor ────────────────────────────────────────────────────────────
     // Settings are loaded before InitializeComponent so the saved window
     // bounds can be applied before the window is ever shown (no visible jump).
@@ -841,6 +848,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                     StartupLogger.Log($"  Stack: {ex.StackTrace}");
                     try { StatusText.Text = $"Hotkey startup error: {ex.Message}"; } catch { }
                 }
+
+                if (_settings.MiniOpenOnStartup)
+                    OpenMiniMode();
             }));
 
             // Auto update check: only when enabled, and only once per 24 hours.
@@ -1124,6 +1134,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         RefreshCategoryFilter();
         FilterSoundsPanel();
         StatusText.Text = $"Switched to: {deck.Name}";
+        ActiveDeckChanged?.Invoke(_activeDeck);
     }
 
     private void AddDeck_Click(object sender, RoutedEventArgs e)
@@ -1148,6 +1159,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         DeckService.Save(_decks);
         RebuildDeckBar();
         StatusText.Text = $"Deck renamed to: {deck.Name}";
+        if (deck.Id == _activeDeck.Id)
+            ActiveDeckChanged?.Invoke(_activeDeck);
     }
 
     private void DuplicateDeck(Deck source)
@@ -1655,7 +1668,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         GridSizeCombo.SelectionChanged += GridSizeCombo_SelectionChanged;
     }
 
-    private static Brush GetPadBackground(string? padColor)
+    internal static Brush GetPadBackground(string? padColor)
     {
         if (padColor is not null)
         {
@@ -1876,6 +1889,50 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         DeckService.Save(_decks);
         FilterSoundsPanel();
         StatusText.Text = $"Moved: {item.DisplayName}";
+    }
+
+    // ── Mini Mode ─────────────────────────────────────────────────────────────
+
+    // Called from the toolbar button and from MiniOpenOnStartup at startup.
+    private void OpenMiniMode()
+    {
+        if (_miniWindow is null)
+        {
+            _miniWindow = new MiniWindow(this);
+            _miniWindow.ApplySettings(_settings);
+            _miniWindow.InitializeDeck(_activeDeck);
+        }
+
+        if (_miniWindow.IsVisible)
+            _miniWindow.Activate();
+        else
+        {
+            _miniWindow.Show();
+            _miniWindow.Activate();
+        }
+    }
+
+    private void MiniModeButton_Click(object sender, RoutedEventArgs e) => OpenMiniMode();
+
+    // Queried by MiniWindow to decide play vs stop on pad click.
+    internal bool IsActivePlayback(Guid soundId) => _activePlaybacks.ContainsKey(soundId);
+
+    // Returns a snapshot of currently active sound IDs so MiniWindow can
+    // sync active highlights when it first opens or rebuilds after a deck switch.
+    internal IReadOnlyList<Guid> GetActivePlaybackIds() => _activePlaybacks.Keys.ToList();
+
+    // Called by MiniWindow pin button to persist the always-on-top preference.
+    internal void SaveMiniAlwaysOnTop(bool value)
+    {
+        _settings.MiniAlwaysOnTop = value;
+        SaveSettings();
+    }
+
+    // Called by MiniWindow close button so position is persisted on hide.
+    internal void SaveMiniPositionFrom(MiniWindow mini)
+    {
+        mini.SavePositionTo(_settings);
+        SaveSettings();
     }
 
     private Border BuildPadCard(SoundItem item)
@@ -2521,16 +2578,16 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    private static readonly Color _fallbackAccent = Color.FromRgb(0, 120, 215);
+    internal static readonly Color _fallbackAccent = Color.FromRgb(0, 120, 215);
 
     private void UpdateRowState(Guid soundId, bool active)
     {
-        if (!_rowControls.TryGetValue(soundId, out var ctrl))
-            return;
-        ctrl.SetActive(active);
+        if (_rowControls.TryGetValue(soundId, out var ctrl))
+            ctrl.SetActive(active);
+        PlaybackStateChanged?.Invoke(soundId, active);
     }
 
-    private void StopSoundById(Guid soundId)
+    internal void StopSoundById(Guid soundId)
     {
         if (!_activePlaybacks.TryGetValue(soundId, out var playback))
             return;
@@ -2564,7 +2621,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _playbackMonitor = null;
     }
 
-    private void PlayLibraryItem(SoundItem item)
+    internal void PlayLibraryItem(SoundItem item)
     {
         if (!_cachedSounds.TryGetValue(item.Id, out var sound))
         {
@@ -2672,7 +2729,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // Public stop-all entry point: clears active sounds, stops the test tone,
     // and updates the status bar.  Mic passthrough is unaffected (it uses
     // AddMixerInput, not the engine's tracked _active list).
-    private void StopAllSounds()
+    internal void StopAllSounds()
     {
         ClearAllActivePlaybacks();
         StopVirtualTestTone();
@@ -3422,11 +3479,22 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             _settings.WindowWidth  = Width;
             _settings.WindowHeight = Height;
         }
+
+        // Persist Mini Mode position/topmost before SaveSettings writes to disk.
+        if (_miniWindow is not null)
+        {
+            _miniWindow.SavePositionTo(_settings);
+            _settings.MiniAlwaysOnTop = _miniWindow.Topmost;
+        }
         SaveSettings();
 
         _downloadCts?.Cancel();
         _downloadCts?.Dispose();
         _downloadCts = null;
+
+        // Close Mini Mode before disposing audio engines.
+        _miniWindow?.ForceClose();
+        _miniWindow = null;
 
         _trayIcon?.Dispose();
         _trayIcon = null;

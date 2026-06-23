@@ -8,6 +8,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 ## Features
 
 - **Sound library** — add any MP3/WAV/OGG/FLAC/AAC file, give it a display name and category, set per-sound volume
+- **Profiles / Decks** — organize sounds into named decks; create, rename, duplicate, and delete decks; the active deck persists across restarts; sounds, categories, and hotkeys are all per-deck; switching decks stops active sound effects but does not interrupt mic passthrough; the Stop All hotkey remains global
 - **Favorites** — star any sound to pin it in the Favorites filter
 - **Recent sounds** — filter to the last 7 days of played sounds, ordered by most recently played
 - **Drag-and-drop import** — drag audio files directly onto the Sound Library panel to add them instantly
@@ -34,7 +35,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.3.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.4.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -90,6 +91,35 @@ When mic passthrough is enabled, your microphone is mixed into the virtual outpu
 
 ---
 
+## Profiles / Decks
+
+Decks let you organize your sound library into independent sets — one deck per game, stream, or scenario.
+
+The deck bar appears at the top of the Sound Library panel as a row of chips. Click a chip to switch to that deck. The active chip is highlighted.
+
+| Action | How |
+|---|---|
+| **Create deck** | Click **+** in the deck bar, enter a name |
+| **Rename deck** | Right-click a deck chip → Rename |
+| **Duplicate deck** | Right-click a deck chip → Duplicate (copies all sounds and categories; hotkeys are cleared to avoid conflicts) |
+| **Delete deck** | Right-click a deck chip → Delete (the last remaining deck cannot be deleted) |
+
+**What is per-deck:**
+- Sounds — adding, removing, and editing sounds only affects the active deck
+- Categories — Category Manager changes apply to the active deck only
+- Hotkeys — only the active deck's hotkeys are registered with Windows; the same combo can be reused across decks without conflict
+- Favorites and Recent — starred sounds and play history are scoped to each deck
+
+**What is global:**
+- Stop All hotkey — stops all sounds regardless of which deck is active
+- Mic passthrough — switching decks does not affect passthrough; it continues uninterrupted
+- Audio device selection and performance preset
+
+**Migration from v1.3 and earlier:**
+On first launch after upgrading, SoundPad automatically migrates your existing `sounds.json` into a new **General** deck. The original `sounds.json` is renamed to a timestamped backup (e.g. `sounds.json.v1.3.bak_20260623120000`) and kept in `%AppData%\SoundPad\`. No sounds are lost.
+
+---
+
 ## Favorites and Recent sounds
 
 **Favorites** — Click the star (☆) on any sound row to mark it as a favourite. Select **Favorites** in the category filter to see only starred sounds.
@@ -106,9 +136,15 @@ Drag one or more audio files (MP3, WAV, OGG, FLAC, AAC) from File Explorer direc
 
 ## Library backup import / export
 
-**Export**: Settings tab → **Export Backup** → choose a save location. SoundPad creates a ZIP containing `sounds.json` (your metadata) and a `Sounds/` folder with all audio files.
+**Export**: Settings tab → **Export Backup** → choose a save location. SoundPad creates a ZIP containing:
+- `decks.json` — all decks and their sound metadata (v1.4+ format)
+- `sounds.json` — flat list of all sounds across all decks (included for backward compatibility)
+- `Sounds/` — all audio files
 
-**Import**: Settings tab → **Import Backup** → select a `.zip` file. SoundPad adds any sounds not already in your library (matched by ID), copies their audio files, and clears hotkeys that conflict with your existing ones.
+**Import**: Settings tab → **Import Backup** → select a `.zip` file.
+
+- **New format (ZIP contains `decks.json`)** — decks are merged into your library by name. Sounds already in any deck (matched by ID) are skipped. New decks are created automatically. Hotkeys that conflict within the destination deck are cleared.
+- **Old format (ZIP contains only `sounds.json`)** — sounds are added to the currently active deck. Sounds already in any deck (matched by ID) are skipped. Conflicting hotkeys are cleared.
 
 Backup ZIPs are self-contained and portable — you can copy a library to another machine.
 
@@ -266,6 +302,14 @@ All user data (sound library, settings, imported audio files) is stored in:
 Typically: `C:\Users\<you>\AppData\Roaming\SoundPad\`
 
 This folder is **not** touched by the installer or uninstaller, so your library survives uninstall + reinstall.
+
+Key files written here:
+
+| File | Contents |
+|---|---|
+| `decks.json` | All decks, sounds, categories, and hotkeys (v1.4+) |
+| `settings.json` | Device selection, toggles, window position, active deck |
+| `Sounds/` | Audio files imported into the library |
 
 A `startup.log` file in this folder records app startup events and is overwritten on each launch — useful for diagnosing startup crashes.
 

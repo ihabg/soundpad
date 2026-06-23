@@ -39,11 +39,32 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
+                    <!-- Deck chips bar -->
+                    <DockPanel Grid.Row="0" Margin="0,0,0,10" LastChildFill="True">
+                        <ui:Button DockPanel.Dock="Right"
+                                   x:Name="AddDeckButton"
+                                   Appearance="Secondary"
+                                   Padding="6"
+                                   Margin="6,0,0,0"
+                                   Click="AddDeck_Click"
+                                   ToolTip="Add new deck">
+                            <ui:Button.Icon>
+                                <ui:SymbolIcon Symbol="Add20"/>
+                            </ui:Button.Icon>
+                        </ui:Button>
+                        <ScrollViewer x:Name="DeckScroller"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="DeckChipsPanel" Orientation="Horizontal"/>
+                        </ScrollViewer>
+                    </DockPanel>
+
                     <!-- Toolbar: label + count + Add Sound, then Search + Category -->
-                    <StackPanel Grid.Row="0" Margin="0,0,0,14">
+                    <StackPanel Grid.Row="1" Margin="0,0,0,14">
                         <DockPanel Margin="0,0,0,14">
                             <ui:Button DockPanel.Dock="Right"
                                        Content="Add Sound"
@@ -99,7 +120,7 @@
                     </StackPanel>
 
                     <!-- Column header (pinned above the scrollable rows) -->
-                    <Border Grid.Row="1"
+                    <Border Grid.Row="2"
                             Background="{DynamicResource ControlFillColorDefaultBrush}"
                             BorderBrush="{DynamicResource CardBorderBrush}"
                             BorderThickness="1"
@@ -126,7 +147,7 @@
 
                     <!-- Scrollable rows -->
                     <Border x:Name="SoundsAreaBorder"
-                            Grid.Row="2"
+                            Grid.Row="3"
                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{DynamicResource CardBorderBrush}"
                             BorderThickness="1,0,1,1"

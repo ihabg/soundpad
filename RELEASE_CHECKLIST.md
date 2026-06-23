@@ -1,4 +1,4 @@
-# SoundPad v1.3.0 — Release Checklist
+# SoundPad v1.4.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.3.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.4.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.3.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.3.0), and publisher
+- [ ] Run `SoundPad-Setup-1.4.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.4.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -250,14 +250,14 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.3.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.4.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
 ### Update available panel (simulate by temporarily lowering csproj version to 1.0.0, rebuild, run)
 
 - [ ] Check for Updates → update panel appears below the Updates card
-- [ ] Panel shows the version number (e.g. "Version v1.3.0 is available")
+- [ ] Panel shows the version number (e.g. "Version v1.4.0 is available")
 - [ ] Panel shows the release title when it differs from the tag
 - [ ] Panel shows a truncated excerpt of release notes when the GitHub release body is non-empty
 - [ ] Panel does not show release notes area when the release body is empty
@@ -335,6 +335,141 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.4.0 new features
+
+### Migration from v1.3 and earlier
+
+- [ ] Fresh install on a machine with an existing `sounds.json` (no `decks.json`) → app launches without error
+- [ ] `decks.json` is created containing a single **General** deck with all sounds from `sounds.json`
+- [ ] Original `sounds.json` is renamed to `sounds.json.v1.3.bak_<timestamp>` and kept in `%AppData%\SoundPad\`
+- [ ] All sounds in the General deck play correctly after migration
+- [ ] Settings and hotkeys survived the migration unchanged
+
+### Deck bar UI
+
+- [ ] Deck bar is visible above the Sound Library panel on the Sound Library tab
+- [ ] Active deck chip is highlighted
+- [ ] Clicking a different chip switches the active deck immediately
+- [ ] Deck bar scrolls horizontally if there are many decks (chips do not wrap or get clipped)
+
+### Create deck
+
+- [ ] Click **+** in the deck bar → New Deck dialog opens with text field focused and text selected
+- [ ] Type a name → Enter key confirms (OK button also works)
+- [ ] Escape key cancels without creating a deck
+- [ ] New deck chip appears at the end of the deck bar and becomes active
+- [ ] New deck starts with an empty sound list
+- [ ] Duplicate name → error message shown inline; dialog stays open
+
+### Rename deck
+
+- [ ] Right-click a deck chip → Rename → dialog opens pre-filled with current name, text selected
+- [ ] Enter new name → deck chip updates immediately
+- [ ] Renamed deck's sounds are unchanged
+- [ ] Duplicate name → error shown inline; dialog stays open
+
+### Duplicate deck
+
+- [ ] Right-click a deck chip → Duplicate → new deck appears with "Copy of <name>"
+- [ ] Duplicate contains the same sounds and categories as the original
+- [ ] Duplicate has **no hotkeys** assigned (all cleared to avoid Win32 conflicts)
+- [ ] Original deck is unchanged
+
+### Delete deck
+
+- [ ] Right-click a deck chip → Delete → confirmation dialog shows the deck name
+- [ ] Confirm → deck removed; active deck switches to the adjacent remaining deck
+- [ ] The last remaining deck has no Delete option (or Delete is greyed out / blocked)
+- [ ] Cancelling the confirmation leaves the deck intact
+
+### Active deck persistence across restarts
+
+- [ ] Switch to a non-default deck → close and reopen app → same deck is active
+- [ ] Sound library shows the correct sounds for the restored active deck
+
+### Per-deck sound isolation
+
+- [ ] Add a sound while on Deck A → sound does not appear in Deck B
+- [ ] Remove a sound while on Deck A → sound remains in Deck B
+- [ ] Drag-and-drop import adds sounds to the active deck only
+
+### Per-deck categories
+
+- [ ] Open Category Manager on Deck A → create "FX" category
+- [ ] Switch to Deck B → "FX" does not appear in Deck B's category list
+- [ ] Category Manager on Deck B → "FX" is not listed
+
+### Per-deck hotkeys
+
+- [ ] Assign Ctrl+Alt+1 to Sound X in Deck A
+- [ ] Switch to Deck B → Ctrl+Alt+1 is unassigned (no sound plays or a different sound plays)
+- [ ] Assign Ctrl+Alt+1 to Sound Y in Deck B → no conflict error
+- [ ] Switch back to Deck A → Ctrl+Alt+1 plays Sound X again
+- [ ] Hotkeys re-register automatically when switching decks (no restart required)
+
+### Stop All hotkey remains global
+
+- [ ] Assign a Stop All hotkey
+- [ ] Play a sound, switch to a different deck → Stop All hotkey still stops the sound
+
+### Deck switch stops sounds but not mic passthrough
+
+- [ ] Enable mic passthrough and play a sound
+- [ ] Switch to a different deck → sound stops; mic passthrough continues uninterrupted
+
+### Sound Editor in non-General decks
+
+- [ ] Switch to a non-default deck, add a sound, open Sound Editor → trim/fade work correctly
+- [ ] Saved trim/fade values persist after restart in the correct deck
+
+### Favorites and Recent are per-deck
+
+- [ ] Star a sound in Deck A → switch to Deck B → starred sound does not appear in Deck B's Favorites filter
+- [ ] Play a sound in Deck A → switch to Deck B → sound does not appear in Deck B's Recent filter
+
+### Backup export — deck data included
+
+- [ ] Settings tab → Export Backup → ZIP is created
+- [ ] ZIP contains `decks.json` with all decks and their metadata
+- [ ] ZIP contains `sounds.json` (flat list across all decks, for backward compatibility)
+- [ ] ZIP contains `Sounds/` folder with all audio files
+
+### Import — old backup (sounds.json only)
+
+- [ ] Import a v1.3 backup ZIP (contains only `sounds.json`, no `decks.json`)
+- [ ] Sounds are added to the **currently active deck**
+- [ ] Sounds already present in any deck (matched by ID) are skipped; count shown in status bar
+- [ ] Conflicting hotkeys are cleared; cleared count shown in status bar
+- [ ] Imported sounds play correctly in the active deck
+
+### Import — new backup (decks.json)
+
+- [ ] Import a v1.4 backup ZIP (contains `decks.json`)
+- [ ] Decks from the backup are merged by name: sounds added to matching existing deck, or a new deck is created
+- [ ] Sounds already present in any deck (matched by ID) are skipped
+- [ ] Newly added deck chips appear in the deck bar after import
+
+### Corrupt decks.json recovery
+
+- [ ] Write garbage text into `%AppData%\SoundPad\decks.json`, restart app
+- [ ] App launches without crash
+- [ ] A timestamped backup of the corrupt file appears (e.g. `decks.json.bak_<timestamp>`)
+- [ ] App falls back to migrating `sounds.json` (if present) or creating a fresh General deck
+
+### Empty decks.json recovery
+
+- [ ] Write `[]` into `decks.json`, restart app
+- [ ] App launches without crash
+- [ ] Timestamped backup created; app falls back to migration or fresh General deck
+
+### Null Sounds / CustomCategories fields
+
+- [ ] Hand-edit `decks.json`: set `"Sounds": null` on one deck, `"CustomCategories": null` on another
+- [ ] App loads without NullReferenceException
+- [ ] Both fields are treated as empty lists; app is fully functional
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -350,12 +485,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.3.0
-  git push origin v1.3.0
+  git tag v1.4.0
+  git push origin v1.4.0
   ```
-- [ ] Create GitHub Release from tag `v1.3.0`
-- [ ] Add release notes summarising v1.3.0 features
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.3.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.4.0`
+- [ ] Add release notes summarising v1.4.0 features
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.4.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

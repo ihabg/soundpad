@@ -46,4 +46,7 @@ public class AppSettings
     // keeps empty/new categories alive between launches.
     // Defaults to empty list so old settings.json files deserialize cleanly.
     public List<string> CustomCategories { get; set; } = new();
+
+    // Tracks which deck was active on last exit; null means use the first deck.
+    public Guid? ActiveDeckId { get; set; }
 }

@@ -53,4 +53,12 @@ public class AppSettings
     // "List" | "Grid" — persisted so the chosen library view survives restarts.
     // Default "List" applies to both new installs and old settings.json files.
     public string LibraryView { get; set; } = "List";
+
+    // "Small" | "Medium" | "Large" — pad dimensions in Grid View.
+    // Default "Medium" preserves the v1.5 card size for existing users.
+    public string GridPadSize { get; set; } = "Medium";
+
+    // true = compact pads (name + hotkey only); false = full (name + category + hotkey + favorite).
+    // Default false preserves the v1.5 layout for existing users.
+    public bool GridCompact { get; set; } = false;
 }

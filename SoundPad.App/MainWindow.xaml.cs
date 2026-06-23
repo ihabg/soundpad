@@ -86,6 +86,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private readonly Dictionary<Guid, RowControls>    _rowControls     = new();
     private DispatcherTimer?                           _playbackMonitor;
 
+    // ── Drag reorder state ────────────────────────────────────────────────────
+    private const  string  InternalReorderFormat = "SoundPadInternalReorder";
+    private        Point   _dragStartPoint;
+    private        bool    _dragReady;
+    private        Guid    _dragSourceId   = Guid.Empty; // Sound being dragged
+    private        Guid    _pendingPlayId  = Guid.Empty; // Pad card press pending play/stop
+    private        Border? _dropIndicator;
+    private        int     _dropIndicatorIndex = -1;     // -1 = not in any panel
+
     // ── Constructor ────────────────────────────────────────────────────────────
     // Settings are loaded before InitializeComponent so the saved window
     // bounds can be applied before the window is ever shown (no visible jump).
@@ -790,6 +799,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             LoadLibrary();
             StartupLogger.Log("LoadLibrary done");
 
+            // Attach panel-level drag handlers once (panels are XAML singletons).
+            SoundsPanel.PreviewMouseMove += SoundsPanel_PreviewMouseMove;
+            GridPanel.PreviewMouseMove   += GridPanel_PreviewMouseMove;
+
             StartupLogger.Log("PopulateDeviceLists begin");
             PopulateDeviceLists();
             StartupLogger.Log("PopulateDeviceLists done");
@@ -1204,6 +1217,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // text and selected category.  Called after any library or filter change.
     private void FilterSoundsPanel()
     {
+        // Cancel any in-progress drag; panels are about to be cleared.
+        _dragReady    = false;
+        _dragSourceId = Guid.Empty;
+        _pendingPlayId = Guid.Empty;
+        RemoveDropIndicator();
+
         var search   = SearchBox?.Text.Trim() ?? "";
         var category = CategoryFilter?.SelectedItem as string ?? "All";
 
@@ -1515,6 +1534,24 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var hoverBg = (Brush)Application.Current.Resources["ControlFillColorDefaultBrush"];
         row.MouseEnter += (_, _) => { if (!_activePlaybacks.ContainsKey(capturedItem.Id)) row.Background = hoverBg; };
         row.MouseLeave += (_, _) => { if (!_activePlaybacks.ContainsKey(capturedItem.Id)) row.Background = Brushes.Transparent; };
+
+        // Record drag-start info; skip when the press originates on a button or slider
+        // so interactive controls (play, edit, hotkey, volume) still work normally.
+        row.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            _dragReady = false;
+            var src = e.OriginalSource as DependencyObject;
+            while (src is not null && src != row)
+            {
+                if (src is System.Windows.Controls.Primitives.ButtonBase || src is Slider)
+                    return;
+                src = VisualTreeHelper.GetParent(src);
+            }
+            _dragSourceId   = capturedItem.Id;
+            _dragStartPoint = e.GetPosition(SoundsPanel);
+            _dragReady      = true;
+        };
+
         row.MouseLeftButtonDown += (_, e) =>
         {
             if (e.ClickCount == 2)
@@ -1548,6 +1585,25 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private void ListViewButton_Click(object sender, RoutedEventArgs e) => SetLibraryView("List");
     private void GridViewButton_Click(object sender, RoutedEventArgs e) => SetLibraryView("Grid");
 
+    private void GridSizeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var selected = (GridSizeCombo.SelectedItem as ComboBoxItem)?.Content as string ?? "Medium";
+        if (_settings.GridPadSize == selected) return;
+        _settings.GridPadSize = selected;
+        SaveSettings();
+        FilterSoundsPanel();
+    }
+
+    private void GridCompactButton_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.GridCompact        = !_settings.GridCompact;
+        GridCompactButton.Appearance = _settings.GridCompact
+            ? ControlAppearance.Primary
+            : ControlAppearance.Secondary;
+        SaveSettings();
+        FilterSoundsPanel();
+    }
+
     private void SetLibraryView(string view)
     {
         if (_settings.LibraryView == view) return;
@@ -1559,7 +1615,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void ApplyLibraryViewButtons()
     {
-        bool isGrid = _settings.LibraryView == "Grid";
+        bool isGrid       = _settings.LibraryView == "Grid";
+        var  gridVis      = isGrid ? Visibility.Visible : Visibility.Collapsed;
+
         if (ListViewButton is not null)
             ListViewButton.Appearance = isGrid ? ControlAppearance.Secondary : ControlAppearance.Primary;
         if (GridViewButton is not null)
@@ -1571,6 +1629,30 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             SoundsAreaBorder.CornerRadius    = isGrid ? new CornerRadius(6) : new CornerRadius(0, 0, 6, 6);
             SoundsAreaBorder.BorderThickness = isGrid ? new Thickness(1) : new Thickness(1, 0, 1, 1);
         }
+        if (GridSizeCombo is not null)
+        {
+            GridSizeCombo.Visibility = gridVis;
+            if (isGrid) SyncGridSizeCombo();
+        }
+        if (GridCompactButton is not null)
+        {
+            GridCompactButton.Visibility = gridVis;
+            GridCompactButton.Appearance = _settings.GridCompact
+                ? ControlAppearance.Primary
+                : ControlAppearance.Secondary;
+        }
+    }
+
+    private void SyncGridSizeCombo()
+    {
+        GridSizeCombo.SelectionChanged -= GridSizeCombo_SelectionChanged;
+        GridSizeCombo.SelectedIndex     = _settings.GridPadSize switch
+        {
+            "Small" => 0,
+            "Large" => 2,
+            _       => 1,
+        };
+        GridSizeCombo.SelectionChanged += GridSizeCombo_SelectionChanged;
     }
 
     private static Brush GetPadBackground(string? padColor)
@@ -1587,11 +1669,230 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
     }
 
+    private (int Width, int Height) GetPadDimensions() => _settings.GridPadSize switch
+    {
+        "Small" => (120, 100),
+        "Large" => (210, 170),
+        _       => (160, 130),
+    };
+
+    // ── Drag reorder: panel-level mouse-move handlers ─────────────────────────
+    // Attached once in MainWindow_Loaded; fire for any mouse move within the panel.
+
+    private void SoundsPanel_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_dragReady || e.LeftButton != MouseButtonState.Pressed || _dragSourceId == Guid.Empty) return;
+        var pos  = Mouse.GetPosition(SoundsPanel);
+        var diff = pos - _dragStartPoint;
+        if (Math.Abs(diff.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(diff.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        _dragReady    = false;
+        var dragId    = _dragSourceId;
+        _dragSourceId = Guid.Empty;
+
+        if (!CanReorder(out var blocked)) { StatusText.Text = blocked; return; }
+
+        DragDrop.DoDragDrop(SoundsPanel, new DataObject(InternalReorderFormat, dragId.ToString()), DragDropEffects.Move);
+        RemoveDropIndicator();
+    }
+
+    private void GridPanel_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_dragReady || e.LeftButton != MouseButtonState.Pressed || _dragSourceId == Guid.Empty) return;
+        var pos  = Mouse.GetPosition(GridPanel);
+        var diff = pos - _dragStartPoint;
+        if (Math.Abs(diff.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(diff.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        _dragReady     = false;
+        _pendingPlayId = Guid.Empty; // Prevent click-to-play from firing on mouse-up
+        var dragId     = _dragSourceId;
+        _dragSourceId  = Guid.Empty;
+
+        if (!CanReorder(out var blocked)) { StatusText.Text = blocked; return; }
+
+        DragDrop.DoDragDrop(GridPanel, new DataObject(InternalReorderFormat, dragId.ToString()), DragDropEffects.Move);
+        RemoveDropIndicator();
+    }
+
+    // ── Drag reorder: helpers ─────────────────────────────────────────────────
+
+    private static bool IsInternalReorder(IDataObject data)
+        => data.GetDataPresent(InternalReorderFormat);
+
+    private bool CanReorder(out string reason)
+    {
+        var cat    = CategoryFilter?.SelectedItem as string ?? "All";
+        var search = SearchBox?.Text.Trim() ?? "";
+        if (cat != "All" || !string.IsNullOrEmpty(search))
+        {
+            reason = "Reorder is only available in All view with no search filter.";
+            return false;
+        }
+        reason = "";
+        return true;
+    }
+
+    private void EnsureDropIndicator(bool isGrid)
+    {
+        bool isCurrentlyGrid = _dropIndicator?.Tag is "Grid";
+        if (_dropIndicator is not null && isCurrentlyGrid == isGrid) return;
+
+        // Type changed or not yet created — remove stale and recreate.
+        if (_dropIndicator is not null)
+        {
+            foreach (var p in new Panel[] { SoundsPanel, GridPanel })
+                if (p.Children.Contains(_dropIndicator))
+                    p.Children.Remove(_dropIndicator);
+            _dropIndicatorIndex = -1;
+        }
+
+        var accentBrush = (Brush)Application.Current.Resources["SystemAccentColorPrimaryBrush"];
+
+        if (isGrid)
+        {
+            var (w, h)     = GetPadDimensions();
+            var accentColor = (accentBrush as SolidColorBrush)?.Color ?? _fallbackAccent;
+            _dropIndicator = new Border
+            {
+                Tag             = "Grid",
+                Width           = w,
+                Height          = h,
+                Margin          = new Thickness(4),
+                CornerRadius    = new CornerRadius(8),
+                BorderBrush     = accentBrush,
+                BorderThickness = new Thickness(2),
+                Background      = new SolidColorBrush(accentColor) { Opacity = 0.12 },
+            };
+        }
+        else
+        {
+            _dropIndicator = new Border
+            {
+                Tag        = "List",
+                Height     = 2,
+                Background = accentBrush,
+                Margin     = new Thickness(0),
+            };
+        }
+    }
+
+    private void RemoveDropIndicator()
+    {
+        if (_dropIndicator is null) return;
+        foreach (var p in new Panel[] { SoundsPanel, GridPanel })
+            if (p.Children.Contains(_dropIndicator))
+                p.Children.Remove(_dropIndicator);
+        _dropIndicatorIndex = -1;
+    }
+
+    private void UpdateDropIndicator(DragEventArgs e, Panel panel)
+    {
+        bool isGrid  = panel is WrapPanel;
+        EnsureDropIndicator(isGrid);
+
+        var mousePos = e.GetPosition(panel);
+        int newIndex = isGrid ? GetGridDropIndex(mousePos) : GetListDropIndex(mousePos);
+
+        if (_dropIndicatorIndex == newIndex) return; // No change needed
+
+        if (_dropIndicatorIndex >= 0 && panel.Children.Contains(_dropIndicator))
+            panel.Children.Remove(_dropIndicator);
+
+        int insertAt = Math.Clamp(newIndex, 0, panel.Children.Count);
+        panel.Children.Insert(insertAt, _dropIndicator!);
+        _dropIndicatorIndex = newIndex;
+    }
+
+    // Returns the logical insert index (among real children, excluding indicator)
+    // for the List View StackPanel based on vertical mouse position.
+    private int GetListDropIndex(Point mouseInPanel)
+    {
+        var real = SoundsPanel.Children.Cast<UIElement>()
+            .Where(c => c != _dropIndicator)
+            .OfType<FrameworkElement>()
+            .ToList();
+
+        for (int i = 0; i < real.Count; i++)
+        {
+            var bounds = real[i].TransformToAncestor(SoundsPanel)
+                                 .TransformBounds(new Rect(real[i].RenderSize));
+            if (mouseInPanel.Y < bounds.Top + bounds.Height / 2)
+                return i;
+        }
+        return real.Count;
+    }
+
+    // Returns the logical insert index for the Grid View WrapPanel.
+    // Iterates cards in order; inserts before the first card whose visual
+    // position is "after" the cursor (left half or row below).
+    private int GetGridDropIndex(Point mouseInPanel)
+    {
+        var real = GridPanel.Children.Cast<UIElement>()
+            .Where(c => c != _dropIndicator)
+            .OfType<FrameworkElement>()
+            .ToList();
+
+        for (int i = 0; i < real.Count; i++)
+        {
+            var bounds = real[i].TransformToAncestor(GridPanel)
+                                  .TransformBounds(new Rect(real[i].RenderSize));
+            // Cursor is within this card's row and in its left half → insert before it
+            if (mouseInPanel.Y < bounds.Bottom &&
+                mouseInPanel.X < bounds.Left + bounds.Width / 2)
+                return i;
+            // Cursor is in the gap above this card → insert before it
+            if (mouseInPanel.Y < bounds.Top)
+                return i;
+        }
+        return real.Count;
+    }
+
+    private void ExecuteReorder(DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(InternalReorderFormat)) return;
+        if (!Guid.TryParse(e.Data.GetData(InternalReorderFormat) as string, out var draggedId)) return;
+
+        int fromIndex = _library.FindIndex(x => x.Id == draggedId);
+        if (fromIndex < 0) return; // Item no longer in active deck (e.g., deck was switched)
+
+        bool isGrid      = _settings.LibraryView == "Grid";
+        var  panel       = isGrid ? (Panel)GridPanel : SoundsPanel;
+        var  mouseInPanel = e.GetPosition(panel);
+        int  dropIndex   = isGrid ? GetGridDropIndex(mouseInPanel) : GetListDropIndex(mouseInPanel);
+
+        // Compute the adjusted target after the item is removed
+        int targetIndex = Math.Clamp(dropIndex, 0, _library.Count);
+        int adjusted    = fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
+        if (fromIndex == adjusted) return; // No actual move
+
+        var item = _library[fromIndex];
+        _library.RemoveAt(fromIndex);
+        _library.Insert(adjusted, item);
+
+        DeckService.Save(_decks);
+        FilterSoundsPanel();
+        StatusText.Text = $"Moved: {item.DisplayName}";
+    }
+
     private Border BuildPadCard(SoundItem item)
     {
         var capturedItem = item;
         var accentBrush  = (Brush)Application.Current.Resources["SystemAccentColorPrimaryBrush"];
         var categoryText = string.IsNullOrWhiteSpace(item.Category) ? "General" : item.Category;
+
+        // ── Pad dimensions and compact mode ──────────────────────────────────
+        var (cardW, cardH) = GetPadDimensions();
+        bool compact       = _settings.GridCompact;
+        double nameFontSz  = _settings.GridPadSize switch
+        {
+            "Small" => compact ? 13.0 : 11.0,
+            "Large" => compact ? 17.0 : 15.0,
+            _       => compact ? 15.0 : 13.0,
+        };
 
         // ── Playing indicator ────────────────────────────────────────────────
         var playingIndicator = new TextBlock
@@ -1603,7 +1904,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             Visibility        = Visibility.Collapsed
         };
 
-        // ── Top row: favorite (left) + hotkey (right) ─────────────────────
+        // ── Top row: favorite (left, hidden in compact) + hotkey (right) ─────
         var hotkeyBlock = new TextBlock
         {
             Text              = item.Hotkey?.DisplayText ?? "",
@@ -1613,25 +1914,28 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             TextTrimming      = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center
         };
-        var favBlock = new TextBlock
-        {
-            Text              = "★",
-            FontSize          = 11,
-            Foreground        = item.IsFavorite
-                ? accentBrush
-                : (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
-            VerticalAlignment = VerticalAlignment.Center
-        };
         var topRow = new DockPanel();
         DockPanel.SetDock(hotkeyBlock, Dock.Right);
         topRow.Children.Add(hotkeyBlock);
-        topRow.Children.Add(favBlock);
+        if (!compact)
+        {
+            var favBlock = new TextBlock
+            {
+                Text              = "★",
+                FontSize          = 11,
+                Foreground        = item.IsFavorite
+                    ? accentBrush
+                    : (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            topRow.Children.Add(favBlock);
+        }
 
         // ── Center: sound name ───────────────────────────────────────────────
         var nameBlock = new TextBlock
         {
             Text                = item.DisplayName,
-            FontSize            = 13,
+            FontSize            = nameFontSz,
             FontWeight          = FontWeights.SemiBold,
             TextWrapping        = TextWrapping.Wrap,
             TextAlignment       = TextAlignment.Center,
@@ -1641,18 +1945,21 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             Margin              = new Thickness(0, 4, 0, 4)
         };
 
-        // ── Bottom row: category badge + playing indicator ───────────────────
-        var catBadge = new UiBadge
-        {
-            Content           = categoryText,
-            Appearance        = ControlAppearance.Success,
-            FontSize          = 9,
-            VerticalAlignment = VerticalAlignment.Center
-        };
+        // ── Bottom row: category badge (hidden in compact) + playing indicator
         var bottomRow = new DockPanel();
         DockPanel.SetDock(playingIndicator, Dock.Right);
         bottomRow.Children.Add(playingIndicator);
-        bottomRow.Children.Add(catBadge);
+        if (!compact)
+        {
+            var catBadge = new UiBadge
+            {
+                Content           = categoryText,
+                Appearance        = ControlAppearance.Success,
+                FontSize          = 9,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            bottomRow.Children.Add(catBadge);
+        }
 
         // ── Layout ───────────────────────────────────────────────────────────
         var layout = new Grid();
@@ -1669,8 +1976,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         // ── Card border ──────────────────────────────────────────────────────
         var card = new Border
         {
-            Width           = 160,
-            Height          = 130,
+            Width           = cardW,
+            Height          = cardH,
             Margin          = new Thickness(4),
             CornerRadius    = new CornerRadius(8),
             Padding         = new Thickness(10),
@@ -1699,8 +2006,20 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _rowControls[item.Id] = new RowControls(setActive);
 
         // ── Click: play / stop ───────────────────────────────────────────────
+        // Press sets a pending play intent; release executes it only if no drag occurred.
+        // The panel-level PreviewMouseMove clears _pendingPlayId when a drag initiates.
         card.MouseLeftButtonDown += (_, _) =>
         {
+            _dragSourceId   = capturedItem.Id;
+            _dragStartPoint = Mouse.GetPosition(GridPanel);
+            _dragReady      = true;
+            _pendingPlayId  = capturedItem.Id;
+        };
+        card.MouseLeftButtonUp += (_, _) =>
+        {
+            if (_pendingPlayId != capturedItem.Id) return;
+            _pendingPlayId = Guid.Empty;
+            _dragReady     = false;
             if (_activePlaybacks.ContainsKey(capturedItem.Id))
                 StopSoundById(capturedItem.Id);
             else
@@ -1709,7 +2028,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         // ── Hover ────────────────────────────────────────────────────────────
         card.MouseEnter += (_, _) => { if (!_activePlaybacks.ContainsKey(capturedItem.Id)) card.Opacity = 0.85; };
-        card.MouseLeave += (_, _) => card.Opacity = 1.0;
+        card.MouseLeave += (_, _) =>
+        {
+            card.Opacity = 1.0;
+            // Cancel pending play if the mouse leaves before releasing (likely a drag)
+            if (_pendingPlayId == capturedItem.Id) _pendingPlayId = Guid.Empty;
+        };
 
         // ── Context menu ─────────────────────────────────────────────────────
         card.ContextMenu = BuildSoundContextMenu(capturedItem);
@@ -2831,7 +3155,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SoundsArea_DragEnter(object sender, DragEventArgs e)
     {
-        if (HasAudioFiles(e.Data))
+        if (IsInternalReorder(e.Data))
+        {
+            e.Effects = DragDropEffects.Move;
+            Panel panel = _settings.LibraryView == "Grid" ? GridPanel : SoundsPanel;
+            UpdateDropIndicator(e, panel);
+        }
+        else if (HasAudioFiles(e.Data))
         {
             e.Effects = DragDropEffects.Copy;
             SoundsAreaBorder.BorderBrush = (Brush)Application.Current.Resources["SystemAccentColorPrimaryBrush"];
@@ -2845,7 +3175,16 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SoundsArea_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = HasAudioFiles(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+        if (IsInternalReorder(e.Data))
+        {
+            e.Effects = DragDropEffects.Move;
+            Panel panel = _settings.LibraryView == "Grid" ? GridPanel : SoundsPanel;
+            UpdateDropIndicator(e, panel);
+        }
+        else
+        {
+            e.Effects = HasAudioFiles(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+        }
         e.Handled = true;
     }
 
@@ -2857,12 +3196,20 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             pos.Y > SoundsAreaBorder.ActualHeight)
         {
             SoundsAreaBorder.BorderBrush = (Brush)Application.Current.Resources["CardBorderBrush"];
+            RemoveDropIndicator();
         }
     }
 
     private void SoundsArea_Drop(object sender, DragEventArgs e)
     {
         SoundsAreaBorder.BorderBrush = (Brush)Application.Current.Resources["CardBorderBrush"];
+        RemoveDropIndicator();
+
+        if (IsInternalReorder(e.Data))
+        {
+            ExecuteReorder(e);
+            return;
+        }
 
         if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
         var files = e.Data.GetData(DataFormats.FileDrop) as string[];

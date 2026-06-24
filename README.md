@@ -29,8 +29,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 - **Start with Windows** — one toggle to register SoundPad in the current-user Run key (no admin required)
 - **Settings persistence** — devices, volume, window position, and all hotkeys survive restarts
 - **Perceptual volume curve** — the volume slider feels natural (power-2 curve: 50 % UI = −12 dB)
-- **Sound Editor** — non-destructive trim (Trim Start / Trim End) and Fade In / Fade Out per sound; original audio files are never modified; settings stored in sounds.json
-- **Waveform timeline** — draggable Trim Start / Trim End handles, click-to-seek playhead, animated preview playhead, fade-in / fade-out gradient overlays, and numeric fields synced bidirectionally with the canvas
+- **Pro Sound Editor** — CapCut-style block timeline; Select (A) and Cut (C) tools; cut splits a block without removing audio; remove blocks to ripple remaining audio together; drag block edges to trim; Undo (Ctrl+Z); zoom slider (1×–10×); draggable playhead arrow; snap cut to playhead; Fade In / Fade Out applied to the joined output; non-destructive — original files never modified; segments saved in decks.json and backups; Instant Replay clips use the same editor
 - **Category Manager** — create, rename, and delete custom sound categories; deleting a category with sounds prompts where to move them; chained operations resolve correctly
 - **Sound row context menu** — right-click any sound row or pad card: Edit, Favourite/Unfavourite, Duplicate (same audio file, same trim/fade/volume, no hotkey), Color (9 preset colors), Reveal in Folder, Remove
 
@@ -38,7 +37,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.9.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.10.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -312,7 +311,8 @@ Right-click any sound in **List View** or **Grid View** and choose **Export as M
 
 Export renders the version you actually hear in SoundPad — not just a copy of the original file:
 
-- **Trim Start / Trim End** — only the trimmed region is exported
+- **Block segments (v1.10+)** — only the kept blocks are included; removed blocks are skipped entirely
+- **Trim Start / Trim End** — only the trimmed region is exported (for sounds without block data)
 - **Fade In / Fade Out** — volume ramps are baked into the exported audio
 - **Volume** — per-sound volume (including the perceptual power-2 curve) is applied
 
@@ -399,18 +399,83 @@ Backup ZIPs are self-contained and portable — you can copy a library to anothe
 
 ---
 
-## Sound Editor
+## Pro Sound Editor
 
-Click **Edit** on any sound row (or right-click → Edit) to open the Sound Editor.
+Click **Edit** on any sound row (or right-click → Edit) to open the Pro Sound Editor.
 
-- **Trim Start / Trim End** — drag the green and orange-red handles on the waveform to set the play region. Only the selected region plays — in preview, in the library, and through the virtual output. The original audio file is never modified.
-- **Fade In / Fade Out** — type a duration in seconds to smoothly ramp volume up at the start and down at the end of the trimmed region.
-- **Waveform timeline** — the full audio waveform is drawn on a canvas. Regions outside the trim zone are dimmed. Fade zones show coloured gradient overlays so you can see the ramp at a glance.
-- **Playhead** — click anywhere on the canvas to position the preview start point. During playback, a white dashed line moves in real time and stops at Trim End.
-- **Numeric fields** — Trim Start, Trim End, Fade In, and Fade Out fields stay in sync with the handles. Typing a value moves the handle; dragging the handle updates the field.
-- **Play Preview** — plays the trimmed, faded clip through your Monitor Output from the playhead position (or Trim Start if the playhead is outside the trim range).
+Audio editing is **non-destructive** — the original audio file is never modified. All edits are stored in `decks.json` and preserved in library backups. Old sounds (no segment data) load and play exactly as before.
 
-All settings save to `sounds.json`. Old `sounds.json` files without trim/fade fields load normally — missing values default to no trim and no fade. Library backup ZIPs preserve trim, fade, and category data.
+### Block timeline
+
+The editor displays a compact CapCut-style block timeline. Each block represents a kept region of the original audio. Blocks are packed together with no gaps — this is the edited/played timeline. Removed blocks leave no visual hole; remaining blocks ripple left.
+
+### Tools
+
+| Tool | Shortcut | What it does |
+|---|---|---|
+| **Select** | A | Click a block to select it; click the timeline to reposition the playhead |
+| **Cut** | C | Click inside a block to split it into two at that point — no audio is removed |
+
+### Cutting and removing blocks
+
+1. Press **C** to switch to Cut mode.
+2. Click anywhere inside a block — it splits into two adjacent blocks. No audio is deleted; both blocks remain in the timeline.
+3. Press **A** to switch back to Select mode.
+4. Click a block to select it (it highlights with a blue outline).
+5. Click **Remove Block** (or press **Delete**) to delete the selected block. The remaining blocks ripple together with no visual gap.
+6. Right-click any block to remove it directly.
+
+Playback and Export as MP3 both join the remaining blocks seamlessly — removed regions are skipped automatically.
+
+### Trimming block edges
+
+In **Select** mode, hover near the left or right edge of any block. The cursor changes to a resize arrow. Drag to trim that block's boundary:
+
+- **Left edge** → adjusts the block's `StartSeconds` (first block left edge also updates Trim Start)
+- **Right edge** → adjusts the block's `EndSeconds` (last block right edge also updates Trim End)
+- Minimum block duration: 20 ms
+
+### Playhead
+
+The white dashed vertical line marks the current preview start position.
+
+- **Click the timeline** to jump the playhead to that position.
+- **Drag the white triangle handle** at the bottom of the canvas for precise positioning. Dragging stops any running preview.
+
+### Snap cut to playhead
+
+When **Snap cut to playhead** is checked (default: ON) and the Cut tool is active, moving the mouse within ~10 px of the playhead snaps the cut preview hairline to the playhead position (the hairline turns bright yellow). Clicking then splits the block exactly at the playhead. Turn Snap OFF to always cut at the exact mouse position.
+
+### Undo
+
+Every edit (cut, remove block, trim drag) can be undone:
+
+- Click the **Undo** button in the editor toolbar.
+- Or press **Ctrl+Z**.
+
+The undo stack is per-session and is not persisted after the dialog closes.
+
+### Zoom
+
+The **Zoom** slider scales the timeline from 1× to 10×. When zoomed, the timeline scrolls horizontally. All coordinate mapping stays correct under any zoom level.
+
+### Fade In / Fade Out
+
+Fade In and Fade Out are applied to the full joined output:
+
+- **Fade In** ramps from silence at the very start of the first block.
+- **Fade Out** ramps to silence at the very end of the last block.
+- Fades are applied identically during Preview, library playback, and Export as MP3.
+
+### Preview
+
+Click **Play Preview** to hear all kept blocks joined together, with fades applied, starting from the playhead position. Plays through the Monitor Output device.
+
+### Backward compatibility
+
+- Sounds edited before v1.10 (trim/fade only, no block data) load and play correctly without any migration.
+- `decks.json` files without the `Segments` field deserialize to a single full-range block — identical playback to before.
+- Library backup ZIPs preserve segment data; old backups without segments import cleanly with default (full-range) behaviour.
 
 ---
 

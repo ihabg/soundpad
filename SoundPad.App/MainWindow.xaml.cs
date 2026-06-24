@@ -2883,7 +2883,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             $"{Path.GetFileNameWithoutExtension(finalPath)}.tmp-export-{Guid.NewGuid():N}.mp3");
 
         // Capture edit params on the UI thread before handing off.
-        var (startS, endS, fadeInS, fadeOutS) = GetTrimFadeParams(sound, item);
+        var segments = GetSegments(sound, item);
+        var (_, _, fadeInS, fadeOutS) = GetTrimFadeParams(sound, item);
         float gain = ConvertUiVolumeToGain(item.Volume);
 
         _exportInProgress.Add(item.Id);
@@ -2894,8 +2895,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             bool tempCreated = false;
             try
             {
-                // Mirror the exact playback pipeline so trim/fade/volume are applied.
-                var source = new CachedSoundSampleProvider(sound, startS, endS, fadeInS, fadeOutS);
+                // Mirror the exact playback pipeline so trim/fade/cuts/volume are applied.
+                var source = new CachedSoundSampleProvider(sound, segments, fadeInS, fadeOutS);
                 ISampleProvider final = gain < 0.999f
                     ? new VolumeSampleProvider(source) { Volume = gain }
                     : source;
@@ -3013,6 +3014,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         item.TrimEndSeconds   = dlg.ResultTrimEnd;
         item.FadeInSeconds    = dlg.ResultFadeIn;
         item.FadeOutSeconds   = dlg.ResultFadeOut;
+        item.Segments         = dlg.ResultSegments;
 
         if (dlg.WasHotkeyChanged)
         {
@@ -3452,12 +3454,16 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         try
         {
-            float volume = ConvertUiVolumeToGain(item.Volume);
-            var (startS, endS, fadeInS, fadeOutS) = GetTrimFadeParams(sound, item);
-            bool hasTrimFade = startS != 0 || endS >= 0 || fadeInS != 0 || fadeOutS != 0;
+            float volume   = ConvertUiVolumeToGain(item.Volume);
+            var   segments = GetSegments(sound, item);
+            var (_, _, fadeInS, fadeOutS) = GetTrimFadeParams(sound, item);
 
-            PlaybackHandle? monitorHandle = hasTrimFade
-                ? _monitorEngine?.Play(sound, volume, startS, endS, fadeInS, fadeOutS)
+            bool hasTrimFadeCuts = item.TrimStartSeconds.HasValue || item.TrimEndSeconds.HasValue
+                || item.FadeInSeconds.HasValue || item.FadeOutSeconds.HasValue
+                || (item.Segments is not null && item.Segments.Count > 0);
+
+            PlaybackHandle? monitorHandle = hasTrimFadeCuts
+                ? _monitorEngine?.Play(sound, volume, segments, fadeInS, fadeOutS)
                 : _monitorEngine?.Play(sound, volume);
 
             var monitorDevice = MonitorComboBox.SelectedItem as AudioDevice;
@@ -3467,8 +3473,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                            && AudioDevice.AreSameOutputDevice(monitorDevice, virtualDevice);
 
             PlaybackHandle? virtualHandle = sameDevice ? null
-                : hasTrimFade
-                    ? _virtualEngine?.Play(sound, volume, startS, endS, fadeInS, fadeOutS)
+                : hasTrimFadeCuts
+                    ? _virtualEngine?.Play(sound, volume, segments, fadeInS, fadeOutS)
                     : _virtualEngine?.Play(sound, volume);
 
             // Stop the previous instance of this same sound before registering the new one.
@@ -3511,6 +3517,34 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         int fadeIn   = item.FadeInSeconds.HasValue    ? (int)(item.FadeInSeconds.Value    * sr) : 0;
         int fadeOut  = item.FadeOutSeconds.HasValue   ? (int)(item.FadeOutSeconds.Value   * sr) : 0;
         return (start, end, fadeIn, fadeOut);
+    }
+
+    // Converts TrimStart/TrimEnd or AudioSegment list into an ordered list of
+    // (S, E) sample-index pairs for multi-segment playback and export.
+    // When Segments is null/empty: old single-segment behavior using TrimStart/TrimEnd.
+    // When Segments is set: those kept blocks are used directly.
+    private static List<(int S, int E)> GetSegments(CachedSound sound, SoundItem item)
+    {
+        int sr          = sound.SampleRate * sound.Channels;
+        int globalStart = item.TrimStartSeconds.HasValue
+            ? Math.Clamp((int)(item.TrimStartSeconds.Value * sr), 0, sound.TotalSamples)
+            : 0;
+        int globalEnd   = item.TrimEndSeconds.HasValue
+            ? Math.Clamp((int)(item.TrimEndSeconds.Value   * sr), globalStart, sound.TotalSamples)
+            : sound.TotalSamples;
+
+        if (item.Segments is null || item.Segments.Count == 0)
+            return [(globalStart, globalEnd)];
+
+        var result = item.Segments
+            .Select(s => (
+                S: Math.Clamp((int)(s.StartSeconds * sr), 0, sound.TotalSamples),
+                E: Math.Clamp((int)(s.EndSeconds   * sr), 0, sound.TotalSamples)
+            ))
+            .Where(s => s.S < s.E)
+            .ToList();
+
+        return result.Count > 0 ? result : [(globalStart, globalEnd)];
     }
 
     // ── Stop All ──────────────────────────────────────────────────────────────

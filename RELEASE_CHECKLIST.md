@@ -1,4 +1,4 @@
-# SoundPad v1.9.0 — Release Checklist
+# SoundPad v1.10.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.9.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.10.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.9.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.9.0), and publisher
+- [ ] Run `SoundPad-Setup-1.10.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.10.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -250,7 +250,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.9.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.10.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
@@ -905,6 +905,135 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.10.0 new features
+
+### Pro Sound Editor — opening
+
+- [ ] Right-click any sound in List View → Edit → Sound Editor opens without crash
+- [ ] Right-click an Instant Replay WAV clip → Edit → Sound Editor opens without crash
+- [ ] Open a sound that has never been edited → timeline shows one block covering the full audio
+- [ ] Open a sound that was previously trimmed (TrimStart/TrimEnd) → timeline shows one block with the correct boundaries
+
+### Select tool
+
+- [ ] Press **A** (or click Select button in toolbar) → Select tool is active (button highlighted)
+- [ ] Click a block → block highlights with a blue selection outline
+- [ ] Click the same block again → block deselects
+- [ ] Click a different block → previous selection clears, new block selected
+- [ ] Click an empty area between blocks → selection clears and playhead moves to that position
+
+### Cut tool
+
+- [ ] Press **C** (or click Cut button in toolbar) → Cut tool is active; cursor changes to crosshair
+- [ ] Hover over the timeline → yellow dashed cut preview hairline follows the mouse
+- [ ] Click inside a block → block splits into two adjacent blocks at the click position
+- [ ] Blocks are now two — both visible in the timeline with a thin separator line
+- [ ] Click inside one of the two blocks → three blocks total
+- [ ] Cutting alone does not remove any audio — total edited duration is unchanged
+
+### Remove Block
+
+- [ ] Press **A**, click a block to select it
+- [ ] Click **Remove Block** button → selected block is deleted; remaining blocks ripple together with no gap
+- [ ] Press **Delete** while a block is selected → same behaviour as Remove Block button
+- [ ] Right-click a block → block is removed immediately (no prior selection needed)
+- [ ] Remove Block button is disabled when no block is selected or only one block remains
+- [ ] Attempting to remove the last block is blocked (button disabled / no action)
+
+### Playback after block editing
+
+- [ ] Cut a block, remove one of the resulting pieces → play the sound from the main library → removed region is skipped; audio plays continuously across the cut point
+- [ ] Export as MP3 on a sound with removed blocks → exported file skips the removed region seamlessly
+
+### Block-edge trimming
+
+- [ ] In Select tool, hover near the left edge of any block → cursor changes to resize arrow (SizeWE)
+- [ ] Hover near the right edge of any block → cursor changes to resize arrow
+- [ ] Drag left edge of a block → block shrinks/grows at its start; waveform updates live
+- [ ] Drag right edge of a block → block shrinks/grows at its end; waveform updates live
+- [ ] For first block: dragging left edge updates Trim Start text field in real time
+- [ ] For last block: dragging right edge updates Trim End text field in real time
+- [ ] Block cannot be trimmed below 20 ms duration (drag stops before zero)
+
+### Undo
+
+- [ ] Undo button is disabled on editor open (nothing to undo)
+- [ ] Cut a block → Undo button enables
+- [ ] Click Undo → cut is reversed; single block restored
+- [ ] Press Ctrl+Z → same result as Undo button
+- [ ] Remove a block → Undo → block restored in its original position
+- [ ] Trim a block edge → release → Undo → edge reverts to pre-drag position
+- [ ] Undo multiple times in sequence → each operation reverses in LIFO order
+
+### Zoom slider
+
+- [ ] Zoom slider visible in editor toolbar, default 1×
+- [ ] Drag slider to 2× → timeline is twice as wide; horizontal scrollbar appears in the waveform border
+- [ ] Drag slider to 10× → timeline scales to 10×; scrollbar allows full navigation
+- [ ] Cut a block while zoomed → cut lands at the correct source-audio position (not misaligned)
+- [ ] Trim a block edge while zoomed → trim lands at the correct source-audio position
+- [ ] Drag back to 1× → timeline returns to fit the viewport; no scrollbar
+
+### Draggable playhead arrow
+
+- [ ] White dashed playhead line visible on timeline
+- [ ] White triangle handle visible at the bottom of the playhead line
+- [ ] Click the timeline → playhead jumps to that position
+- [ ] Hover over the triangle handle → cursor changes to Hand
+- [ ] Drag the triangle handle left/right → playhead line moves in real time
+- [ ] Release → playhead stays at the new position
+- [ ] Click Play Preview after dragging → preview starts from the dragged position
+- [ ] Drag playhead while zoomed → position remains correct on the visual and audio timeline
+
+### Snap cut to playhead
+
+- [ ] "Snap cut to playhead" checkbox is visible and checked by default (ON)
+- [ ] With Snap ON, Cut tool active: drag playhead to a precise position; move mouse close to the playhead line (within ~10 px) → cut preview hairline snaps to playhead position and turns bright yellow
+- [ ] Click while snapped → block splits exactly at playhead position (not just approximately)
+- [ ] Move mouse far from playhead → hairline returns to mouse position (normal semi-transparent yellow); click cuts at mouse
+- [ ] Snap does not fire if the playhead is in a different block than the mouse
+- [ ] Uncheck "Snap cut to playhead" (Snap OFF) → clicking near the playhead cuts at the exact mouse position; no snapping occurs
+
+### Fade In / Fade Out
+
+- [ ] Set Fade In = 1s → Play Preview → audio ramps up from silence over the first second of the first block
+- [ ] Set Fade Out = 1s → Play Preview → audio ramps to silence over the last second of the last block
+- [ ] Fades apply to the joined multi-block output (not per-block)
+- [ ] Fade In / Fade Out survive Save → reopen → still applied during playback
+
+### Save and persistence
+
+- [ ] Click Save after cutting and removing blocks → dialog closes
+- [ ] Reopen Edit for the same sound → timeline shows the saved blocks
+- [ ] Play the sound from the main library → plays only the kept blocks (removed regions skipped)
+- [ ] Export as MP3 on the edited sound → exported audio contains only kept blocks
+
+### Backup / import round-trip
+
+- [ ] Edit a sound (cut + remove blocks), save, then export a backup ZIP
+- [ ] Import that backup on a clean library → sound loads with the same block structure
+- [ ] Blocks play correctly after import
+
+### Regression: old sounds unaffected
+
+- [ ] Open the Sound Editor on a sound that has never had blocks edited → works exactly as before (single block spanning full trim range)
+- [ ] Edit Trim Start / Trim End via text fields on an un-blocked sound → trims correctly
+- [ ] Old sounds play without any change to their audio output after upgrading to v1.10.0
+
+### Regression: v1.9 and earlier features unaffected
+
+- [ ] Instant Replay clips can still be saved and played back
+- [ ] Export as MP3 still works for sounds with no block edits
+- [ ] Mini Mode opens, shows pads, and plays sounds
+- [ ] Grid drag-and-drop reorder still works
+- [ ] External file-drop import still works
+- [ ] Hotkeys (sound, Stop All, Instant Replay) still fire correctly
+- [ ] Mic passthrough is unaffected
+- [ ] Monitor and Virtual output routing are unaffected
+- [ ] In-app updater still functions
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -920,12 +1049,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.9.0
-  git push origin v1.9.0
+  git tag v1.10.0
+  git push origin v1.10.0
   ```
-- [ ] Create GitHub Release from tag `v1.9.0`
-- [ ] Add release notes summarising v1.9.0 features
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.9.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.10.0`
+- [ ] Add release notes summarising v1.10.0 features
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.10.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

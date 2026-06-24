@@ -8,7 +8,16 @@
       "Bash(cat \"/c/Users/Kebab/AppData/Roaming/SoundPad/sounds.json\")",
       "Read(//c/Users/Kebab/AppData/Roaming/SoundPad/**)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(s['DisplayName'], '->', s.get\\('Hotkey'\\)\\) for s in d]\")",
-      "Bash(mkdir -p \"c:/Users/Kebab/Desktop/SoundPad/scripts\" \"c:/Users/Kebab/Desktop/SoundPad/installer\")"
+      "Bash(mkdir -p \"c:/Users/Kebab/Desktop/SoundPad/scripts\" \"c:/Users/Kebab/Desktop/SoundPad/installer\")",
+      "PowerShell($dll = \"$env:USERPROFILE\\\\.nuget\\\\packages\\\\naudio\\\\2.3.0\\\\lib\\\\net6.0-windows7.0\\\\NAudio.dll\"; $asm = [Reflection.Assembly]::LoadFile\\($dll\\); $asm.GetTypes\\(\\) | Where-Object { $_.Name -match \"Mp3|MediaFoundation|Encoder|Lame\" } | Select-Object -ExpandProperty FullName)",
+      "PowerShell($dll = \"$env:USERPROFILE\\\\.nuget\\\\packages\\\\naudio\\\\2.3.0\\\\lib\\\\net6.0-windows7.0\\\\NAudio.dll\"; $asm = [Reflection.Assembly]::ReflectionOnlyLoadFrom\\($dll\\); try { $types = $asm.GetTypes\\(\\) } catch { $types = $_.Exception.Types }; $types | Where-Object { $_ -ne $null -and $_.Name -match \"Mp3|MediaFoundation|Encoder|Lame\" } | Select-Object -ExpandProperty FullName)",
+      "PowerShell($dll = \"$env:USERPROFILE\\\\.nuget\\\\packages\\\\naudio\\\\2.3.0\\\\lib\\\\net472\\\\NAudio.dll\"; Add-Type -Path $dll -PassThru | Where-Object { $_.Name -match \"Mp3|MediaFoundation|Encoder|Lame\" } | Select-Object FullName)",
+      "Bash(find \"/c/Users/Osaid.DESKTOP-OKA0Q57/.nuget/packages/naudio.core/2.3.0\" -name \"*.dll\" | head -5 && strings \"/c/Users/Osaid.DESKTOP-OKA0Q57/.nuget/packages/naudio.core/2.3.0/lib/netstandard2.0/NAudio.Core.dll\" 2>/dev/null | grep -iE \"Mp3|MediaFoundation|Encoder|Acm\" | sort -u | head -30)",
+      "Read(//c/Users/Osaid.DESKTOP-OKA0Q57/.nuget/packages/naudio.core/2.3.0/**)",
+      "Read(//c/Users/Osaid.DESKTOP-OKA0Q57/.nuget/packages/naudio.core/2.3.0/lib/netstandard2.0/**)",
+      "Read(//c/Users/Osaid.DESKTOP-OKA0Q57/.nuget/packages//**)",
+      "Bash(xargs '-I{}' sh -c 'f=\"{}\"; result=$\\(dotnet-ildasm \"$f\" 2>/dev/null | grep -iE \"Mp3FileWriter|MediaFoundationEncoder|LameMp3\" | head -3\\); if [ -n \"$result\" ]; then echo \"=== $f ===\"; echo \"$result\"; fi')",
+      "PowerShell($dll = \"$env:USERPROFILE\\\\.nuget\\\\packages\\\\naudio\\\\2.3.0\\\\lib\\\\net6.0-windows7.0\\\\NAudio.dll\"; $bytes = [System.IO.File]::ReadAllBytes\\($dll\\); $text = [System.Text.Encoding]::UTF8.GetString\\($bytes\\); $text | Select-String -Pattern \"WaveFile|AcmEncoder|MediaFoundation\" -AllMatches | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Value | Sort-Object -Unique)"
     ],
     "additionalDirectories": [
       "C:\\Users\\Kebab\\AppData\\Local\\Temp\\wpfui_probe",

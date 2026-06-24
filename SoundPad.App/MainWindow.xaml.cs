@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using NAudio.MediaFoundation;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using SoundPad.App.Audio;
@@ -109,6 +110,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private DispatcherTimer?      _irSignalTimer;
     // True while a background Stop/Start is in progress; blocks re-entrant operations.
     private bool                  _irOperationPending;
+
+    // ── MP3 export ────────────────────────────────────────────────────────────
+    // Tracks sounds currently being exported to prevent duplicate concurrent exports.
+    private readonly HashSet<Guid> _exportInProgress = new();
 
     // ── Constructor ────────────────────────────────────────────────────────────
     // Settings are loaded before InitializeComponent so the saved window
@@ -2759,6 +2764,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var revealMenuItem = new MenuItem { Header = "Reveal in Folder" };
         revealMenuItem.Click += (_, _) => RevealInFolder(item);
 
+        var exportMenuItem = new MenuItem { Header = "Export as MP3…" };
+        exportMenuItem.Click += (_, _) => ExportSoundAsMp3(item);
+
         var removeMenuItem = new MenuItem
         {
             Header     = "Remove",
@@ -2772,9 +2780,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         ctx.Items.Add(dupMenuItem);
         ctx.Items.Add(BuildColorMenu(item));
         ctx.Items.Add(revealMenuItem);
+        ctx.Items.Add(exportMenuItem);
         ctx.Items.Add(new Separator());
         ctx.Items.Add(removeMenuItem);
-        ctx.Opened += (_, _) => favMenuItem.Header = item.IsFavorite ? "Unfavorite" : "Favorite";
+        ctx.Opened += (_, _) =>
+        {
+            favMenuItem.Header       = item.IsFavorite ? "Unfavorite" : "Favorite";
+            exportMenuItem.IsEnabled = !_exportInProgress.Contains(item.Id);
+        };
         return ctx;
     }
 
@@ -2829,6 +2842,106 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         return colorMenu;
+    }
+
+    // ── Export as MP3 ──────────────────────────────────────────────────────────
+
+    private void ExportSoundAsMp3(SoundItem item)
+    {
+        if (_exportInProgress.Contains(item.Id))
+        {
+            StatusText.Text = $"Export already in progress for: {item.DisplayName}";
+            return;
+        }
+
+        if (!_cachedSounds.TryGetValue(item.Id, out var sound))
+        {
+            StatusText.Text = $"Cannot export: {item.DisplayName} is not loaded.";
+            return;
+        }
+
+        string safeName = SanitizeFileName(item.DisplayName);
+        if (string.IsNullOrWhiteSpace(safeName))
+            safeName = "SoundPad Export";
+
+        var dlg = new SaveFileDialog
+        {
+            Title           = "Export as MP3",
+            FileName        = safeName,
+            DefaultExt      = ".mp3",
+            Filter          = "MP3 Audio (*.mp3)|*.mp3",
+            AddExtension    = true,
+            OverwritePrompt = true,
+        };
+
+        if (dlg.ShowDialog() != true)
+            return;
+
+        string finalPath = dlg.FileName;
+        string dir       = Path.GetDirectoryName(finalPath) ?? Path.GetTempPath();
+        string tempPath  = Path.Combine(dir,
+            $"{Path.GetFileNameWithoutExtension(finalPath)}.tmp-export-{Guid.NewGuid():N}.mp3");
+
+        // Capture edit params on the UI thread before handing off.
+        var (startS, endS, fadeInS, fadeOutS) = GetTrimFadeParams(sound, item);
+        float gain = ConvertUiVolumeToGain(item.Volume);
+
+        _exportInProgress.Add(item.Id);
+        StatusText.Text = "Exporting MP3…";
+
+        _ = Task.Run(() =>
+        {
+            bool tempCreated = false;
+            try
+            {
+                // Mirror the exact playback pipeline so trim/fade/volume are applied.
+                var source = new CachedSoundSampleProvider(sound, startS, endS, fadeInS, fadeOutS);
+                ISampleProvider final = gain < 0.999f
+                    ? new VolumeSampleProvider(source) { Volume = gain }
+                    : source;
+
+                // MediaFoundationEncoder requires PCM; convert float → 16-bit PCM.
+                var waveProvider = new SampleToWaveProvider16(final);
+
+                // Encode to temp file first — never touch the final path until success.
+                MediaFoundationEncoder.EncodeToMp3(waveProvider, tempPath, desiredBitRate: 192_000);
+                tempCreated = true;
+
+                // Atomic promotion: replace final path only after successful encode.
+                File.Move(tempPath, finalPath, overwrite: true);
+                tempCreated = false;
+
+                string fileName = Path.GetFileName(finalPath);
+                Dispatcher.Invoke(() =>
+                {
+                    _exportInProgress.Remove(item.Id);
+                    StatusText.Text = $"Exported MP3: {fileName}";
+                });
+            }
+            catch (Exception ex)
+            {
+                if (tempCreated)
+                {
+                    try { File.Delete(tempPath); } catch { }
+                }
+
+                string msg = ex is System.Runtime.InteropServices.COMException comEx
+                    ? $"MP3 encoder unavailable (0x{comEx.HResult:X8}) — install the Windows Media Feature Pack."
+                    : $"Export failed: {ex.Message}";
+
+                Dispatcher.Invoke(() =>
+                {
+                    _exportInProgress.Remove(item.Id);
+                    StatusText.Text = msg;
+                });
+            }
+        });
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        char[] invalid = Path.GetInvalidFileNameChars();
+        return string.Concat(name.Select(c => Array.IndexOf(invalid, c) >= 0 ? '_' : c)).Trim();
     }
 
     // ── Add Sound ──────────────────────────────────────────────────────────────

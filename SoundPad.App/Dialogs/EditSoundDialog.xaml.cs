@@ -49,8 +49,9 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
     // ── Waveform data ─────────────────────────────────────────────────────────
     private const int WaveformBuckets = 360;
-    private static readonly Brush            WaveformBrush = new SolidColorBrush(Color.FromRgb(100, 149, 237));
-    private static readonly DoubleCollection PlayheadDash  = new DoubleCollection { 4, 3 };
+    private static readonly Brush            WaveformBrush  = new SolidColorBrush(Color.FromRgb(100, 149, 237));
+    private static readonly DoubleCollection PlayheadDash   = new DoubleCollection { 4, 3 };
+    private static readonly double[]         NiceIntervals  = { 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0 };
     private float[]  _peaks    = Array.Empty<float>();
     private double   _duration; // raw source audio duration in seconds
 
@@ -73,16 +74,25 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
     private double?                     _cutHoverVisualSec;    // visual-time hover position (Cut mode)
     private bool                        _cutHoverIsSnapping;   // true when hover has snapped to playhead
 
-    // ── Block-edge / playhead drag state ─────────────────────────────────────
-    private enum DragTarget { None, BlockLeft, BlockRight, Playhead }
+    // ── Block-edge / playhead / reorder drag state ───────────────────────────
+    private enum DragTarget { None, BlockLeft, BlockRight, Playhead, Block }
     private DragTarget _drag                     = DragTarget.None;
     private int        _trimBlockIdx             = -1;
     private double     _dragAnchorX;
     private double     _dragStartSrcValue;
     private double     _dragStartEditedDuration;
 
-    // ── Undo ──────────────────────────────────────────────────────────────────
+    // ── Block reorder state ───────────────────────────────────────────────────
+    private bool _pendingReorder      = false;
+    private int  _reorderDragBlockIdx = -1;
+    private int  _reorderInsertBefore = 0;
+
+    // ── Undo / Redo ───────────────────────────────────────────────────────────
     private readonly Stack<List<AudioSegment>> _undoStack = new();
+    private readonly Stack<List<AudioSegment>> _redoStack = new();
+
+    // ── Copy / Paste ──────────────────────────────────────────────────────────
+    private AudioSegment? _copiedSegment;
 
     // ── Zoom ──────────────────────────────────────────────────────────────────
     private double _zoomFactor = 1.0;
@@ -174,6 +184,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         {
             _cutHoverVisualSec  = null;
             _cutHoverIsSnapping = false;
+            _pendingReorder     = false;
             if (_tool == EditorTool.Cut) RedrawCanvas();
         };
 
@@ -270,8 +281,9 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         if (WaveformScrollViewer is null || WaveformCanvas is null) return;
         double viewW = WaveformScrollViewer.ActualWidth;
         if (viewW <= 0) return;
-        WaveformCanvas.Width  = viewW * _zoomFactor;
-        WaveformCanvas.Height = WaveformScrollViewer.ActualHeight;
+        double canvasW = viewW * _zoomFactor;
+        WaveformCanvas.Width = canvasW;
+        if (RulerCanvas is not null) RulerCanvas.Width = canvasW;
         RedrawCanvas();
     }
 
@@ -281,6 +293,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         if (ZoomText is not null)
             ZoomText.Text = $"{(int)_zoomFactor}×";
         SetCanvasWidth();
+        Dispatcher.InvokeAsync(ScrollToShowPlayhead, DispatcherPriority.Render);
     }
 
     private void Waveform_MouseDown(object sender, MouseButtonEventArgs e)
@@ -334,7 +347,17 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
                         ? (hit == _selectedSegmentIndex ? -1 : hit)
                         : -1;
 
-                    UpdateDeleteButton();
+                    // Start potential block reorder if a block is now selected and
+                    // there are multiple blocks to reorder.
+                    _pendingReorder = false;
+                    if (_selectedSegmentIndex >= 0 && _segments.Count > 1)
+                    {
+                        _pendingReorder      = true;
+                        _reorderDragBlockIdx = _selectedSegmentIndex;
+                        _dragAnchorX         = x;
+                    }
+
+                    UpdateSelectionUI();
                     RedrawCanvas();
                 }
             }
@@ -395,6 +418,29 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
+        // ── Block reorder (active drag) ───────────────────────────────────────
+        if (_drag == DragTarget.Block)
+        {
+            double rDur = ComputeEditedDuration();
+            var    rBlk = BuildVisualBlocks();
+            _reorderInsertBefore = ComputeInsertBefore(rBlk, x, w, rDur);
+            WaveformCanvas.Cursor = Cursors.SizeAll;
+            RedrawCanvas();
+            return;
+        }
+
+        // ── Pending reorder — activate once threshold is exceeded ─────────────
+        if (_pendingReorder && Math.Abs(x - _dragAnchorX) > 5)
+        {
+            double rDur = ComputeEditedDuration();
+            var    rBlk = BuildVisualBlocks();
+            _drag                = DragTarget.Block;
+            _reorderInsertBefore = ComputeInsertBefore(rBlk, x, w, rDur);
+            WaveformCanvas.CaptureMouse();
+            RedrawCanvas();
+            return;
+        }
+
         if (_tool == EditorTool.Cut)
         {
             double editedDur             = ComputeEditedDuration();
@@ -422,8 +468,14 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
     private void Waveform_MouseUp(object sender, MouseButtonEventArgs e)
     {
-        _drag = DragTarget.None;
+        if (_drag == DragTarget.Block)
+            PerformReorder(_reorderDragBlockIdx, _reorderInsertBefore);
+
+        _drag           = DragTarget.None;
+        _pendingReorder = false;
         WaveformCanvas.ReleaseMouseCapture();
+        if (WaveformCanvas is not null && _tool != EditorTool.Cut)
+            WaveformCanvas.Cursor = Cursors.Arrow;
     }
 
     // ── Text box ↔ segment sync ───────────────────────────────────────────────
@@ -487,7 +539,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         _segments.Insert(idx,     new AudioSegment(seg.StartSeconds, srcSec));
         _segments.Insert(idx + 1, new AudioSegment(srcSec, seg.EndSeconds));
         _selectedSegmentIndex = -1;
-        UpdateDeleteButton();
+        UpdateSelectionUI();
         RedrawCanvas();
     }
 
@@ -509,7 +561,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             _selectedSegmentIndex--;
         SyncTrimFromSegments();
         _playheadVisualSec = Math.Clamp(_playheadVisualSec, 0, ComputeEditedDuration());
-        UpdateDeleteButton();
+        UpdateSelectionUI();
         RedrawCanvas();
     }
 
@@ -526,12 +578,41 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         _syncingFields = false;
     }
 
-    private void UpdateDeleteButton()
+    private void UpdateSelectionUI()
     {
+        bool hasSelection = _selectedSegmentIndex >= 0 && _selectedSegmentIndex < _segments.Count;
+
         if (DeleteCutButton is not null)
-            DeleteCutButton.IsEnabled = _selectedSegmentIndex >= 0
-                                     && _selectedSegmentIndex < _segments.Count
-                                     && _segments.Count > 1;
+            DeleteCutButton.IsEnabled = hasSelection && _segments.Count > 1;
+
+        if (CopyButton is not null)
+            CopyButton.IsEnabled = hasSelection;
+
+        if (PasteButton is not null)
+            PasteButton.IsEnabled = _copiedSegment is not null;
+
+        if (BlockInfoText is null) return;
+
+        if (hasSelection)
+        {
+            var blocks = BuildVisualBlocks();
+            if (_selectedSegmentIndex < blocks.Count)
+            {
+                var blk = blocks[_selectedSegmentIndex];
+                double dur = blk.SourceEnd - blk.SourceStart;
+                BlockInfoText.Text =
+                    $"Block {_selectedSegmentIndex + 1} of {_segments.Count}" +
+                    $"  ·  Source {blk.SourceStart:F2}s – {blk.SourceEnd:F2}s" +
+                    $"  ·  Duration {dur:F2}s";
+            }
+        }
+        else
+        {
+            double editedDur = ComputeEditedDuration();
+            BlockInfoText.Text = _segments.Count > 1
+                ? $"{_segments.Count} blocks  ·  Edited: {editedDur:F2}s  (original: {_duration:F2}s)"
+                : "";
+        }
     }
 
     // ── Canvas drawing (ripple/compact layout) ────────────────────────────────
@@ -597,8 +678,9 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
             if (bi == _selectedSegmentIndex)
             {
+                bool isDragging = _drag == DragTarget.Block && bi == _reorderDragBlockIdx;
                 AddRect(canvas, bx1, bw, h,
-                    new SolidColorBrush(Color.FromArgb(40, 100, 149, 237)));
+                    new SolidColorBrush(Color.FromArgb((byte)(isDragging ? 20 : 40), 100, 149, 237)));
                 var bdr = new Rectangle
                 {
                     Width = bw, Height = h, Fill = Brushes.Transparent,
@@ -606,6 +688,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
                     StrokeThickness = 1.5,
                     IsHitTestVisible = false
                 };
+                if (isDragging) bdr.StrokeDashArray = new DoubleCollection { 4, 3 };
                 Canvas.SetLeft(bdr, bx1); Canvas.SetTop(bdr, 0);
                 canvas.Children.Add(bdr);
             }
@@ -692,6 +775,26 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             canvas.Children.Add(rh);
         }
 
+        // ── Block reorder insertion indicator ─────────────────────────────────
+        if (_drag == DragTarget.Block)
+        {
+            double insertX;
+            if (_reorderInsertBefore <= 0)
+                insertX = 0;
+            else if (_reorderInsertBefore >= blocks.Count)
+                insertX = w;
+            else
+                insertX = VisualToX(blocks[_reorderInsertBefore].VisualStart, w, editedDur);
+
+            canvas.Children.Add(new Line
+            {
+                X1 = insertX, Y1 = 0, X2 = insertX, Y2 = h,
+                Stroke = new SolidColorBrush(Color.FromArgb(240, 100, 200, 255)),
+                StrokeThickness = 3,
+                IsHitTestVisible = false
+            });
+        }
+
         // ── Playhead (white dashed line + draggable triangle handle) ─────────
         double phX = VisualToX(Math.Clamp(_playheadVisualSec, 0, editedDur), w, editedDur);
         canvas.Children.Add(new Line
@@ -728,6 +831,8 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
                 IsHitTestVisible = false
             });
         }
+
+        RedrawRuler();
     }
 
     private static void AddRect(Canvas canvas, double x, double width, double height, Brush fill)
@@ -737,25 +842,118 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         canvas.Children.Add(r);
     }
 
-    // ── Undo ──────────────────────────────────────────────────────────────────
+    private void RedrawRuler()
+    {
+        var ruler = RulerCanvas;
+        if (ruler is null) return;
+        double w = ruler.ActualWidth;
+        double h = ruler.ActualHeight;
+        if (w <= 0 || h <= 0) return;
+
+        ruler.Children.Clear();
+
+        double editedDur = ComputeEditedDuration();
+        if (editedDur <= 0) return;
+
+        // Choose a tick interval that gives ~60px between major ticks.
+        double pxPerSec   = w / editedDur;
+        double rawInterval = 60.0 / pxPerSec;
+        double tickInterval = NiceIntervals.FirstOrDefault(iv => iv >= rawInterval, NiceIntervals[^1]);
+
+        double minorInterval = tickInterval / 2.0;
+        bool   showMinor     = minorInterval * pxPerSec >= 8;
+
+        int decimals  = tickInterval < 0.1 ? 2 : tickInterval < 1.0 ? 1 : 0;
+        string fmt    = decimals > 0 ? $"F{decimals}" : "0";
+
+        var labelBrush = new SolidColorBrush(Color.FromArgb(200, 200, 200, 200));
+        var tickBrush  = new SolidColorBrush(Color.FromArgb(160, 180, 180, 180));
+        var minorBrush = new SolidColorBrush(Color.FromArgb(90,  150, 150, 150));
+
+        // Ruler baseline
+        ruler.Children.Add(new Line
+        {
+            X1 = 0, Y1 = h - 1, X2 = w, Y2 = h - 1,
+            Stroke = tickBrush, StrokeThickness = 1, IsHitTestVisible = false
+        });
+
+        // Major ticks + labels
+        for (double t = 0; t <= editedDur + tickInterval * 0.01; t += tickInterval)
+        {
+            double x = VisualToX(t, w, editedDur);
+            ruler.Children.Add(new Line
+            {
+                X1 = x, Y1 = h - 7, X2 = x, Y2 = h - 1,
+                Stroke = tickBrush, StrokeThickness = 1, IsHitTestVisible = false
+            });
+
+            string label = t >= 60
+                ? $"{(int)(t / 60)}:{(int)(t % 60):D2}"
+                : t.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture);
+            var tb = new TextBlock
+            {
+                Text = label, FontSize = 9,
+                Foreground = labelBrush, IsHitTestVisible = false
+            };
+            Canvas.SetLeft(tb, x + 2);
+            Canvas.SetTop(tb, 1);
+            ruler.Children.Add(tb);
+        }
+
+        // Minor ticks (halfway between major ticks)
+        if (showMinor)
+        {
+            for (double t = minorInterval; t < editedDur; t += tickInterval)
+            {
+                double x = VisualToX(t, w, editedDur);
+                ruler.Children.Add(new Line
+                {
+                    X1 = x, Y1 = h - 4, X2 = x, Y2 = h - 1,
+                    Stroke = minorBrush, StrokeThickness = 1, IsHitTestVisible = false
+                });
+            }
+        }
+    }
+
+    // ── Undo / Redo ───────────────────────────────────────────────────────────
 
     private void PushUndo()
     {
         _undoStack.Push(_segments.ToList()); // AudioSegment is a record — shallow copy is safe
+        _redoStack.Clear();
         UpdateUndoButton();
+        UpdateRedoButton();
     }
 
     private void Undo()
     {
         if (_undoStack.Count == 0) return;
+        _redoStack.Push(_segments.ToList());
         var snapshot = _undoStack.Pop();
         _segments.Clear();
         _segments.AddRange(snapshot);
         _selectedSegmentIndex = _selectedSegmentIndex >= _segments.Count ? -1 : _selectedSegmentIndex;
         SyncTrimFromSegments();
         _playheadVisualSec = Math.Clamp(_playheadVisualSec, 0, ComputeEditedDuration());
-        UpdateDeleteButton();
+        UpdateSelectionUI();
         UpdateUndoButton();
+        UpdateRedoButton();
+        RedrawCanvas();
+    }
+
+    private void Redo()
+    {
+        if (_redoStack.Count == 0) return;
+        _undoStack.Push(_segments.ToList());
+        var snapshot = _redoStack.Pop();
+        _segments.Clear();
+        _segments.AddRange(snapshot);
+        _selectedSegmentIndex = Math.Clamp(_selectedSegmentIndex, -1, _segments.Count - 1);
+        SyncTrimFromSegments();
+        _playheadVisualSec = Math.Clamp(_playheadVisualSec, 0, ComputeEditedDuration());
+        UpdateSelectionUI();
+        UpdateUndoButton();
+        UpdateRedoButton();
         RedrawCanvas();
     }
 
@@ -765,7 +963,14 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             UndoButton.IsEnabled = _undoStack.Count > 0;
     }
 
+    private void UpdateRedoButton()
+    {
+        if (RedoButton is not null)
+            RedoButton.IsEnabled = _redoStack.Count > 0;
+    }
+
     private void UndoButton_Click(object sender, RoutedEventArgs e) => Undo();
+    private void RedoButton_Click(object sender, RoutedEventArgs e) => Redo();
 
     // ── Snap-cut resolution ───────────────────────────────────────────────────
 
@@ -815,6 +1020,38 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         return (bestBlock, bestIsLeft);
     }
 
+    // Returns the index before which the dragged block should be inserted
+    // (0 = before block 0, Count = append at end), based on which half of each
+    // block the mouse is over.
+    private static int ComputeInsertBefore(List<VisualBlock> blocks, double mouseX, double w, double editedDur)
+    {
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            double midX = VisualToX((blocks[i].VisualStart + blocks[i].VisualEnd) / 2.0, w, editedDur);
+            if (mouseX < midX) return i;
+        }
+        return blocks.Count;
+    }
+
+    // Moves the segment at fromIdx so it appears at the position indicated by
+    // insertBefore (in the pre-removal index space).
+    private void PerformReorder(int fromIdx, int insertBefore)
+    {
+        if (fromIdx < 0 || fromIdx >= _segments.Count) return;
+        int toIdx = insertBefore > fromIdx ? insertBefore - 1 : insertBefore;
+        if (toIdx == fromIdx) return;
+
+        PushUndo();
+        var seg = _segments[fromIdx];
+        _segments.RemoveAt(fromIdx);
+        _segments.Insert(toIdx, seg);
+        _selectedSegmentIndex = toIdx;
+        SyncTrimFromSegments();
+        _playheadVisualSec = Math.Clamp(_playheadVisualSec, 0, ComputeEditedDuration());
+        UpdateSelectionUI();
+        RedrawCanvas();
+    }
+
     // ── Tool toggle handlers ──────────────────────────────────────────────────
 
     private void SelectToolButton_Checked(object sender, RoutedEventArgs e) => ActivateSelectTool();
@@ -830,6 +1067,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         if (SelectToolButton is not null) SelectToolButton.IsChecked = true;
         if (CutToolButton    is not null) CutToolButton.IsChecked    = false;
         if (WaveformCanvas   is not null) WaveformCanvas.Cursor      = Cursors.Arrow;
+        UpdateSelectionUI();
         RedrawCanvas();
     }
 
@@ -837,10 +1075,16 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
     {
         _tool                 = EditorTool.Cut;
         _selectedSegmentIndex = -1;
+        _pendingReorder       = false;
+        if (_drag != DragTarget.None)
+        {
+            _drag = DragTarget.None;
+            WaveformCanvas?.ReleaseMouseCapture();
+        }
         if (CutToolButton    is not null) CutToolButton.IsChecked    = true;
         if (SelectToolButton is not null) SelectToolButton.IsChecked = false;
         if (WaveformCanvas   is not null) WaveformCanvas.Cursor      = Cursors.Cross;
-        UpdateDeleteButton();
+        UpdateSelectionUI();
         RedrawCanvas();
     }
 
@@ -868,7 +1112,8 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         bool textFocused = Keyboard.FocusedElement is System.Windows.Controls.TextBox
-                        or Wpf.Ui.Controls.TextBox;
+                        or Wpf.Ui.Controls.TextBox
+                        or ComboBox;
         if (textFocused) return;
 
         switch (e.Key)
@@ -877,16 +1122,37 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
                 ActivateSelectTool();
                 e.Handled = true;
                 break;
+            case Key.C when (Keyboard.Modifiers & ModifierKeys.Control) != 0:
+                CopySelectedBlock();
+                e.Handled = true;
+                break;
             case Key.C:
                 ActivateCutTool();
+                e.Handled = true;
+                break;
+            case Key.V when (Keyboard.Modifiers & ModifierKeys.Control) != 0:
+                PasteBlock();
                 e.Handled = true;
                 break;
             case Key.Delete:
                 DeleteSelectedSegment();
                 e.Handled = true;
                 break;
+            case Key.Space:
+                Preview_Click(this, e);
+                e.Handled = true;
+                break;
+            case Key.Z when (Keyboard.Modifiers & ModifierKeys.Control) != 0
+                         && (Keyboard.Modifiers & ModifierKeys.Shift) != 0:
+                Redo();
+                e.Handled = true;
+                break;
             case Key.Z when (Keyboard.Modifiers & ModifierKeys.Control) != 0:
                 Undo();
+                e.Handled = true;
+                break;
+            case Key.Y when (Keyboard.Modifiers & ModifierKeys.Control) != 0:
+                Redo();
                 e.Handled = true;
                 break;
         }
@@ -1053,7 +1319,10 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         }
 
         if (WaveformCanvas.ActualWidth > 0)
+        {
             RedrawCanvas();
+            if (_zoomFactor > 1) ScrollToShowPlayhead();
+        }
     }
 
     private void StopPreview()
@@ -1069,6 +1338,45 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
         if (PreviewButton     is not null) PreviewButton.Content  = "Play Preview";
         if (PreviewStatusText is not null) PreviewStatusText.Text = "";
+    }
+
+    // ── Copy / Paste ──────────────────────────────────────────────────────────
+
+    private void CopySelectedBlock()
+    {
+        if (_selectedSegmentIndex < 0 || _selectedSegmentIndex >= _segments.Count) return;
+        _copiedSegment = _segments[_selectedSegmentIndex];
+        UpdateSelectionUI();
+    }
+
+    private void PasteBlock()
+    {
+        if (_copiedSegment is null) return;
+        PushUndo();
+        int insertAfter = _selectedSegmentIndex >= 0 && _selectedSegmentIndex < _segments.Count
+            ? _selectedSegmentIndex
+            : _segments.Count - 1;
+        _segments.Insert(insertAfter + 1, _copiedSegment);
+        _selectedSegmentIndex = insertAfter + 1;
+        SyncTrimFromSegments();
+        UpdateSelectionUI();
+        RedrawCanvas();
+    }
+
+    private void CopyButton_Click(object  sender, RoutedEventArgs e) => CopySelectedBlock();
+    private void PasteButton_Click(object sender, RoutedEventArgs e) => PasteBlock();
+
+    // ── Scroll to keep playhead visible ──────────────────────────────────────
+
+    private void ScrollToShowPlayhead()
+    {
+        if (WaveformScrollViewer is null || WaveformCanvas is null) return;
+        double editedDur = ComputeEditedDuration();
+        if (editedDur <= 0) return;
+        double w     = WaveformCanvas.ActualWidth;
+        double phX   = VisualToX(_playheadVisualSec, w, editedDur);
+        double viewW = WaveformScrollViewer.ViewportWidth;
+        WaveformScrollViewer.ScrollToHorizontalOffset(Math.Max(0, phX - viewW / 2));
     }
 
     // ── Save / Cancel ─────────────────────────────────────────────────────────
@@ -1094,19 +1402,25 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        double effectiveEnd = trimEnd ?? _duration;
-        if (trimStart.HasValue && trimStart.Value >= effectiveEnd)
+        // Trim boundary validation only applies to the single-block path.
+        // For multi-block saves, ResultSegments is the source of truth and
+        // TrimStart/TrimEnd text-box values are irrelevant (set to null on save).
+        if (_segments.Count <= 1)
         {
-            TrimErrorText.Text       = "Trim Start must be less than Trim End.";
-            TrimErrorText.Visibility = Visibility.Visible;
-            return;
-        }
+            double effectiveEnd = trimEnd ?? _duration;
+            if (trimStart.HasValue && trimStart.Value >= effectiveEnd)
+            {
+                TrimErrorText.Text       = "Trim Start must be less than Trim End.";
+                TrimErrorText.Visibility = Visibility.Visible;
+                return;
+            }
 
-        if (trimEnd.HasValue && trimEnd.Value > _duration)
-        {
-            TrimErrorText.Text       = $"Trim End cannot exceed the sound duration ({_duration:F2}s).";
-            TrimErrorText.Visibility = Visibility.Visible;
-            return;
+            if (trimEnd.HasValue && trimEnd.Value > _duration)
+            {
+                TrimErrorText.Text       = $"Trim End cannot exceed the sound duration ({_duration:F2}s).";
+                TrimErrorText.Visibility = Visibility.Visible;
+                return;
+            }
         }
 
         ResultName     = name;

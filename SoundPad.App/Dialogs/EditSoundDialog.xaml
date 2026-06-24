@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Edit Sound"
-        Width="490" Height="780"
-        MinWidth="490" MinHeight="780"
-        MaxWidth="490" MaxHeight="780"
+        Width="490" Height="840"
+        MinWidth="490" MinHeight="840"
+        MaxWidth="490" MaxHeight="840"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         FontFamily="Segoe UI"
@@ -185,6 +185,7 @@
                     <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                         <ToggleButton x:Name="SelectToolButton"
                                       Content="Select (A)"
+                                      ToolTip="Select and drag blocks (A)"
                                       IsChecked="True"
                                       Padding="10,4"
                                       FontSize="11"
@@ -192,6 +193,7 @@
                                       Checked="SelectToolButton_Checked"/>
                         <ToggleButton x:Name="CutToolButton"
                                       Content="Cut (C)"
+                                      ToolTip="Cut block at cursor position (C)"
                                       IsChecked="False"
                                       Padding="10,4"
                                       FontSize="11"
@@ -199,18 +201,32 @@
                                       Checked="CutToolButton_Checked"/>
                         <ui:Button x:Name="UndoButton"
                                    Content="Undo"
+                                   ToolTip="Undo last edit (Ctrl+Z)"
                                    Appearance="Secondary"
                                    FontSize="11"
                                    IsEnabled="False"
+                                   Margin="0,0,4,0"
                                    Click="UndoButton_Click">
                             <ui:Button.Icon>
                                 <ui:SymbolIcon Symbol="ArrowUndo20"/>
+                            </ui:Button.Icon>
+                        </ui:Button>
+                        <ui:Button x:Name="RedoButton"
+                                   Content="Redo"
+                                   ToolTip="Redo last undone edit (Ctrl+Y)"
+                                   Appearance="Secondary"
+                                   FontSize="11"
+                                   IsEnabled="False"
+                                   Click="RedoButton_Click">
+                            <ui:Button.Icon>
+                                <ui:SymbolIcon Symbol="ArrowRedo20"/>
                             </ui:Button.Icon>
                         </ui:Button>
                     </StackPanel>
                     <ui:Button x:Name="DeleteCutButton"
                                DockPanel.Dock="Right"
                                Content="Remove Block"
+                               ToolTip="Remove the selected block (Delete)"
                                Appearance="Secondary"
                                FontSize="11"
                                IsEnabled="False"
@@ -219,6 +235,35 @@
                             <ui:SymbolIcon Symbol="Delete20"/>
                         </ui:Button.Icon>
                     </ui:Button>
+                </DockPanel>
+
+                <!-- Second toolbar row: Copy / Paste -->
+                <DockPanel Margin="0,0,0,4" LastChildFill="False">
+                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                        <ui:Button x:Name="CopyButton"
+                                   Content="Copy"
+                                   ToolTip="Copy selected block (Ctrl+C)"
+                                   Appearance="Secondary"
+                                   FontSize="11"
+                                   IsEnabled="False"
+                                   Margin="0,0,4,0"
+                                   Click="CopyButton_Click">
+                            <ui:Button.Icon>
+                                <ui:SymbolIcon Symbol="Copy20"/>
+                            </ui:Button.Icon>
+                        </ui:Button>
+                        <ui:Button x:Name="PasteButton"
+                                   Content="Paste"
+                                   ToolTip="Paste copied block (Ctrl+V)"
+                                   Appearance="Secondary"
+                                   FontSize="11"
+                                   IsEnabled="False"
+                                   Click="PasteButton_Click">
+                            <ui:Button.Icon>
+                                <ui:SymbolIcon Symbol="ClipboardPaste20"/>
+                            </ui:Button.Icon>
+                        </ui:Button>
+                    </StackPanel>
                 </DockPanel>
 
                 <!-- Snap cut to playhead -->
@@ -258,7 +303,7 @@
                 </DockPanel>
 
                 <!-- ── WAVEFORM TIMELINE ─────────────────────────────────────── -->
-                <Border Height="88"
+                <Border Height="126"
                         Background="#1A1A1A"
                         BorderBrush="{DynamicResource CardBorderBrush}"
                         BorderThickness="1"
@@ -269,15 +314,29 @@
                                   HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Hidden"
                                   SizeChanged="WaveformScrollViewer_SizeChanged">
-                        <Canvas x:Name="WaveformCanvas"
-                                Background="Transparent"
-                                Cursor="Arrow"
-                                MouseLeftButtonDown="Waveform_MouseDown"
-                                MouseLeftButtonUp="Waveform_MouseUp"
-                                MouseMove="Waveform_MouseMove"
-                                MouseRightButtonDown="Waveform_MouseRightDown"/>
+                        <StackPanel Orientation="Vertical">
+                            <Canvas x:Name="RulerCanvas"
+                                    Height="20"
+                                    Background="Transparent"
+                                    IsHitTestVisible="False"/>
+                            <Canvas x:Name="WaveformCanvas"
+                                    Height="88"
+                                    Background="Transparent"
+                                    Cursor="Arrow"
+                                    MouseLeftButtonDown="Waveform_MouseDown"
+                                    MouseLeftButtonUp="Waveform_MouseUp"
+                                    MouseMove="Waveform_MouseMove"
+                                    MouseRightButtonDown="Waveform_MouseRightDown"/>
+                        </StackPanel>
                     </ScrollViewer>
                 </Border>
+
+                <!-- Block info -->
+                <TextBlock x:Name="BlockInfoText"
+                           FontSize="10"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,3,0,0"
+                           Text=""/>
 
                 <!-- timeline legend -->
                 <Grid Margin="0,4,0,0">

@@ -98,6 +98,21 @@ public class AudioPlaybackEngine : IDisposable
         return new PlaybackHandle(top, source);
     }
 
+    // Overload with multi-segment support for non-destructive cuts.
+    // segments is an ordered list of (S, E) sample-index pairs produced by GetSegments().
+    // fadeInSamples / fadeOutSamples apply to the overall joined output, not per segment.
+    public PlaybackHandle Play(CachedSound sound, float volume,
+        IReadOnlyList<(int S, int E)> segments, int fadeInSamples, int fadeOutSamples)
+    {
+        var source = new CachedSoundSampleProvider(sound, segments, fadeInSamples, fadeOutSamples);
+        ISampleProvider top = source;
+        if (volume < 0.999f)
+            top = new VolumeSampleProvider(source) { Volume = Math.Clamp(volume, 0f, 1f) };
+        _active.Add(top);
+        _mixer.AddMixerInput(top);
+        return new PlaybackHandle(top, source);
+    }
+
     // Removes every active provider from the mixer, silencing all sounds.
     // Does NOT affect persistent inputs added via AddMixerInput (e.g. mic passthrough).
     public void StopAll()

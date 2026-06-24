@@ -3,15 +3,16 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Edit Sound"
-        Width="490" Height="740"
-        MinWidth="490" MinHeight="740"
-        MaxWidth="490" MaxHeight="740"
+        Width="490" Height="780"
+        MinWidth="490" MinHeight="780"
+        MaxWidth="490" MaxHeight="780"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         FontFamily="Segoe UI"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica"
-        WindowCornerPreference="Round">
+        WindowCornerPreference="Round"
+        PreviewKeyDown="Window_PreviewKeyDown">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -179,6 +180,83 @@
                            Visibility="Collapsed"
                            Margin="0,4,0,4"/>
 
+                <!-- ── TIMELINE TOOLS ────────────────────────────────────────── -->
+                <DockPanel Margin="0,8,0,4" LastChildFill="False">
+                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                        <ToggleButton x:Name="SelectToolButton"
+                                      Content="Select (A)"
+                                      IsChecked="True"
+                                      Padding="10,4"
+                                      FontSize="11"
+                                      Margin="0,0,4,0"
+                                      Checked="SelectToolButton_Checked"/>
+                        <ToggleButton x:Name="CutToolButton"
+                                      Content="Cut (C)"
+                                      IsChecked="False"
+                                      Padding="10,4"
+                                      FontSize="11"
+                                      Margin="0,0,4,0"
+                                      Checked="CutToolButton_Checked"/>
+                        <ui:Button x:Name="UndoButton"
+                                   Content="Undo"
+                                   Appearance="Secondary"
+                                   FontSize="11"
+                                   IsEnabled="False"
+                                   Click="UndoButton_Click">
+                            <ui:Button.Icon>
+                                <ui:SymbolIcon Symbol="ArrowUndo20"/>
+                            </ui:Button.Icon>
+                        </ui:Button>
+                    </StackPanel>
+                    <ui:Button x:Name="DeleteCutButton"
+                               DockPanel.Dock="Right"
+                               Content="Remove Block"
+                               Appearance="Secondary"
+                               FontSize="11"
+                               IsEnabled="False"
+                               Click="DeleteCutButton_Click">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="Delete20"/>
+                        </ui:Button.Icon>
+                    </ui:Button>
+                </DockPanel>
+
+                <!-- Snap cut to playhead -->
+                <CheckBox x:Name="SnapToPlayheadCheckBox"
+                          Content="Snap cut to playhead"
+                          IsChecked="True"
+                          FontSize="11"
+                          HorizontalAlignment="Right"
+                          Margin="0,2,0,4"
+                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                <!-- Zoom -->
+                <DockPanel Margin="0,0,0,4" LastChildFill="True">
+                    <TextBlock DockPanel.Dock="Left"
+                               Text="Zoom"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Margin="0,0,6,0"/>
+                    <TextBlock x:Name="ZoomText"
+                               DockPanel.Dock="Right"
+                               Text="1×"
+                               FontSize="11"
+                               Width="28"
+                               TextAlignment="Left"
+                               VerticalAlignment="Center"
+                               Margin="4,0,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <Slider x:Name="ZoomSlider"
+                            Minimum="1"
+                            Maximum="10"
+                            Value="1"
+                            TickFrequency="1"
+                            IsSnapToTickEnabled="True"
+                            VerticalAlignment="Center"
+                            ValueChanged="ZoomSlider_ValueChanged"/>
+                </DockPanel>
+
                 <!-- ── WAVEFORM TIMELINE ─────────────────────────────────────── -->
                 <Border Height="88"
                         Background="#1A1A1A"
@@ -186,19 +264,26 @@
                         BorderThickness="1"
                         CornerRadius="6"
                         ClipToBounds="True"
-                        Margin="0,4,0,0">
-                    <Canvas x:Name="WaveformCanvas"
-                            Background="Transparent"
-                            Cursor="Cross"
-                            SizeChanged="WaveformCanvas_SizeChanged"
-                            MouseLeftButtonDown="Waveform_MouseDown"
-                            MouseLeftButtonUp="Waveform_MouseUp"
-                            MouseMove="Waveform_MouseMove"/>
+                        Margin="0,0,0,0">
+                    <ScrollViewer x:Name="WaveformScrollViewer"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Hidden"
+                                  SizeChanged="WaveformScrollViewer_SizeChanged">
+                        <Canvas x:Name="WaveformCanvas"
+                                Background="Transparent"
+                                Cursor="Arrow"
+                                MouseLeftButtonDown="Waveform_MouseDown"
+                                MouseLeftButtonUp="Waveform_MouseUp"
+                                MouseMove="Waveform_MouseMove"
+                                MouseRightButtonDown="Waveform_MouseRightDown"/>
+                    </ScrollViewer>
                 </Border>
 
                 <!-- timeline legend -->
                 <Grid Margin="0,4,0,0">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
@@ -221,9 +306,12 @@
                             </LinearGradientBrush>
                         </Rectangle.Fill>
                     </Rectangle>
-                    <TextBlock Grid.Column="5" Text=" Fade In/Out   " FontSize="10"
+                    <TextBlock Grid.Column="5" Text=" Fade   " FontSize="10"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"/>
-                    <Line Grid.Column="6" X1="0" Y1="4" X2="12" Y2="4"
+                    <Rectangle Grid.Column="6" Width="12" Height="8" Fill="#99555555" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="7" Text=" Removed   " FontSize="10"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"/>
+                    <Line Grid.Column="8" X1="0" Y1="4" X2="12" Y2="4"
                           Stroke="White" StrokeThickness="1.5"
                           StrokeDashArray="3,2" VerticalAlignment="Center"/>
                 </Grid>

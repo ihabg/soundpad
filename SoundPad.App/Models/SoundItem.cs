@@ -30,4 +30,9 @@ public class SoundItem
     // Optional pad color shown in Grid View — stored as "#RRGGBB" hex string, null = default card color.
     // Nullable so old decks.json files without this field deserialize cleanly to null.
     public string? PadColor { get; set; }
+
+    // Non-destructive kept audio segments for block-based editing.
+    // null or empty = old behavior: single segment from TrimStartSeconds to TrimEndSeconds.
+    // Nullable so old decks.json files without this field deserialize cleanly to null.
+    public List<AudioSegment>? Segments { get; set; }
 }

@@ -38,7 +38,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.7.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.8.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -227,6 +227,80 @@ Mini Mode window size, position, and always-on-top state are saved to `settings.
 ### Architecture
 
 MainWindow remains the single owner of all playback and audio state. Mini Mode is UI-only and does not create a second audio engine. All play, stop, and active-state changes go through MainWindow's existing `PlayLibraryItem`, `StopSoundById`, and `StopAllSounds` methods. Active state propagates via the `PlaybackStateChanged` event fired from `UpdateRowState`. Deck changes propagate via the `ActiveDeckChanged` event. Old `settings.json` files without Mini Mode fields load correctly — all new fields default to sensible values (`MiniAlwaysOnTop = true`, `MiniOpenOnStartup = false`, position = null).
+
+---
+
+## Instant Replay Audio Clipper
+
+The **Instant Replay** feature records a rolling buffer of your system audio — so when a perfect moment happens, you can save the last N minutes as a clip with a single button or hotkey.
+
+Instant Replay is **OFF by default**. No audio is captured unless you explicitly enable it.
+
+### Enabling Instant Replay
+
+1. Open the **Settings** tab → find the **Instant Replay** card.
+2. Toggle **Instant Replay** ON.
+3. The status bar confirms the capture device and audio format, or shows a signal warning if no audio is detected.
+
+### Capture device
+
+- The **Capture Device** drop-down selects which system render endpoint to record (e.g. headset, speakers, or a specific audio interface).
+- Leaving it on the default captures from the Windows default playback device.
+- The selected device persists across restarts.
+- The **Signal** indicator shows one of three states:
+  - **Capturing audio** — ring buffer is filling normally
+  - **No signal (waiting for audio)** — device is open but no audio data has arrived yet
+  - **No signal (device meter active but capture silent)** — audio is playing on the device but the capture is reading silence; try selecting a different Capture Device
+
+### Buffer length
+
+Choose from **1 to 5 minutes** of rolling history. The ring buffer holds this many minutes of audio at all times; older audio is overwritten continuously as new audio arrives.
+
+All Instant Replay settings (capture device, buffer length, microphone) are locked while Instant Replay is ON and unlock when you turn it OFF.
+
+### Saving a clip
+
+Click **Save Clip** in the Settings card, or press the **Save Clip hotkey** (assignable in Settings). SoundPad:
+
+1. Snapshots the last N minutes from the ring buffer
+2. Writes a WAV file to `%AppData%\SoundPad\Sounds\`
+3. Adds the clip to the active deck as `Clip YYYY-MM-DD HH-MM-SS`
+4. Opens the **Sound Editor** immediately so you can rename, trim, fade, or assign a hotkey
+
+Clips are saved as **WAV** for reliability and instant playback. MP3 export is planned for a later version.
+
+Once in the library, clips behave exactly like any other sound — they can be played, colored, hotkeyed, duplicated, trimmed, faded, and included in backups. Mini Mode refreshes automatically when a clip is saved.
+
+### Optional microphone capture
+
+To include your voice in clips:
+
+1. Tick **Include microphone** in the Instant Replay card.
+2. Select your microphone from the **Microphone** drop-down.
+3. Adjust **Mic Volume** (0–200 %).
+4. Save a clip — SoundPad mixes system audio and mic audio sample-by-sample into a single WAV.
+
+Microphone capture is **OFF by default** (privacy default). No microphone is ever recorded unless **Include microphone** is enabled AND Instant Replay is ON. Enabling mic capture does not affect the existing **Mic Passthrough** feature — both can be active simultaneously.
+
+If the mic produces no signal at save time, the clip is saved with system audio only and the status bar explains why.
+
+### Hotkeys
+
+Two hotkeys can be assigned in the **Settings** tab:
+
+| Hotkey | Action |
+|---|---|
+| **Save Clip** | Instantly snapshot the ring buffer and save a clip |
+| **Toggle Instant Replay** | Turn Instant Replay ON or OFF without opening Settings |
+
+Both hotkeys fire globally (even when the app is minimised or hidden in the tray), survive deck switches, and persist across restarts.
+
+### Privacy
+
+- No audio is captured while Instant Replay is OFF.
+- No microphone is recorded unless Include microphone is enabled.
+- No audio is routed anywhere — Instant Replay only writes to a local WAV file on Save Clip.
+- Old `settings.json` files without Instant Replay fields load correctly — all fields default to OFF.
 
 ---
 

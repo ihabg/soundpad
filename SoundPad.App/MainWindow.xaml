@@ -136,6 +136,20 @@
                                     <ui:SymbolIcon Symbol="AppsList20"/>
                                 </ui:Button.Icon>
                             </ui:Button>
+                            <!-- Instant Replay recording indicator — visible only when IR is ON -->
+                            <Border x:Name="InstantReplayRecPill"
+                                    DockPanel.Dock="Right"
+                                    Visibility="Collapsed"
+                                    Background="#D32F2F"
+                                    CornerRadius="4"
+                                    Padding="6,2"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,8,0">
+                                <TextBlock Text="● REC"
+                                           Foreground="White"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"/>
+                            </Border>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="SOUND LIBRARY"
                                            FontSize="11"
@@ -612,6 +626,228 @@
                                                IsEnabled="False"
                                                Click="ClearStopAllHotkey_Click"/>
                                 </Grid>
+                            </StackPanel>
+                        </ui:Card>
+
+                        <!-- ── Instant Replay / Audio Clipper ─────────────────────────────── -->
+                        <ui:Card Padding="20" Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="INSTANT REPLAY"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,14"/>
+
+                                <!-- Status indicator row -->
+                                <DockPanel Margin="0,0,0,4">
+                                    <Border x:Name="InstantReplayStatusDot"
+                                            DockPanel.Dock="Left"
+                                            Width="10" Height="10"
+                                            CornerRadius="5"
+                                            Background="Gray"
+                                            VerticalAlignment="Center"
+                                            Margin="0,0,8,0"/>
+                                    <TextBlock x:Name="InstantReplayStatusText"
+                                               Text="Instant Replay: OFF"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+
+                                <!-- Signal level indicator (visible only while running) -->
+                                <TextBlock x:Name="InstantReplaySignalText"
+                                           Text=""
+                                           FontSize="11"
+                                           Margin="18,0,0,12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+
+                                <ui:ToggleSwitch x:Name="InstantReplaySwitch"
+                                                 Content="Enable Instant Replay"
+                                                 Margin="0,0,0,8"
+                                                 Checked="InstantReplaySwitch_Checked"
+                                                 Unchecked="InstantReplaySwitch_Unchecked"/>
+
+                                <TextBlock Text="Captures recent system audio only when enabled. No recording occurs when off."
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,14"/>
+
+                                <!-- Buffer length -->
+                                <DockPanel Margin="0,0,0,10">
+                                    <TextBlock DockPanel.Dock="Left"
+                                               Text="Buffer length"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Center"
+                                               Width="110"/>
+                                    <ComboBox x:Name="InstantReplayMinutesCombo"
+                                              Width="140"
+                                              HorizontalAlignment="Left"
+                                              SelectionChanged="InstantReplayMinutesCombo_SelectionChanged">
+                                        <ComboBoxItem Content="1 minute"/>
+                                        <ComboBoxItem Content="2 minutes"/>
+                                        <ComboBoxItem Content="3 minutes"/>
+                                        <ComboBoxItem Content="4 minutes"/>
+                                        <ComboBoxItem Content="5 minutes"/>
+                                    </ComboBox>
+                                </DockPanel>
+
+                                <!-- Capture device — which output to tap for loopback audio -->
+                                <DockPanel Margin="0,0,0,14">
+                                    <TextBlock DockPanel.Dock="Left"
+                                               Text="Capture device"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Center"
+                                               Width="110"/>
+                                    <ComboBox x:Name="InstantReplayCaptureDeviceCombo"
+                                              MinWidth="200"
+                                              HorizontalAlignment="Left"
+                                              SelectionChanged="InstantReplayCaptureDeviceCombo_SelectionChanged"/>
+                                </DockPanel>
+
+                                <!-- ── Microphone capture (optional) ──────────────────── -->
+                                <Border Height="1"
+                                        Background="{DynamicResource CardBorderBrush}"
+                                        Margin="0,6,0,14"/>
+
+                                <TextBlock Text="MICROPHONE (OPTIONAL)"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,10"/>
+
+                                <CheckBox x:Name="InstantReplayIncludeMicCheckBox"
+                                          Content="Include microphone in clips"
+                                          Margin="0,0,0,6"
+                                          Checked="InstantReplayIncludeMicCheckBox_Checked"
+                                          Unchecked="InstantReplayIncludeMicCheckBox_Unchecked"/>
+
+                                <TextBlock Text="Microphone audio is only captured while Instant Replay is ON and Include microphone is enabled."
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="24,0,0,10"/>
+
+                                <DockPanel Margin="0,0,0,6">
+                                    <TextBlock DockPanel.Dock="Left"
+                                               Text="Microphone"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Center"
+                                               Width="110"/>
+                                    <ComboBox x:Name="InstantReplayMicDeviceCombo"
+                                              MinWidth="200"
+                                              HorizontalAlignment="Left"
+                                              SelectionChanged="InstantReplayMicDeviceCombo_SelectionChanged"/>
+                                </DockPanel>
+
+                                <TextBlock x:Name="InstantReplayMicSignalText"
+                                           Text=""
+                                           FontSize="11"
+                                           Margin="0,0,0,10"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+
+                                <!-- Hint shown only while Instant Replay is ON -->
+                                <TextBlock x:Name="InstantReplayLockedHint"
+                                           Text="Turn Instant Replay OFF to change capture device, buffer length, or microphone settings."
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Visibility="Collapsed"
+                                           Margin="0,0,0,14"/>
+
+                                <!-- Save Clip button -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <ui:Button x:Name="SaveInstantReplayClipButton"
+                                               Content="Save Clip"
+                                               Appearance="Secondary"
+                                               Click="SaveInstantReplayClip_Click">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="VideoClip20"/>
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                </StackPanel>
+
+                                <Border Height="1"
+                                        Background="{DynamicResource CardBorderBrush}"
+                                        Margin="0,0,0,14"/>
+
+                                <TextBlock Text="HOTKEYS"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,12"/>
+
+                                <!-- Save Clip hotkey row -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="Save Clip"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        <TextBlock x:Name="InstantReplayClipHotkeyText"
+                                                   Text="No hotkey"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   Margin="0,3,0,0"/>
+                                    </StackPanel>
+                                    <ui:Button Grid.Column="1"
+                                               Content="Set Hotkey"
+                                               Appearance="Secondary"
+                                               Width="120"
+                                               Margin="0,0,8,0"
+                                               Click="SetInstantReplayClipHotkey_Click"/>
+                                    <ui:Button x:Name="ClearInstantReplayClipHotkeyButton"
+                                               Grid.Column="2"
+                                               Content="Clear"
+                                               Appearance="Secondary"
+                                               Width="90"
+                                               IsEnabled="False"
+                                               Click="ClearInstantReplayClipHotkey_Click"/>
+                                </Grid>
+
+                                <!-- Toggle ON/OFF hotkey row -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="Toggle ON/OFF"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        <TextBlock x:Name="InstantReplayToggleHotkeyText"
+                                                   Text="No hotkey"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   Margin="0,3,0,0"/>
+                                    </StackPanel>
+                                    <ui:Button Grid.Column="1"
+                                               Content="Set Hotkey"
+                                               Appearance="Secondary"
+                                               Width="120"
+                                               Margin="0,0,8,0"
+                                               Click="SetInstantReplayToggleHotkey_Click"/>
+                                    <ui:Button x:Name="ClearInstantReplayToggleHotkeyButton"
+                                               Grid.Column="2"
+                                               Content="Clear"
+                                               Appearance="Secondary"
+                                               Width="90"
+                                               IsEnabled="False"
+                                               Click="ClearInstantReplayToggleHotkey_Click"/>
+                                </Grid>
+
                             </StackPanel>
                         </ui:Card>
 

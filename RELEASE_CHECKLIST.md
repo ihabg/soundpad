@@ -1,4 +1,4 @@
-# SoundPad v1.7.0 — Release Checklist
+# SoundPad v1.8.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.7.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.8.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.7.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.7.0), and publisher
+- [ ] Run `SoundPad-Setup-1.8.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.8.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -250,7 +250,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.7.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.8.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
@@ -730,6 +730,116 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.8.0 new features
+
+### Instant Replay — default state
+
+- [ ] Fresh install (no `settings.json`) → Instant Replay is **OFF** by default
+- [ ] Include microphone is **OFF** by default
+- [ ] No audio capture occurs until Instant Replay is toggled ON
+
+### Instant Replay — capture device
+
+- [ ] Capture Device drop-down loads all available render endpoints
+- [ ] Selecting a device and restarting the app → same device is still selected
+- [ ] Leaving the device on "Default" captures from the Windows default playback endpoint
+
+### Instant Replay — signal indicator
+
+- [ ] Toggle Instant Replay ON with audio playing → signal indicator shows **Capturing audio**
+- [ ] Toggle Instant Replay ON with no audio playing → indicator shows **No signal (waiting for audio)**
+- [ ] Selecting a wrong/inactive capture device while audio plays → indicator shows no-signal + device-meter-active warning
+- [ ] Indicator clears automatically when Instant Replay is turned OFF
+
+### Instant Replay — settings locked while ON
+
+- [ ] Capture Device combo is disabled while Instant Replay is ON
+- [ ] Buffer Length combo is disabled while Instant Replay is ON
+- [ ] Include microphone checkbox is disabled while Instant Replay is ON
+- [ ] Microphone drop-down is disabled while Instant Replay is ON
+- [ ] Locked-hint text is visible while Instant Replay is ON
+- [ ] All controls re-enable when Instant Replay is turned OFF
+
+### Instant Replay — buffer length
+
+- [ ] Buffer Length combo offers 1, 2, 3, 4, 5 minutes
+- [ ] Selected buffer length persists after restart
+- [ ] Changing buffer length while OFF takes effect on next Enable
+
+### Instant Replay — system-only clip (mic OFF)
+
+- [ ] Enable Instant Replay, play audio for 10+ seconds, click Save Clip → clip appears in the active deck
+- [ ] Clip file is a valid WAV at `%AppData%\SoundPad\Sounds\Clip YYYY-MM-DD HH-MM-SS.wav`
+- [ ] Clip plays back with audible audio (not silence)
+- [ ] Saved clip opens in the Sound Editor immediately after saving
+- [ ] Clip name defaults to `Clip YYYY-MM-DD HH-MM-SS`
+- [ ] Sound Editor allows rename, trim, fade, and hotkey assignment on the clip
+
+### Instant Replay — clip in active deck
+
+- [ ] Saved clip appears at the bottom of the current active deck in List View
+- [ ] Saved clip appears as a pad in Grid View
+- [ ] Saved clip plays correctly from the library
+- [ ] Saved clip is included in the next backup export
+
+### Instant Replay — Mini Mode refresh
+
+- [ ] Open Mini Mode before saving a clip → after Save Clip, the new clip pad appears in Mini Mode without reopening it
+
+### Instant Replay — wrong capture device (no signal)
+
+- [ ] Select a capture device that is not producing audio
+- [ ] Enable Instant Replay, wait, then Save Clip → status bar shows warning about no system audio signal alongside "Clip saved: ..."
+- [ ] Clip file is still saved (silent WAV) — no crash
+
+### Instant Replay — optional microphone
+
+- [ ] Tick Include microphone, select a mic device, enable Instant Replay → status bar shows IR is ON
+- [ ] Mic device drop-down lists all available WaveIn devices
+- [ ] Selected mic device and Include state persist after restart
+- [ ] Enable Instant Replay + mic, speak into mic, play audio, Save Clip → WAV contains both system audio and voice
+- [ ] Clip plays back with both system audio and mic audio audible
+
+### Instant Replay — mic OFF does not record microphone
+
+- [ ] Include microphone is unchecked → Save Clip → clip contains only system audio (verify with audio editor if needed)
+- [ ] Instant Replay OFF → no mic recording occurs regardless of Include microphone state
+
+### Instant Replay — mic failure graceful handling
+
+- [ ] Select a mic device that cannot be opened (e.g. disconnect it before enabling IR)
+- [ ] Toggle Instant Replay ON → status bar shows "Instant Replay is ON — mic capture failed: ..." (system capture continues)
+- [ ] Save Clip while mic failed → clip saves with system audio only; status bar shows "(Microphone had no signal; saved system audio only.)" appended to "Clip saved: ..."
+- [ ] No crash; app remains fully functional
+
+### Instant Replay — hotkeys
+
+- [ ] Assign a Save Clip hotkey in Settings → hotkey fires and saves a clip while app is in background
+- [ ] Assign a Toggle Instant Replay hotkey → hotkey turns IR ON and OFF
+- [ ] Both hotkeys persist after restart
+- [ ] Both hotkeys remain active after switching decks
+- [ ] Both hotkeys fire while Mini Mode has keyboard focus
+
+### Instant Replay — app exit while ON
+
+- [ ] Enable Instant Replay (and optionally mic), then exit the app → app exits cleanly within a few seconds; no hung process
+
+### Instant Replay — settings backward compatibility
+
+- [ ] Manually delete all Instant Replay fields from `settings.json`, restart app → app loads without crash; IR defaults to OFF
+
+### Regression — no v1.7 regressions introduced by v1.8
+
+- [ ] Mini Mode opens, plays sounds, syncs with main window, and refreshes on deck switch
+- [ ] Grid drag-and-drop reorder still works in both List and Grid views
+- [ ] External file-drop import still works in both views
+- [ ] Mic Passthrough is unaffected (can be enabled simultaneously with IR mic capture)
+- [ ] Output routing (Monitor + Virtual) is unaffected
+- [ ] Sound Editor opens for existing sounds (not just clips)
+- [ ] In-app updater still functions
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -745,12 +855,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.7.0
-  git push origin v1.7.0
+  git tag v1.8.0
+  git push origin v1.8.0
   ```
-- [ ] Create GitHub Release from tag `v1.7.0`
-- [ ] Add release notes summarising v1.7.0 features
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.7.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.8.0`
+- [ ] Add release notes summarising v1.8.0 features
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.8.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

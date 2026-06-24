@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using SoundPad.App.Audio;
 using SoundPad.App.Dialogs;
@@ -101,6 +102,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     internal event Action<Guid, bool>? PlaybackStateChanged;
     internal event Action<Deck>?       ActiveDeckChanged;
     private  MiniWindow?               _miniWindow;
+
+    // ── Instant Replay ────────────────────────────────────────────────────────
+    // Null when the feature is off. Created when the user enables Instant Replay.
+    private InstantReplayService? _instantReplay;
+    private DispatcherTimer?      _irSignalTimer;
+    // True while a background Stop/Start is in progress; blocks re-entrant operations.
+    private bool                  _irOperationPending;
 
     // ── Constructor ────────────────────────────────────────────────────────────
     // Settings are loaded before InitializeComponent so the saved window
@@ -773,8 +781,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             StartupLogger.Log("HotkeyManager created");
 
             _hotkeyService = new HotkeyService(_hotkeys);
-            _hotkeyService.HotkeyTriggered        += OnSoundHotkeyTriggered;
-            _hotkeyService.StopAllHotkeyTriggered += OnStopAllHotkeyTriggered;
+            _hotkeyService.HotkeyTriggered             += OnSoundHotkeyTriggered;
+            _hotkeyService.StopAllHotkeyTriggered      += OnStopAllHotkeyTriggered;
+            _hotkeyService.InstantReplayClipTriggered  += SaveInstantReplayClip;
+            _hotkeyService.InstantReplayToggleTriggered += ToggleInstantReplay;
             StartupLogger.Log("HotkeyService ready");
         }
         catch (Exception ex)
@@ -848,6 +858,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                     StartupLogger.Log($"  Stack: {ex.StackTrace}");
                     try { StatusText.Text = $"Hotkey startup error: {ex.Message}"; } catch { }
                 }
+
+                RestoreInstantReplaySettings();
 
                 if (_settings.MiniOpenOnStartup)
                     OpenMiniMode();
@@ -960,7 +972,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         int soundCount = _library.Count(x => x.Hotkey is not null);
         Debug.WriteLine($"[Hotkeys:{context}] Starting — {soundCount} sound hotkey(s), " +
-                        $"Stop All: {_settings.StopAllHotkey?.DisplayText ?? "none"}");
+                        $"Stop All: {_settings.StopAllHotkey?.DisplayText ?? "none"}, " +
+                        $"IR Clip: {_settings.InstantReplayClipHotkey?.DisplayText ?? "none"}, " +
+                        $"IR Toggle: {_settings.InstantReplayToggleHotkey?.DisplayText ?? "none"}");
 
         if (_hotkeyService is null)
         {
@@ -969,10 +983,20 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return new HotkeyRegistrationResult();
         }
 
-        var result = _hotkeyService.ReregisterAll(_library, _settings.StopAllHotkey);
+        var result = _hotkeyService.ReregisterAll(
+            _library,
+            _settings.StopAllHotkey,
+            _settings.InstantReplayClipHotkey,
+            _settings.InstantReplayToggleHotkey);
 
-        int total  = soundCount + (_settings.StopAllHotkey is not null ? 1 : 0);
-        int failed = result.FailedSoundIds.Count + (result.StopAllFailed ? 1 : 0);
+        int total  = soundCount
+                   + (_settings.StopAllHotkey             is not null ? 1 : 0)
+                   + (_settings.InstantReplayClipHotkey   is not null ? 1 : 0)
+                   + (_settings.InstantReplayToggleHotkey is not null ? 1 : 0);
+        int failed = result.FailedSoundIds.Count
+                   + (result.StopAllFailed             ? 1 : 0)
+                   + (result.InstantReplayClipFailed   ? 1 : 0)
+                   + (result.InstantReplayToggleFailed ? 1 : 0);
         Debug.WriteLine($"[Hotkeys:{context}] Registered {total - failed}/{total}, {failed} failed.");
 
         foreach (var failId in result.FailedSoundIds)
@@ -982,6 +1006,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
         if (result.StopAllFailed)
             Debug.WriteLine($"[Hotkeys:{context}] FAILED Stop All hotkey — Win32 RegisterHotKey returned false");
+        if (result.InstantReplayClipFailed)
+            Debug.WriteLine($"[Hotkeys:{context}] FAILED Instant Replay clip hotkey");
+        if (result.InstantReplayToggleFailed)
+            Debug.WriteLine($"[Hotkeys:{context}] FAILED Instant Replay toggle hotkey");
 
         if (failed > 0)
         {
@@ -990,6 +1018,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 problems.Add($"{result.FailedSoundIds.Count} sound hotkey(s)");
             if (result.StopAllFailed)
                 problems.Add("Stop All hotkey");
+            if (result.InstantReplayClipFailed)
+                problems.Add("Instant Replay clip hotkey");
+            if (result.InstantReplayToggleFailed)
+                problems.Add("Instant Replay toggle hotkey");
             StatusText.Text = $"Ready — could not register: {string.Join(", ", problems)}";
         }
 
@@ -1935,6 +1967,616 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         SaveSettings();
     }
 
+    // ── Instant Replay ────────────────────────────────────────────────────────
+
+    // Restores IR switch and combo state from settings, then starts capture if
+    // the feature was previously enabled.  Called once at startup (ContextIdle).
+    private void RestoreInstantReplaySettings()
+    {
+        // Populate device combos first so they are ready before the switch fires.
+        PopulateInstantReplayCaptureDevices();
+        PopulateInstantReplayMicDevices();
+
+        // Restore buffer length combo without triggering the handler.
+        InstantReplayMinutesCombo.SelectionChanged -= InstantReplayMinutesCombo_SelectionChanged;
+        InstantReplayMinutesCombo.SelectedIndex     = Math.Clamp(_settings.InstantReplayMinutes - 1, 0, 4);
+        InstantReplayMinutesCombo.SelectionChanged += InstantReplayMinutesCombo_SelectionChanged;
+
+        // Restore include-mic checkbox without triggering its handlers.
+        InstantReplayIncludeMicCheckBox.Checked   -= InstantReplayIncludeMicCheckBox_Checked;
+        InstantReplayIncludeMicCheckBox.Unchecked -= InstantReplayIncludeMicCheckBox_Unchecked;
+        InstantReplayIncludeMicCheckBox.IsChecked  = _settings.InstantReplayIncludeMicrophone;
+        InstantReplayIncludeMicCheckBox.Checked   += InstantReplayIncludeMicCheckBox_Checked;
+        InstantReplayIncludeMicCheckBox.Unchecked += InstantReplayIncludeMicCheckBox_Unchecked;
+
+        UpdateInstantReplayUI(running: false);
+        RefreshInstantReplayHotkeyDisplay();
+
+        // Setting IsChecked = true triggers InstantReplaySwitch_Checked → EnableInstantReplay().
+        if (_settings.InstantReplayEnabled)
+            InstantReplaySwitch.IsChecked = true;
+    }
+
+    private void PopulateInstantReplayMicDevices()
+    {
+        if (InstantReplayMicDeviceCombo is null) return;
+        try
+        {
+            var mics = MicDevice.GetAll();
+            InstantReplayMicDeviceCombo.SelectionChanged -= InstantReplayMicDeviceCombo_SelectionChanged;
+            InstantReplayMicDeviceCombo.ItemsSource = mics;
+
+            if (mics.Count > 0)
+            {
+                // Try to match by saved name first, fall back to device number, then index 0.
+                int idx = -1;
+                if (!string.IsNullOrEmpty(_settings.InstantReplayMicDeviceName))
+                    for (int i = 0; i < mics.Count; i++)
+                        if (mics[i].Name == _settings.InstantReplayMicDeviceName) { idx = i; break; }
+                if (idx < 0 && _settings.InstantReplayMicDeviceNumber.HasValue)
+                    for (int i = 0; i < mics.Count; i++)
+                        if (mics[i].Number == _settings.InstantReplayMicDeviceNumber.Value) { idx = i; break; }
+                InstantReplayMicDeviceCombo.SelectedIndex = idx >= 0 ? idx : 0;
+            }
+
+            InstantReplayMicDeviceCombo.SelectionChanged += InstantReplayMicDeviceCombo_SelectionChanged;
+        }
+        catch { /* mic enumeration failed — combo stays empty */ }
+    }
+
+    private void PopulateInstantReplayCaptureDevices()
+    {
+        // Double guard: detach the handler AND set the flag so SelectionChanged
+        // cannot start a capture restart while we are rebuilding the item list.
+        bool wasPending = _irOperationPending;
+        _irOperationPending = true;
+        InstantReplayCaptureDeviceCombo.SelectionChanged -= InstantReplayCaptureDeviceCombo_SelectionChanged;
+        try
+        {
+            var devices = IrCaptureDevice.GetAll();
+            InstantReplayCaptureDeviceCombo.ItemsSource = devices;
+
+            int idx = 0; // default: "Default output device"
+            if (_settings.InstantReplayCaptureDeviceId is not null)
+            {
+                for (int i = 0; i < devices.Count; i++)
+                {
+                    if (devices[i].Id == _settings.InstantReplayCaptureDeviceId)
+                    { idx = i; break; }
+                }
+            }
+            InstantReplayCaptureDeviceCombo.SelectedIndex = idx;
+        }
+        finally
+        {
+            InstantReplayCaptureDeviceCombo.SelectionChanged += InstantReplayCaptureDeviceCombo_SelectionChanged;
+            _irOperationPending = wasPending; // restore (false on startup, unchanged if nested)
+        }
+    }
+
+    // Programmatically reverts the toggle switch to OFF without firing its handlers,
+    // used when Enable fails or when Stop is called from a non-switch code path.
+    private void RevertInstantReplaySwitchToOff()
+    {
+        InstantReplaySwitch.Checked   -= InstantReplaySwitch_Checked;
+        InstantReplaySwitch.Unchecked -= InstantReplaySwitch_Unchecked;
+        InstantReplaySwitch.IsChecked  = false;
+        InstantReplaySwitch.Checked   += InstantReplaySwitch_Checked;
+        InstantReplaySwitch.Unchecked += InstantReplaySwitch_Unchecked;
+    }
+
+    // Updates every IR-related control to match the running state.
+    // The toggle switch IsEnabled is intentionally never changed here — the user
+    // must always be able to turn Instant Replay OFF regardless of other state.
+    private void UpdateInstantReplayUI(bool running)
+    {
+        if (InstantReplayStatusDot is not null)
+            InstantReplayStatusDot.Background = running
+                ? new SolidColorBrush(Color.FromRgb(0xD3, 0x2F, 0x2F))
+                : new SolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E));
+
+        if (InstantReplayStatusText is not null)
+            InstantReplayStatusText.Text = running
+                ? "Instant Replay: ON — capturing system audio"
+                : "Instant Replay: OFF";
+
+        if (InstantReplayRecPill is not null)
+            InstantReplayRecPill.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
+
+        // Sync the toggle switch checked state without triggering its handlers.
+        // IsEnabled is NOT changed — the toggle must always remain interactive.
+        if (InstantReplaySwitch is not null)
+        {
+            InstantReplaySwitch.Checked   -= InstantReplaySwitch_Checked;
+            InstantReplaySwitch.Unchecked -= InstantReplaySwitch_Unchecked;
+            InstantReplaySwitch.IsChecked  = running;
+            InstantReplaySwitch.Checked   += InstantReplaySwitch_Checked;
+            InstantReplaySwitch.Unchecked += InstantReplaySwitch_Unchecked;
+        }
+
+        // Lock all settings controls while IR is running.
+        if (InstantReplayMinutesCombo is not null)
+            InstantReplayMinutesCombo.IsEnabled = !running;
+        if (InstantReplayCaptureDeviceCombo is not null)
+            InstantReplayCaptureDeviceCombo.IsEnabled = !running;
+        if (InstantReplayIncludeMicCheckBox is not null)
+            InstantReplayIncludeMicCheckBox.IsEnabled = !running;
+        if (InstantReplayMicDeviceCombo is not null)
+            InstantReplayMicDeviceCombo.IsEnabled = !running;
+
+        // Clear mic signal text when stopping.
+        if (!running && InstantReplayMicSignalText is not null)
+            InstantReplayMicSignalText.Text = "";
+
+        // Show the "turn IR OFF to change" hint only while running.
+        if (InstantReplayLockedHint is not null)
+            InstantReplayLockedHint.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
+
+        // Start or stop the 500 ms signal level poll.
+        if (running)
+        {
+            if (_irSignalTimer is null)
+            {
+                _irSignalTimer       = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+                _irSignalTimer.Tick += OnIrSignalTick;
+            }
+            _irSignalTimer.Start();
+        }
+        else
+        {
+            _irSignalTimer?.Stop();
+            if (InstantReplaySignalText is not null)
+                InstantReplaySignalText.Text = "";
+        }
+    }
+
+    // Fires every 500 ms while Instant Replay is running; updates the signal indicator.
+    private void OnIrSignalTick(object? sender, EventArgs e)
+    {
+        if (_instantReplay is null || !_instantReplay.IsRunning)
+        {
+            _irSignalTimer?.Stop();
+            if (InstantReplaySignalText is not null) InstantReplaySignalText.Text = "";
+            return;
+        }
+
+        if (InstantReplaySignalText is null) return;
+
+        float meterPeak     = _instantReplay.DeviceMasterPeak;  // AudioMeterInformation COM read
+        bool  hasSignal     = _instantReplay.IsReceivingAudio;
+        int   callbackCount = _instantReplay.DataAvailableCount;
+        float capturePeak   = _instantReplay.LastPeak;
+
+        if (hasSignal)
+        {
+            float dbfs = capturePeak > 0f
+                ? 20f * (float)Math.Log10(capturePeak)
+                : -96f;
+            InstantReplaySignalText.Text =
+                $"Capturing audio  ·  Peak: {dbfs:F1} dBFS  ·  {_instantReplay.CaptureDeviceName}";
+            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)); // green
+        }
+        else if (callbackCount == 0)
+        {
+            InstantReplaySignalText.Text =
+                $"Waiting for audio data from: {_instantReplay.CaptureDeviceName}\n" +
+                $"Format: {_instantReplay.CaptureFormatDesc}";
+            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x00)); // amber
+        }
+        else if (meterPeak > 0.01f)
+        {
+            InstantReplaySignalText.Text =
+                $"Device meter: {meterPeak * 100:F0}% — audio detected but capture is silent\n" +
+                $"Format: {_instantReplay.CaptureFormatDesc}  ·  Callbacks: {callbackCount}  ·  Last: {_instantReplay.LastBytesRecorded} B";
+            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36)); // red
+        }
+        else
+        {
+            InstantReplaySignalText.Text =
+                $"No audio on: {_instantReplay.CaptureDeviceName}\n" +
+                $"Meter: {meterPeak * 100:F0}%  ·  Callbacks: {callbackCount}  ·  Last: {_instantReplay.LastBytesRecorded} B\n" +
+                $"Select the output device that is currently playing audio.";
+            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x00)); // amber
+        }
+
+        // Update mic signal indicator.
+        if (InstantReplayMicSignalText is not null)
+        {
+            if (!_settings.InstantReplayIncludeMicrophone)
+            {
+                InstantReplayMicSignalText.Text = "";
+            }
+            else if (_instantReplay.IsMicRunning)
+            {
+                if (_instantReplay.IsMicReceivingAudio)
+                {
+                    InstantReplayMicSignalText.Text       = "Mic: active";
+                    InstantReplayMicSignalText.Foreground = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50));
+                }
+                else
+                {
+                    InstantReplayMicSignalText.Text       = "Mic: no signal — speak into microphone or check device";
+                    InstantReplayMicSignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x00));
+                }
+            }
+            else
+            {
+                InstantReplayMicSignalText.Text       = "Mic: not started — mic capture failed (check Microphone device)";
+                InstantReplayMicSignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x00));
+            }
+        }
+    }
+
+    private void RefreshInstantReplayHotkeyDisplay()
+    {
+        if (InstantReplayClipHotkeyText is not null)
+            InstantReplayClipHotkeyText.Text = _settings.InstantReplayClipHotkey?.DisplayText ?? "No hotkey";
+        if (ClearInstantReplayClipHotkeyButton is not null)
+            ClearInstantReplayClipHotkeyButton.IsEnabled = _settings.InstantReplayClipHotkey is not null;
+
+        if (InstantReplayToggleHotkeyText is not null)
+            InstantReplayToggleHotkeyText.Text = _settings.InstantReplayToggleHotkey?.DisplayText ?? "No hotkey";
+        if (ClearInstantReplayToggleHotkeyButton is not null)
+            ClearInstantReplayToggleHotkeyButton.IsEnabled = _settings.InstantReplayToggleHotkey is not null;
+    }
+
+    // ── Toggle handlers ───────────────────────────────────────────────────────
+
+    private void InstantReplaySwitch_Checked(object sender, RoutedEventArgs e)   => EnableInstantReplay();
+    private void InstantReplaySwitch_Unchecked(object sender, RoutedEventArgs e) => DisableInstantReplay();
+
+    // Called by the hotkey (Toggle ON/OFF); keeps the switch in sync.
+    private void ToggleInstantReplay()
+    {
+        if (_instantReplay is null || !_instantReplay.IsRunning)
+            EnableInstantReplay();
+        else
+            DisableInstantReplay();
+    }
+
+    private void EnableInstantReplay()
+    {
+        if (_irOperationPending) return;
+        _instantReplay ??= new InstantReplayService(_settings.InstantReplayMinutes);
+        try
+        {
+            _instantReplay.Start(_settings.InstantReplayCaptureDeviceId);
+
+            // Optionally start microphone capture if the user has enabled it.
+            bool micFailed = false;
+            if (_settings.InstantReplayIncludeMicrophone
+                && InstantReplayMicDeviceCombo?.SelectedItem is MicDevice irMic)
+            {
+                try
+                {
+                    _instantReplay.StartMic(irMic.Number, _settings.InstantReplayMicVolume);
+                }
+                catch (Exception micEx)
+                {
+                    // Mic failure does not abort system capture — IR stays ON, warning shown.
+                    micFailed = true;
+                    StatusText.Text = $"Instant Replay is ON — mic capture failed: {micEx.Message}";
+                }
+            }
+
+            _settings.InstantReplayEnabled = true;
+            SaveSettings();
+            UpdateInstantReplayUI(running: true);
+            if (!micFailed)
+            {
+                StatusText.Text = _instantReplay.FallbackWarning is { } w
+                    ? $"Instant Replay is ON — Warning: {w}"
+                    : $"Instant Replay is ON — {_instantReplay.CaptureDeviceName}  ·  {_instantReplay.CaptureFormatDesc}";
+            }
+        }
+        catch (Exception ex)
+        {
+            // Start() failed — dispose on a background thread to avoid STA deadlock.
+            var failedService = _instantReplay;
+            _instantReplay = null;
+            _settings.InstantReplayEnabled = false;
+            SaveSettings();
+            UpdateInstantReplayUI(running: false); // also reverts switch
+            StatusText.Text = $"Instant Replay failed to start: {ex.Message}";
+            if (failedService is not null)
+                _ = Task.Run(() => failedService.Dispose());
+        }
+    }
+
+    private void DisableInstantReplay()
+    {
+        // Null the field immediately so the rest of the UI sees IR as off right away,
+        // then dispose on a background thread — WasapiCapture.Dispose() calls
+        // captureThread.Join() which would otherwise cause a COM STA deadlock on
+        // the UI thread (the WASAPI thread needs STA to complete COM cleanup).
+        var service = _instantReplay;
+        _instantReplay = null;
+        _settings.InstantReplayEnabled = false;
+        SaveSettings();
+        UpdateInstantReplayUI(running: false); // stops signal timer, reverts switch
+        StatusText.Text = "Instant Replay is OFF.";
+        if (service is not null)
+            _ = Task.Run(() => service.Dispose());
+    }
+
+    // ── Buffer length ─────────────────────────────────────────────────────────
+    // Both combos (buffer length and capture device) are disabled while IR is ON,
+    // so these handlers only ever fire while IR is OFF.  Just persist the setting;
+    // it takes effect on the next Enable.
+
+    private void InstantReplayMinutesCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_irOperationPending) return;
+        int newMinutes = InstantReplayMinutesCombo.SelectedIndex + 1;
+        if (_settings.InstantReplayMinutes == newMinutes) return;
+        _settings.InstantReplayMinutes = newMinutes;
+        SaveSettings();
+    }
+
+    private void InstantReplayCaptureDeviceCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_irOperationPending) return;
+        if (InstantReplayCaptureDeviceCombo.SelectedItem is not IrCaptureDevice device) return;
+        string? newId = device.Id;
+        if (_settings.InstantReplayCaptureDeviceId == newId) return;
+        _settings.InstantReplayCaptureDeviceId = newId;
+        SaveSettings();
+    }
+
+    private void InstantReplayIncludeMicCheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        _settings.InstantReplayIncludeMicrophone = true;
+        SaveSettings();
+    }
+
+    private void InstantReplayIncludeMicCheckBox_Unchecked(object sender, RoutedEventArgs e)
+    {
+        _settings.InstantReplayIncludeMicrophone = false;
+        SaveSettings();
+    }
+
+    private void InstantReplayMicDeviceCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_irOperationPending) return;
+        if (InstantReplayMicDeviceCombo.SelectedItem is not MicDevice mic) return;
+        _settings.InstantReplayMicDeviceName   = mic.Name;
+        _settings.InstantReplayMicDeviceNumber = mic.Number;
+        SaveSettings();
+    }
+
+    // ── Save Clip ─────────────────────────────────────────────────────────────
+
+    private void SaveInstantReplayClip_Click(object sender, RoutedEventArgs e) => SaveInstantReplayClip();
+
+    // Saves the buffered audio as a WAV, adds it to the active deck, refreshes
+    // UI/Mini Mode, and opens the Sound Editor for trimming and naming.
+    private void SaveInstantReplayClip()
+    {
+        if (_instantReplay is null || !_instantReplay.IsRunning)
+        {
+            StatusText.Text = "Instant Replay is not running — enable it in Settings first.";
+            return;
+        }
+
+        var sysSamples = _instantReplay.GetRecentSamples();
+        if (sysSamples is null || sysSamples.Length == 0)
+        {
+            StatusText.Text = "No audio captured yet — wait a moment after enabling Instant Replay.";
+            return;
+        }
+
+        // Retrieve mic ring if mic capture was active.
+        float[]? micSamples = null;
+        if (_settings.InstantReplayIncludeMicrophone && _instantReplay.IsMicRunning)
+            micSamples = _instantReplay.GetRecentMicSamples();
+
+        // Mix mic into system audio (sample-by-sample sum, clamped to [-1, 1]).
+        // If mic has no data, pass system audio through unchanged.
+        float[] samples;
+        string? mixNote = null;
+        if (micSamples is { Length: > 0 })
+        {
+            int mixLen = Math.Max(sysSamples.Length, micSamples.Length);
+            samples = new float[mixLen];
+            for (int i = 0; i < mixLen; i++)
+            {
+                float s = i < sysSamples.Length ? sysSamples[i] : 0f;
+                float m = i < micSamples.Length ? micSamples[i] : 0f;
+                float v = s + m;
+                samples[i] = v > 1f ? 1f : v < -1f ? -1f : v;
+            }
+        }
+        else
+        {
+            samples = sysSamples;
+            if (_settings.InstantReplayIncludeMicrophone && _instantReplay.IsMicRunning)
+                mixNote = "Microphone had no signal; saved system audio only.";
+        }
+
+        var timestamp = DateTime.Now;
+        var name      = $"Clip {timestamp:yyyy-MM-dd HH-mm-ss}";
+        var fileName  = name + ".wav";
+        var dir       = AppPaths.SoundsDirectory;
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, fileName);
+
+        try
+        {
+            using var writer = new WaveFileWriter(path, CachedSound.TargetFormat);
+            writer.WriteSamples(samples, 0, samples.Length);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Save Clip failed: {ex.Message}";
+            return;
+        }
+
+        CachedSound cached;
+        try
+        {
+            cached = new CachedSound(path);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Clip saved but could not preload audio: {ex.Message}";
+            return;
+        }
+
+        var item = new SoundItem
+        {
+            DisplayName = name,
+            FilePath    = path,
+            Category    = "Clips",
+            Volume      = 1.0f,
+            CreatedAt   = timestamp
+        };
+
+        _cachedSounds[item.Id] = cached;
+        _library.Add(item);
+        DeckService.Save(_decks);
+        RefreshCategoryFilter();
+        FilterSoundsPanel();
+        ActiveDeckChanged?.Invoke(_activeDeck); // refresh Mini Mode
+
+        string saveNote =
+            !_instantReplay.IsReceivingAudio ? " (WARNING: no system audio signal — check Capture device)" :
+            mixNote is not null              ? $" ({mixNote})" :
+                                               "";
+        StatusText.Text = $"Clip saved: {item.DisplayName}{saveNote}";
+
+        EditSound(item); // open Sound Editor for rename / trim / fade
+    }
+
+    // ── Hotkey assignment ─────────────────────────────────────────────────────
+
+    private void SetInstantReplayClipHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        if (_hotkeyService is null)
+        {
+            MessageBox.Show("Hotkeys are not available in this session.", "Hotkeys",
+                             MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var dlg = new HotkeyCaptureDialog(this, "Instant Replay: Save Clip", _settings.InstantReplayClipHotkey);
+        if (dlg.ShowDialog() != true) return;
+
+        if (dlg.WasCleared)
+        {
+            _settings.InstantReplayClipHotkey = null;
+            ReregisterAllHotkeysAndReport("ir-clip-clear");
+            SaveSettings();
+            RefreshInstantReplayHotkeyDisplay();
+            StatusText.Text = "Instant Replay clip hotkey cleared.";
+            return;
+        }
+
+        var newBinding = dlg.ResultBinding;
+        if (newBinding is null) return;
+
+        var owner = FindHotkeyOwnerForIR(newBinding, excludeClip: true, excludeToggle: false);
+        if (owner is not null)
+        {
+            MessageBox.Show(
+                $"\"{newBinding.DisplayText}\" is already assigned to \"{owner}\".\n\nChoose a different combination.",
+                "Hotkey already in use", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var previous = _settings.InstantReplayClipHotkey;
+        _settings.InstantReplayClipHotkey = newBinding;
+
+        var result = ReregisterAllHotkeysAndReport("ir-clip-set");
+        if (result.InstantReplayClipFailed)
+        {
+            _settings.InstantReplayClipHotkey = previous;
+            ReregisterAllHotkeysAndReport("ir-clip-set-rollback");
+            MessageBox.Show(
+                $"Windows could not register \"{newBinding.DisplayText}\".\n\n" +
+                "It may already be used by another application. Choose a different combination.",
+                "Hotkey unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        SaveSettings();
+        RefreshInstantReplayHotkeyDisplay();
+        StatusText.Text = $"Instant Replay clip hotkey set: {newBinding.DisplayText}";
+    }
+
+    private void ClearInstantReplayClipHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settings.InstantReplayClipHotkey is null) return;
+        _settings.InstantReplayClipHotkey = null;
+        ReregisterAllHotkeysAndReport("ir-clip-clear");
+        SaveSettings();
+        RefreshInstantReplayHotkeyDisplay();
+        StatusText.Text = "Instant Replay clip hotkey cleared.";
+    }
+
+    private void SetInstantReplayToggleHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        if (_hotkeyService is null)
+        {
+            MessageBox.Show("Hotkeys are not available in this session.", "Hotkeys",
+                             MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var dlg = new HotkeyCaptureDialog(this, "Instant Replay: Toggle ON/OFF", _settings.InstantReplayToggleHotkey);
+        if (dlg.ShowDialog() != true) return;
+
+        if (dlg.WasCleared)
+        {
+            _settings.InstantReplayToggleHotkey = null;
+            ReregisterAllHotkeysAndReport("ir-toggle-clear");
+            SaveSettings();
+            RefreshInstantReplayHotkeyDisplay();
+            StatusText.Text = "Instant Replay toggle hotkey cleared.";
+            return;
+        }
+
+        var newBinding = dlg.ResultBinding;
+        if (newBinding is null) return;
+
+        var owner = FindHotkeyOwnerForIR(newBinding, excludeClip: false, excludeToggle: true);
+        if (owner is not null)
+        {
+            MessageBox.Show(
+                $"\"{newBinding.DisplayText}\" is already assigned to \"{owner}\".\n\nChoose a different combination.",
+                "Hotkey already in use", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var previous = _settings.InstantReplayToggleHotkey;
+        _settings.InstantReplayToggleHotkey = newBinding;
+
+        var result = ReregisterAllHotkeysAndReport("ir-toggle-set");
+        if (result.InstantReplayToggleFailed)
+        {
+            _settings.InstantReplayToggleHotkey = previous;
+            ReregisterAllHotkeysAndReport("ir-toggle-set-rollback");
+            MessageBox.Show(
+                $"Windows could not register \"{newBinding.DisplayText}\".\n\n" +
+                "It may already be used by another application. Choose a different combination.",
+                "Hotkey unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        SaveSettings();
+        RefreshInstantReplayHotkeyDisplay();
+        StatusText.Text = $"Instant Replay toggle hotkey set: {newBinding.DisplayText}";
+    }
+
+    private void ClearInstantReplayToggleHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settings.InstantReplayToggleHotkey is null) return;
+        _settings.InstantReplayToggleHotkey = null;
+        ReregisterAllHotkeysAndReport("ir-toggle-clear");
+        SaveSettings();
+        RefreshInstantReplayHotkeyDisplay();
+        StatusText.Text = "Instant Replay toggle hotkey cleared.";
+    }
+
     private Border BuildPadCard(SoundItem item)
     {
         var capturedItem = item;
@@ -2393,6 +3035,42 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             && _settings.StopAllHotkey.Modifiers == binding.Modifiers
             && _settings.StopAllHotkey.Key == binding.Key)
             return "Stop All Sounds";
+
+        if (_settings.InstantReplayClipHotkey is not null
+            && _settings.InstantReplayClipHotkey.Modifiers == binding.Modifiers
+            && _settings.InstantReplayClipHotkey.Key == binding.Key)
+            return "Instant Replay: Save Clip";
+
+        if (_settings.InstantReplayToggleHotkey is not null
+            && _settings.InstantReplayToggleHotkey.Modifiers == binding.Modifiers
+            && _settings.InstantReplayToggleHotkey.Key == binding.Key)
+            return "Instant Replay: Toggle ON/OFF";
+
+        return null;
+    }
+
+    // Conflict check for IR hotkey dialogs — same as FindHotkeyOwner but allows
+    // excluding one of the two IR slots to avoid "conflicts with itself" false positives.
+    private string? FindHotkeyOwnerForIR(HotkeyBinding binding, bool excludeClip, bool excludeToggle)
+    {
+        var sound = _library.FirstOrDefault(x => x.Hotkey is not null
+                        && x.Hotkey.Modifiers == binding.Modifiers && x.Hotkey.Key == binding.Key);
+        if (sound is not null) return sound.DisplayName;
+
+        if (_settings.StopAllHotkey is not null
+            && _settings.StopAllHotkey.Modifiers == binding.Modifiers
+            && _settings.StopAllHotkey.Key == binding.Key)
+            return "Stop All Sounds";
+
+        if (!excludeClip && _settings.InstantReplayClipHotkey is not null
+            && _settings.InstantReplayClipHotkey.Modifiers == binding.Modifiers
+            && _settings.InstantReplayClipHotkey.Key == binding.Key)
+            return "Instant Replay: Save Clip";
+
+        if (!excludeToggle && _settings.InstantReplayToggleHotkey is not null
+            && _settings.InstantReplayToggleHotkey.Modifiers == binding.Modifiers
+            && _settings.InstantReplayToggleHotkey.Key == binding.Key)
+            return "Instant Replay: Toggle ON/OFF";
 
         return null;
     }
@@ -3495,6 +4173,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         // Close Mini Mode before disposing audio engines.
         _miniWindow?.ForceClose();
         _miniWindow = null;
+
+        // Dispose the IR service on a background thread — WasapiCapture.Dispose() calls
+        // captureThread.Join(), which would deadlock the STA thread if called here.
+        // The process exits after Window_Closing returns; the background thread or the
+        // OS will clean up the COM/WASAPI resources if Dispose doesn't finish in time.
+        var irService = _instantReplay;
+        _instantReplay = null;
+        if (irService is not null)
+            _ = Task.Run(() => irService.Dispose());
 
         _trayIcon?.Dispose();
         _trayIcon = null;

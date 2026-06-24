@@ -1,4 +1,4 @@
-# SoundPad v1.8.0 — Release Checklist
+# SoundPad v1.9.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.8.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.9.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.8.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.8.0), and publisher
+- [ ] Run `SoundPad-Setup-1.9.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.9.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -250,7 +250,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.8.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.9.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
@@ -840,6 +840,71 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.9.0 new features
+
+### Export as MP3 — context menu presence
+
+- [ ] Right-click any sound in **List View** → context menu shows "Export as MP3…" between "Reveal in Folder" and the separator above "Remove"
+- [ ] Right-click any sound in **Grid View** → same menu item present at the same position
+- [ ] Mini Mode pads have no context menu — no action needed there
+
+### Export as MP3 — dialog behavior
+
+- [ ] Click "Export as MP3…" → Save As dialog opens with the sound's display name as the default filename, `.mp3` extension, "MP3 Audio (*.mp3)|*.mp3" filter
+- [ ] Click Cancel in the Save As dialog → nothing happens, status bar unchanged, no file created
+- [ ] Choose a path and click Save → status bar shows "Exporting MP3…" briefly then "Exported MP3: filename.mp3"
+
+### Export as MP3 — source file types
+
+- [ ] Export an imported **MP3** file → valid MP3 produced (re-rendered, not a file copy)
+- [ ] Export an imported **WAV** file → valid MP3 produced
+- [ ] Export an Instant Replay **WAV clip** (saved from Instant Replay) → valid MP3 produced
+
+### Export as MP3 — edits applied
+
+- [ ] Export a sound with **TrimStart=2s, TrimEnd=5s** → MP3 is ~3 seconds; content matches the trimmed region
+- [ ] Export a sound with **FadeIn=1s** → audible fade-in ramp at the start of the exported MP3
+- [ ] Export a sound with **FadeOut=1s** → audible fade-out ramp at the end of the exported MP3
+- [ ] Export a sound with **Volume=50%** → exported MP3 is noticeably quieter than a 100% export of the same sound
+- [ ] Export a sound with all four edits applied simultaneously → all edits reflected in the MP3
+
+### Export as MP3 — library integrity
+
+- [ ] After export: sound still appears in the library with the same name, category, and settings
+- [ ] After export: no duplicate sound added to the library
+- [ ] After export: original audio file on disk is unchanged (verify via Reveal in Folder → check file date/size)
+
+### Export as MP3 — duplicate export guard
+
+- [ ] Trigger export on a sound; immediately right-click the same sound again → "Export as MP3…" is greyed out while export is in progress
+- [ ] After the export finishes, right-click again → "Export as MP3…" is enabled again
+
+### Export as MP3 — error handling
+
+- [ ] Export to a **read-only directory** (e.g. `C:\Windows\`) → status bar shows "Export failed: …", no crash
+- [ ] After a failed export: no partial file left at the chosen output path (temp file cleaned up)
+- [ ] After a failed export: if a file already existed at the output path, it is still intact
+
+### Export as MP3 — output file quality
+
+- [ ] Open exported MP3 in an external media player (Windows Media Player, VLC, etc.) → file plays correctly
+- [ ] Exported MP3 duration matches the trimmed length (or full length if no trim)
+- [ ] Exported MP3 has no leading/trailing silence beyond what trim/fade settings produce
+
+### Regression — no v1.8 regressions introduced by v1.9 changes
+
+- [ ] Sound Editor (Edit Sound dialog) opens and saves trim/fade correctly
+- [ ] Instant Replay clips can still be saved and played back
+- [ ] Mini Mode opens, shows pads, and plays sounds correctly
+- [ ] Grid drag-and-drop reorder still works
+- [ ] External file-drop import still works in both views
+- [ ] Hotkeys (sound, Stop All, Instant Replay) still fire correctly
+- [ ] Mic passthrough is unaffected
+- [ ] Monitor and Virtual output routing are unaffected
+- [ ] In-app updater still functions
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -855,12 +920,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.8.0
-  git push origin v1.8.0
+  git tag v1.9.0
+  git push origin v1.9.0
   ```
-- [ ] Create GitHub Release from tag `v1.8.0`
-- [ ] Add release notes summarising v1.8.0 features
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.8.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.9.0`
+- [ ] Add release notes summarising v1.9.0 features
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.9.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

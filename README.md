@@ -38,7 +38,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.8.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.9.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -301,6 +301,47 @@ Both hotkeys fire globally (even when the app is minimised or hidden in the tray
 - No microphone is recorded unless Include microphone is enabled.
 - No audio is routed anywhere — Instant Replay only writes to a local WAV file on Save Clip.
 - Old `settings.json` files without Instant Replay fields load correctly — all fields default to OFF.
+
+---
+
+## Export as MP3
+
+Right-click any sound in **List View** or **Grid View** and choose **Export as MP3…** to save an external MP3 file of that sound.
+
+### What gets exported
+
+Export renders the version you actually hear in SoundPad — not just a copy of the original file:
+
+- **Trim Start / Trim End** — only the trimmed region is exported
+- **Fade In / Fade Out** — volume ramps are baked into the exported audio
+- **Volume** — per-sound volume (including the perceptual power-2 curve) is applied
+
+Even if the source file is already an MP3, SoundPad re-renders it through the edit pipeline so the exported file always reflects your edits.
+
+### Export behavior
+
+- A **Save As** dialog lets you choose the output file name and location.
+- The default file name is the sound's display name, sanitised for Windows.
+- Encoding uses the **Windows Media Foundation** built-in MP3 encoder (no external tools or bundled binaries required).
+- Export bitrate: **192 kbps**.
+- A safe temp-file flow is used: SoundPad encodes to a temporary file first, then replaces the final file only after a successful encode. If encoding fails, the temp file is deleted and the original final path is not touched.
+- While an export is in progress, the **Export as MP3…** menu item for that sound is greyed out. It re-enables when the export finishes.
+- Status bar shows **"Exporting MP3…"** while running and **"Exported MP3: filename.mp3"** on success.
+
+### What is not affected
+
+- The sound in the SoundPad library is **not modified**.
+- No duplicate sound is added to the library.
+- The original audio file on disk is **not modified**.
+
+### Works for
+
+- Any imported sound (MP3, WAV, OGG, FLAC, AAC)
+- Instant Replay WAV clips saved from the Instant Replay feature
+
+### Future
+
+Export as WAV, batch export, and selectable bitrate are planned for a later version.
 
 ---
 

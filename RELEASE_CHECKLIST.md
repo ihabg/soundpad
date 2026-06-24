@@ -1,4 +1,4 @@
-# SoundPad v1.10.0 — Release Checklist
+# SoundPad v1.10.1 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.10.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.10.1.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.10.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.10.0), and publisher
+- [ ] Run `SoundPad-Setup-1.10.1.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.10.1), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -250,7 +250,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.10.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.10.1) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
@@ -1018,7 +1018,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 - [ ] Open the Sound Editor on a sound that has never had blocks edited → works exactly as before (single block spanning full trim range)
 - [ ] Edit Trim Start / Trim End via text fields on an un-blocked sound → trims correctly
-- [ ] Old sounds play without any change to their audio output after upgrading to v1.10.0
+- [ ] Old sounds play without any change to their audio output after upgrading to v1.10.1
 
 ### Regression: v1.9 and earlier features unaffected
 
@@ -1049,12 +1049,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.10.0
-  git push origin v1.10.0
+  git tag v1.10.1
+  git push origin v1.10.1
   ```
-- [ ] Create GitHub Release from tag `v1.10.0`
-- [ ] Add release notes summarising v1.10.0 features
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.10.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.10.1`
+- [ ] Add release notes summarising v1.10.1 hotfix
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.10.1.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

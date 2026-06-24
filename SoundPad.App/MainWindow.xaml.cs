@@ -3060,7 +3060,69 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         DeckService.Save(_decks);
         RefreshCategoryFilter();
         FilterSoundsPanel();
-        StatusText.Text = $"Removed: {name}";
+        var fileMsg = TryDeleteSoundFileIfUnused(item);
+        StatusText.Text = fileMsg is null
+            ? $"Removed: {name}"
+            : $"Removed: {name}. {fileMsg}";
+    }
+
+    private string? TryDeleteSoundFileIfUnused(SoundItem removedItem)
+    {
+        if (string.IsNullOrWhiteSpace(removedItem.FilePath))
+            return null;
+
+        string fullPath;
+        try   { fullPath = Path.GetFullPath(removedItem.FilePath); }
+        catch { return null; }
+
+        // Only delete files inside %AppData%\SoundPad\Sounds
+        string managedDir = Path.GetFullPath(AppPaths.SoundsDirectory);
+        if (!managedDir.EndsWith(Path.DirectorySeparatorChar))
+            managedDir += Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(managedDir, StringComparison.OrdinalIgnoreCase))
+            return "External file was not deleted.";
+
+        // _library.Remove(item) already ran, so _decks now reflects the post-removal state.
+        // If any remaining sound in any deck still points to this path, keep the file.
+        bool usedElsewhere = _decks
+            .SelectMany(d => d.Sounds)
+            .Any(s =>
+            {
+                if (string.IsNullOrWhiteSpace(s.FilePath)) return false;
+                try   { return string.Equals(Path.GetFullPath(s.FilePath), fullPath, StringComparison.OrdinalIgnoreCase); }
+                catch { return false; }
+            });
+
+        if (usedElsewhere)
+            return "Audio file kept — also used by another sound.";
+
+        if (!File.Exists(fullPath))
+            return "Audio file was already missing.";
+
+        try
+        {
+            Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(
+                fullPath,
+                Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
+                Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+            return "Audio file deleted.";
+        }
+        catch (FileNotFoundException)
+        {
+            return "Audio file was already missing.";
+        }
+        catch (IOException ex)
+        {
+            return $"Audio file could not be deleted: {ex.Message}";
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return $"Audio file could not be deleted: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            return $"Audio file could not be deleted: {ex.Message}";
+        }
     }
 
     // ── Duplicate Sound ───────────────────────────────────────────────────────

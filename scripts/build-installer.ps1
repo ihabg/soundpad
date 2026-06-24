@@ -57,7 +57,7 @@ Write-Host "  Found: $isccPath" -ForegroundColor Gray
 
 # Compile installer
 $issPath      = Join-Path $root "installer\SoundPad.iss"
-$outInstaller = Join-Path $root "artifacts\installer\SoundPad-Setup-1.9.0.exe"
+$outInstaller = Join-Path $root "artifacts\installer\SoundPad-Setup-1.10.0.exe"
 
 Write-Host "  Script: $issPath" -ForegroundColor Gray
 Write-Host ""

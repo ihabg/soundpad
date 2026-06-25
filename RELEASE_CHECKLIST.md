@@ -1,4 +1,4 @@
-# SoundPad v1.13.0 — Release Checklist
+# SoundPad v1.14.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.13.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.14.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.13.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.13.0), and publisher
+- [ ] Run `SoundPad-Setup-1.14.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.14.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -250,7 +250,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.13.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.14.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
@@ -1306,6 +1306,117 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.14.0 new features
+
+### Audio Effects — no-effects regression
+
+- [ ] Open any existing sound that has no effects set → Edit → Effects section shows Reverse unchecked, Normalize unchecked, Speed at 1.00× — all defaults
+- [ ] Save with defaults → sound plays identically to before; no audio changes
+- [ ] Export as MP3 on a no-effects sound → exported audio matches the pre-v1.14.0 export exactly (no processing overhead applied)
+
+### Audio Effects — Reverse
+
+- [ ] Open a sound → check **Reverse** → click Play Preview → audio plays backwards
+- [ ] Save → play from the library → sound plays in reverse
+- [ ] Open the same sound again → Reverse checkbox is still checked (persisted)
+- [ ] Uncheck Reverse → Save → sound plays forward again
+
+### Audio Effects — Normalize
+
+- [ ] Open a quiet sound → check **Normalize** → click Play Preview → audio is noticeably louder (boosted to 0 dB peak)
+- [ ] Open a loud sound → check Normalize → Play Preview → amplitude is unchanged or slightly reduced (already at peak)
+- [ ] Save → play from the library → normalization is applied
+- [ ] Normalize checkbox persists after Save → reopen Edit → still checked
+
+### Audio Effects — Playback Speed
+
+- [ ] Open a sound → drag Speed slider to 2.0× → SpeedValueText shows "2.00×" → Play Preview → audio plays at double speed and higher pitch
+- [ ] Drag Speed slider to 0.5× → SpeedValueText shows "0.50×" → Play Preview → audio plays at half speed and lower pitch
+- [ ] Set Speed to 1.00× → Play Preview → audio plays at normal speed (no audible difference from no-effect)
+- [ ] Save with Speed = 1.50× → play from the library → correct speed applied
+- [ ] Speed value persists after Save → reopen Edit → slider is at 1.50×
+
+### Audio Effects — Reset Effects button
+
+- [ ] Set Reverse ON, Normalize ON, Speed to 1.75× → click **Reset Effects** → Reverse unchecked, Normalize unchecked, Speed returns to 1.00×
+- [ ] Reset does not auto-save — clicking Cancel after Reset discards the reset
+- [ ] Reset followed by Save → sound plays with no effects
+
+### Audio Effects — combinations
+
+- [ ] Check Reverse + Normalize → Play Preview → audio is reversed and normalized
+- [ ] Check Reverse + Speed 0.5× → Play Preview → audio is reversed at half speed
+- [ ] Check Normalize + Speed 2.0× → Play Preview → audio is normalized then sped up
+- [ ] Check all three (Reverse + Normalize + Speed 1.5×) → Play Preview → all three applied correctly; Save → plays back from library with all three effects
+
+### Audio Effects — interaction with trim, fade, and block segments
+
+- [ ] Sound with TrimStart/TrimEnd set → add Reverse → Preview → only the trimmed region plays, reversed
+- [ ] Sound with block segments → add Reverse → Preview → only the kept blocks play, in reverse order
+- [ ] Sound with FadeIn/FadeOut → add Speed 2.0× → play → fade ramps still audible at the faster speed
+- [ ] Effects + Volume slider (e.g. 50%) → play → volume reduction is applied on top of effects
+
+### Audio Effects — editor preview uses unsaved values
+
+- [ ] Open a sound with no effects → check Reverse (do not Save) → click Play Preview → audio plays in reverse (unsaved state used for preview)
+- [ ] Close the dialog without saving → play from library → sound plays forward (unchanged)
+- [ ] Set Speed to 1.75× without saving → Play Preview → preview at 1.75×; Cancel → library playback still at original speed
+
+### Audio Effects — cache behavior
+
+- [ ] Play a sound with effects → note the "Rendering effects…" status bar message on first play
+- [ ] Play the same sound again → no "Rendering…" message; playback starts immediately (cached)
+- [ ] Edit the sound → Save (even with identical settings) → play again → cache is invalidated; "Rendering…" appears once more
+- [ ] Stop All while a sound is rendering (effects) → rendering is cancelled; sound does not start playing after Stop All
+
+### Audio Effects — export
+
+- [ ] Sound with Reverse ON → Export as MP3 → exported MP3 plays in reverse
+- [ ] Sound with Normalize ON → Export as MP3 → exported MP3 is normalized
+- [ ] Sound with Speed 1.5× → Export as MP3 → exported MP3 duration is ~2/3 of the original; pitch is higher
+- [ ] Sound with all three effects → Export as MP3 → all three effects present in the export
+- [ ] Export uses cached processed audio when available (no double-render)
+
+### Audio Effects — Duplicate preserves effects
+
+- [ ] Assign Reverse + Normalize + Speed 1.25× to a sound → right-click → Duplicate
+- [ ] Open the duplicate in Edit → Reverse checked, Normalize checked, Speed shows 1.25× (all copied)
+- [ ] Play the duplicate from the library → effects applied
+- [ ] Edit the duplicate's effects → Save → original sound's effects are unchanged
+
+### Audio Effects — Backup preserves effects
+
+- [ ] Assign effects to several sounds → Settings → Export Backup → ZIP created
+- [ ] Import that backup on a clean library → imported sounds have all effect settings intact
+- [ ] Play imported sounds → effects are applied correctly
+- [ ] Import an old backup (pre-v1.14, no effect fields) → import succeeds; sounds load with no effects (Reverse=false, Normalize=false, Speed=1.0) — no crash
+
+### Audio Effects — Stop All / epoch guard
+
+- [ ] Start playing a sound that requires effects rendering → immediately press **Stop All** before rendering finishes → sound does NOT start playing after Stop All is pressed
+- [ ] After Stop All, play the same sound again → renders fresh and starts playing correctly
+
+### Audio Effects — Mini Mode
+
+- [ ] Open Mini Mode → click a pad for a sound with effects → effects are applied during Mini Mode playback
+- [ ] Stop All from Mini Mode footer → any in-progress effect render is cancelled (same epoch guard behavior)
+
+### Regression — no v1.13 regressions introduced by v1.14
+
+- [ ] Play, stop, favorites, recent, categories, add, remove, duplicate, reveal, export MP3 all work
+- [ ] Tags search and tag filter work correctly
+- [ ] Sort orders (Name A–Z, Favorites first, etc.) work correctly
+- [ ] Edit sound saves name, category, volume, trim, fade, segments correctly alongside effects
+- [ ] Pro Sound Editor opens, cuts, removes blocks, undoes/redoes correctly
+- [ ] Instant Replay saves clips, clips appear in library, hotkeys work
+- [ ] Mini Mode opens, shows pads, syncs playback state
+- [ ] Hotkeys (sound, Stop All, Instant Replay) fire correctly
+- [ ] Routing Wizard and device selection work
+- [ ] Backup export/import works for all pre-existing fields
+- [ ] In-app updater still functions
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -1321,12 +1432,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.13.0
-  git push origin v1.13.0
+  git tag v1.14.0
+  git push origin v1.14.0
   ```
-- [ ] Create GitHub Release from tag `v1.13.0`
-- [ ] Add release notes summarising v1.13.0 Search, Tags, and Better Library UX changes
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.13.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.14.0`
+- [ ] Add release notes summarising v1.14.0 Audio Effects Phase 1 changes
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.14.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

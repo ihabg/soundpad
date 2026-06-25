@@ -1319,11 +1319,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             filtered = sortKey switch
             {
-                "Name A-Z" => filtered.OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase),
-                "Name Z-A" => filtered.OrderByDescending(x => x.DisplayName, StringComparer.OrdinalIgnoreCase),
-                "Newest"   => filtered.OrderByDescending(x => x.CreatedAt),
-                "Oldest"   => filtered.OrderBy(x => x.CreatedAt),
-                _          => filtered // Manual — preserve library order
+                "Name A-Z"  => filtered.OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase),
+                "Name Z-A"  => filtered.OrderByDescending(x => x.DisplayName, StringComparer.OrdinalIgnoreCase),
+                "Newest"    => filtered.OrderByDescending(x => x.CreatedAt),
+                "Oldest"    => filtered.OrderBy(x => x.CreatedAt),
+                "Category"  => filtered.OrderBy(x => x.Category ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                                       .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase),
+                "Favorites" => filtered.OrderByDescending(x => x.IsFavorite)
+                                       .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase),
+                _           => filtered // Manual — preserve library order
             };
         }
 

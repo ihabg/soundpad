@@ -198,11 +198,13 @@
                                 <ComboBox x:Name="SortBox"
                                           Grid.Column="4"
                                           SelectionChanged="SortBox_SelectionChanged">
-                                    <ComboBoxItem Content="Manual order" Tag="Manual"/>
-                                    <ComboBoxItem Content="Name A–Z"     Tag="Name A-Z"/>
-                                    <ComboBoxItem Content="Name Z–A"     Tag="Name Z-A"/>
-                                    <ComboBoxItem Content="Newest first" Tag="Newest"/>
-                                    <ComboBoxItem Content="Oldest first" Tag="Oldest"/>
+                                    <ComboBoxItem Content="Manual order"    Tag="Manual"/>
+                                    <ComboBoxItem Content="Name A–Z"        Tag="Name A-Z"/>
+                                    <ComboBoxItem Content="Name Z–A"        Tag="Name Z-A"/>
+                                    <ComboBoxItem Content="Newest first"    Tag="Newest"/>
+                                    <ComboBoxItem Content="Oldest first"    Tag="Oldest"/>
+                                    <ComboBoxItem Content="Category"        Tag="Category"/>
+                                    <ComboBoxItem Content="Favorites first" Tag="Favorites"/>
                                 </ComboBox>
                             </Grid>
                         </StackPanel>

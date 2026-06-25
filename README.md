@@ -29,7 +29,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 - **Start with Windows** — one toggle to register SoundPad in the current-user Run key (no admin required)
 - **Settings persistence** — devices, volume, window position, and all hotkeys survive restarts
 - **Perceptual volume curve** — the volume slider feels natural (power-2 curve: 50 % UI = −12 dB)
-- **Pro Sound Editor** — CapCut-style block timeline; Select (A) and Cut (C) tools; cut splits a block without removing audio; remove blocks to ripple remaining audio together; drag block edges to trim; Undo (Ctrl+Z); zoom slider (1×–10×); draggable playhead arrow; snap cut to playhead; Fade In / Fade Out applied to the joined output; non-destructive — original files never modified; segments saved in decks.json and backups; Instant Replay clips use the same editor
+- **Pro Sound Editor** — CapCut-style block timeline; Select (A) and Cut (C) tools; cut splits a block without removing audio; remove blocks to ripple remaining audio together; drag block edges to trim; drag blocks to reorder; Undo (Ctrl+Z) and Redo (Ctrl+Y / Ctrl+Shift+Z); Copy (Ctrl+C) and Paste (Ctrl+V) blocks; time ruler above waveform; selected block info; Spacebar preview play/pause; zoom slider (1×–10×); draggable playhead arrow; snap cut to playhead; Fade In / Fade Out applied to the joined output; non-destructive — original files never modified; segments saved in decks.json and backups; Instant Replay clips use the same editor
 - **Category Manager** — create, rename, and delete custom sound categories; deleting a category with sounds prompts where to move them; chained operations resolve correctly
 - **Sound row context menu** — right-click any sound row or pad card: Edit, Favourite/Unfavourite, Duplicate (same audio file, same trim/fade/volume, no hotkey), Color (9 preset colors), Reveal in Folder, Remove
 
@@ -37,7 +37,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.10.1.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.11.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -409,6 +409,10 @@ Audio editing is **non-destructive** — the original audio file is never modifi
 
 The editor displays a compact CapCut-style block timeline. Each block represents a kept region of the original audio. Blocks are packed together with no gaps — this is the edited/played timeline. Removed blocks leave no visual hole; remaining blocks ripple left.
 
+### Time ruler
+
+A time ruler runs above the waveform canvas and shows absolute timestamps for the current view. The ruler automatically adjusts its tick spacing to match the current zoom level and scrolls in sync with the waveform so the position under the playhead is always readable.
+
 ### Tools
 
 | Tool | Shortcut | What it does |
@@ -446,14 +450,34 @@ The white dashed vertical line marks the current preview start position.
 
 When **Snap cut to playhead** is checked (default: ON) and the Cut tool is active, moving the mouse within ~10 px of the playhead snaps the cut preview hairline to the playhead position (the hairline turns bright yellow). Clicking then splits the block exactly at the playhead. Turn Snap OFF to always cut at the exact mouse position.
 
-### Undo
+### Undo / Redo
 
-Every edit (cut, remove block, trim drag) can be undone:
+Every edit (cut, remove block, trim drag, paste, and reorder) can be undone or redone:
 
-- Click the **Undo** button in the editor toolbar.
-- Or press **Ctrl+Z**.
+- Click the **Undo** button in the editor toolbar, or press **Ctrl+Z**.
+- Click the **Redo** button in the editor toolbar, or press **Ctrl+Y** / **Ctrl+Shift+Z**.
 
-The undo stack is per-session and is not persisted after the dialog closes.
+The undo/redo stacks are per-session and are not persisted after the dialog closes.
+
+### Copy / Paste block
+
+With a block selected in **Select** mode:
+
+- Press **Ctrl+C** to copy the selected block.
+- Press **Ctrl+V** to paste it as a new block appended to the end of the timeline.
+
+Pasted blocks play and export in the same sequence as all other blocks. Paste is undoable.
+
+### Block drag / reorder
+
+In **Select** mode, drag any block horizontally to move it to a new position in the timeline. A visual placeholder shows the drop target.
+
+- Reordering affects both playback and **Export as MP3** — audio is rendered in the reordered sequence.
+- Reorder is undoable.
+
+### Selected block info
+
+When a block is selected, the editor toolbar shows the block's **start time**, **end time**, and **duration**. The display updates in real time as you trim block edges or reorder blocks.
 
 ### Zoom
 
@@ -469,7 +493,7 @@ Fade In and Fade Out are applied to the full joined output:
 
 ### Preview
 
-Click **Play Preview** to hear all kept blocks joined together, with fades applied, starting from the playhead position. Plays through the Monitor Output device.
+Click **Play Preview** (or press **Spacebar**) to hear all kept blocks joined together, with fades applied, starting from the playhead position. Press **Spacebar** again (or click **Stop Preview**) to pause. Plays through the Monitor Output device.
 
 ### Backward compatibility
 

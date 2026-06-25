@@ -1,4 +1,4 @@
-# SoundPad v1.10.1 — Release Checklist
+# SoundPad v1.11.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.10.1.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.11.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.10.1.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.10.1), and publisher
+- [ ] Run `SoundPad-Setup-1.11.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.11.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -250,7 +250,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.10.1) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.11.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
@@ -1034,6 +1034,99 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.11.0 new features
+
+### Pro Sound Editor — time ruler
+
+- [ ] Open the Sound Editor on any sound → time ruler is visible above the waveform canvas
+- [ ] At 1× zoom, ruler tick marks and timestamps align with the waveform timeline
+- [ ] Zoom to 5× → ruler tick spacing adjusts; timestamps match the zoomed positions
+- [ ] Zoom to 10× → ruler is still readable and correctly aligned
+- [ ] Scroll the waveform horizontally while zoomed → ruler scrolls in sync with the waveform
+
+### Pro Sound Editor — zoom / scroll (Phase 2 improvements)
+
+- [ ] Zoom to any level → playhead remains visible in the viewport (timeline scrolls to keep it in view)
+- [ ] Scroll and cut a block at a non-zero scroll offset → cut lands at the correct source-audio position
+
+### Pro Sound Editor — redo
+
+- [ ] Perform an edit (cut, remove, trim, paste, reorder) → Undo reverses it
+- [ ] After undoing, click the **Redo** button → edit is re-applied
+- [ ] After undoing, press **Ctrl+Y** → edit is re-applied
+- [ ] After undoing, press **Ctrl+Shift+Z** → edit is re-applied
+- [ ] Redo button is disabled when there is nothing to redo
+- [ ] Performing a new edit after undoing clears the redo stack (Redo button disables)
+
+### Pro Sound Editor — Copy / Paste block
+
+- [ ] Select a block → press **Ctrl+C** → no visible change (block is copied internally)
+- [ ] Press **Ctrl+V** → a new block is appended to the end of the timeline
+- [ ] Pasted block has the same source audio boundaries as the copied block
+- [ ] Play from the library → pasted block plays in sequence after the other blocks
+- [ ] Export as MP3 → pasted block is included in the exported audio at the correct position
+- [ ] Undo → pasted block is removed; Redo → pasted block is restored
+
+### Pro Sound Editor — block drag / reorder
+
+- [ ] In Select mode, drag a block to a new position → visual placeholder shows the drop target
+- [ ] Release → timeline updates to the new block order
+- [ ] Play from the library → audio plays in the reordered block sequence
+- [ ] Export as MP3 → exported audio follows the reordered block order
+- [ ] Undo → reorder is reversed; Redo → reorder is re-applied
+- [ ] Drag a block to the first position → it becomes the first block played and exported
+- [ ] Drag a block to the last position → it becomes the last block played and exported
+
+### Pro Sound Editor — selected block info
+
+- [ ] No block selected → block info area is empty or shows a placeholder
+- [ ] Select a block → toolbar shows the block's start time, end time, and duration
+- [ ] Trim a block edge → info updates in real time to reflect the new boundaries
+- [ ] Reorder blocks → selected block info updates to reflect the new positions
+- [ ] Deselect the block → info clears
+
+### Pro Sound Editor — Spacebar preview play/pause
+
+- [ ] With the Sound Editor open and no text field focused, press **Spacebar** → preview plays from the playhead position
+- [ ] Press **Spacebar** again while playing → preview pauses
+- [ ] Press **Spacebar** again while paused → preview resumes from the paused position
+- [ ] Click **Stop Preview** → stops preview; next Spacebar starts from the playhead position
+- [ ] Type in the **Trim Start** or **Trim End** field → Spacebar does not trigger play/pause while focused
+
+### Pro Sound Editor — keyboard shortcuts do not trigger while typing
+
+- [ ] Click in the **Trim Start** field, type a value → pressing **A** or **C** does not switch tools; pressing **Delete** does not remove a block
+- [ ] Click in the **Trim End** field → same behavior
+- [ ] Ctrl+Z while a text field is focused → does not trigger block-level Undo (or only undoes text input within the field)
+- [ ] Spacebar while a text field is focused → does not trigger play/pause
+
+### Instant Replay clips — still open / edit / export
+
+- [ ] Save an Instant Replay clip → it appears in the active deck
+- [ ] Right-click the clip → Edit → Pro Sound Editor opens without crash
+- [ ] Cut and remove a block on the IR clip → Save → clip plays correctly with the edit applied
+- [ ] Export the IR clip as MP3 → exported audio reflects the block edits
+
+### Sound colors — failed workaround removed, preset colors still work
+
+- [ ] Right-click a sound → Color submenu shows 9 preset colors with swatches
+- [ ] Select a color (e.g. Red) → sound row stripe (List View) or pad background (Grid View) updates immediately
+- [ ] Select Default → color is cleared; row/pad returns to standard appearance
+- [ ] Colors persist after app restart
+
+### Regression — v1.11.0
+
+- [ ] Export as MP3 still works for sounds with and without block edits
+- [ ] Pro Sound Editor Phase 1 features (Cut, Remove Block, trim edges, Undo, zoom, playhead, snap) still work
+- [ ] Mini Mode opens, shows pads, and plays sounds correctly
+- [ ] Instant Replay save, playback, and hotkeys still work
+- [ ] Hotkeys (sound, Stop All, Instant Replay) still fire correctly
+- [ ] Mic passthrough is unaffected
+- [ ] Monitor and Virtual output routing are unaffected
+- [ ] In-app updater still functions
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -1049,12 +1142,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.10.1
-  git push origin v1.10.1
+  git tag v1.11.0
+  git push origin v1.11.0
   ```
-- [ ] Create GitHub Release from tag `v1.10.1`
-- [ ] Add release notes summarising v1.10.1 hotfix
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.10.1.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.11.0`
+- [ ] Add release notes summarising v1.11.0 Pro Sound Editor Phase 2 changes
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.11.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

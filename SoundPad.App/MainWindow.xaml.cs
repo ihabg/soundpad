@@ -2778,7 +2778,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         ctx.Items.Add(editMenuItem);
         ctx.Items.Add(favMenuItem);
         ctx.Items.Add(dupMenuItem);
-        ctx.Items.Add(BuildColorMenu(item));
+        var colorMenuItem = new MenuItem { Header = "Color…" };
+        colorMenuItem.Click += (_, _) => OpenColorPicker(item);
+        ctx.Items.Add(colorMenuItem);
         ctx.Items.Add(revealMenuItem);
         ctx.Items.Add(exportMenuItem);
         ctx.Items.Add(new Separator());
@@ -2791,57 +2793,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return ctx;
     }
 
-    private MenuItem BuildColorMenu(SoundItem item)
+    private void OpenColorPicker(SoundItem item)
     {
-        var colorMenu = new MenuItem { Header = "Color" };
-
-        var presets = new (string? Hex, string Label)[]
-        {
-            (null,      "Default"),
-            ("#E53935", "Red"),
-            ("#F4511E", "Orange"),
-            ("#F9AB00", "Yellow"),
-            ("#0F9D58", "Green"),
-            ("#039BE5", "Blue"),
-            ("#7B1FA2", "Purple"),
-            ("#D81B60", "Pink"),
-            ("#546E7A", "Gray"),
-        };
-
-        foreach (var (hex, label) in presets)
-        {
-            var swatchBg = hex is not null
-                ? (Brush)new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex))
-                : (Brush)Application.Current.Resources["ControlFillColorDefaultBrush"];
-            var swatch = new Border
-            {
-                Width             = 12,
-                Height            = 12,
-                CornerRadius      = new CornerRadius(2),
-                Background        = swatchBg,
-                BorderBrush       = hex is null
-                    ? (Brush)Application.Current.Resources["CardBorderBrush"]
-                    : Brushes.Transparent,
-                BorderThickness   = new Thickness(hex is null ? 1 : 0),
-                Margin            = new Thickness(0, 0, 6, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            var header = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            header.Children.Add(swatch);
-            header.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
-
-            var capturedHex = hex;
-            var colorItem   = new MenuItem { Header = header };
-            colorItem.Click += (_, _) =>
-            {
-                item.PadColor = capturedHex;
-                DeckService.Save(_decks);
-                FilterSoundsPanel();
-            };
-            colorMenu.Items.Add(colorItem);
-        }
-
-        return colorMenu;
+        var dlg = new Dialogs.ColorPickerDialog(this, item.PadColor);
+        if (dlg.ShowDialog() != true) return;
+        item.PadColor = dlg.ResultColor;
+        DeckService.Save(_decks);
+        FilterSoundsPanel();
+        StatusText.Text = $"Updated color for {item.DisplayName}";
     }
 
     // ── Export as MP3 ──────────────────────────────────────────────────────────

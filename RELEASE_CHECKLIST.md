@@ -1,4 +1,4 @@
-# SoundPad v1.11.0 — Release Checklist
+# SoundPad v1.12.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.11.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.12.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.11.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.11.0), and publisher
+- [ ] Run `SoundPad-Setup-1.12.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.12.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -250,7 +250,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.11.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.12.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
@@ -521,7 +521,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Grid View — right-click context menu
 
-- [ ] Right-click a pad → context menu shows: Edit, Favourite/Unfavourite, Duplicate, Color, Reveal in Folder, Remove
+- [ ] Right-click a pad → context menu shows: Edit, Favourite/Unfavourite, Duplicate, Color…, Reveal in Folder, Remove
 - [ ] **Edit** → Sound Editor opens for that sound
 - [ ] **Favourite** → star fills on the pad; filter badge updates; next right-click shows "Unfavourite"
 - [ ] **Unfavourite** → star clears on the pad; next right-click shows "Favourite"
@@ -529,19 +529,19 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] **Reveal in Folder** → File Explorer opens with audio file selected
 - [ ] **Remove** → confirmation dialog; confirm → pad removed from grid
 
-### Color menu — List View
+### Color Picker dialog — List View
 
-- [ ] Right-click a sound row → Color submenu shows 9 options with color swatches
-- [ ] Select **Red** → a 4 px red stripe appears on the left edge of that row immediately
-- [ ] Select **Default** → stripe disappears; row returns to standard appearance
+- [ ] Right-click a sound row → **Color…** opens the Color Picker dialog (no submenu)
+- [ ] Select **Red** → Apply → a 4 px red stripe appears on the left edge of that row immediately
+- [ ] Select **Default** → Apply → stripe disappears; row returns to standard appearance
 - [ ] Stripe remains visible while a sound is actively playing (accent background + stripe both visible)
 - [ ] Stripe is not visible on rows that have no color set (PadColor = null)
 
-### Color menu — Grid View
+### Color Picker dialog — Grid View
 
-- [ ] Right-click a pad → Color submenu shows 9 options with color swatches
-- [ ] Select **Blue** → pad background changes to blue immediately
-- [ ] Select **Default** → pad returns to the standard card background
+- [ ] Right-click a pad → **Color…** opens the Color Picker dialog (no submenu)
+- [ ] Select **Blue** → Apply → pad background changes to blue immediately
+- [ ] Select **Default** → Apply → pad returns to the standard card background
 - [ ] While a sound is playing, the accent highlight overrides the pad color; ▶ indicator still shown; color restores when sound stops
 
 ### Color persistence
@@ -1107,11 +1107,11 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] Cut and remove a block on the IR clip → Save → clip plays correctly with the edit applied
 - [ ] Export the IR clip as MP3 → exported audio reflects the block edits
 
-### Sound colors — failed workaround removed, preset colors still work
+### Sound colors — Color Picker dialog (submenu replaced in v1.12.0)
 
-- [ ] Right-click a sound → Color submenu shows 9 preset colors with swatches
-- [ ] Select a color (e.g. Red) → sound row stripe (List View) or pad background (Grid View) updates immediately
-- [ ] Select Default → color is cleared; row/pad returns to standard appearance
+- [ ] Right-click a sound → **Color…** opens the Color Picker dialog (no submenu)
+- [ ] Select a preset (e.g. Red) → Apply → row stripe (List View) or pad background (Grid View) updates immediately
+- [ ] Select Default → Apply → color is cleared; row/pad returns to standard appearance
 - [ ] Colors persist after app restart
 
 ### Regression — v1.11.0
@@ -1121,6 +1121,103 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] Mini Mode opens, shows pads, and plays sounds correctly
 - [ ] Instant Replay save, playback, and hotkeys still work
 - [ ] Hotkeys (sound, Stop All, Instant Replay) still fire correctly
+- [ ] Mic passthrough is unaffected
+- [ ] Monitor and Virtual output routing are unaffected
+- [ ] In-app updater still functions
+
+---
+
+## Feature tests — v1.12.0 new features
+
+### Color Picker dialog — opening
+
+- [ ] Right-click any sound in **List View** → context menu shows **Color…** (single item, no submenu)
+- [ ] Right-click any pad in **Grid View** → context menu shows **Color…** (single item, no submenu)
+- [ ] Click **Color…** → Color Picker dialog opens (420 px wide, all controls visible including Cancel and Apply buttons)
+- [ ] Dialog title bar shows "Sound Color" with a color icon
+- [ ] Dialog opens centered over the main window
+
+### Color Picker dialog — initial state
+
+- [ ] Open **Color…** on a sound with no color → Default preset is highlighted with an accent ring; HEX box is empty; Apply is enabled
+- [ ] Open **Color…** on a sound with a preset color (e.g. Red `#E53935`) → Red preset is highlighted; HEX box shows `#E53935`; RGB sliders and boxes show the correct values; Apply is enabled
+- [ ] Open **Color…** on a sound with a custom color (e.g. `#ABCDEF`) → no preset highlighted; HEX box shows `#ABCDEF`; RGB sliders and boxes reflect the color; Apply is enabled
+
+### Color Picker dialog — preset selection
+
+- [ ] Click **Red** → ring highlights Red; HEX box shows `#E53935`; RGB boxes show 229, 57, 53; preview swatch turns red; Apply enabled
+- [ ] Click **Blue** → ring moves to Blue; HEX box shows `#039BE5`; preview swatch turns blue
+- [ ] Click **Default** → ring highlights Default; HEX box clears; RGB boxes clear; preview swatch shows the card default background; Apply enabled
+- [ ] Click a preset when another preset is already selected → ring moves to the new preset; old ring disappears
+
+### Color Picker dialog — HEX input
+
+- [ ] Type `#FFAA00` in the HEX box → RGB boxes update to 255, 170, 0; sliders move; preview swatch turns amber; Apply enabled
+- [ ] Type `FFAA00` (no `#`) → treated as valid; dialog normalizes and accepts the color
+- [ ] Type a partial value like `#FFA` → Apply disabled; error "Enter a valid 6-digit HEX color" visible
+- [ ] Type `#GGGGGG` (invalid hex chars) → Apply disabled; error visible
+- [ ] Clear the HEX box entirely (with no preset active) → Apply disabled; no error shown
+- [ ] Type the exact HEX of a preset (e.g. `#039BE5`) → that preset's ring highlights automatically
+
+### Color Picker dialog — RGB inputs
+
+- [ ] Drag the Red slider → Red text box updates; HEX box updates; preview swatch updates; Apply enabled
+- [ ] Type `255` in the Red box → Red slider moves to 255; HEX and swatch update
+- [ ] Type `300` in any RGB box → Apply disabled; error "R, G, and B must each be a number from 0 to 255" visible
+- [ ] After typing `300` then clearing the box (with Default still active) → error disappears; Apply re-enables
+- [ ] Type valid values in all three RGB boxes → Apply enabled; error cleared
+- [ ] RGB values that match a preset (e.g. R=3, G=155, B=229 → `#039BE5`) → Blue preset ring highlights automatically
+
+### Color Picker dialog — Cancel and Escape
+
+- [ ] Click **Cancel** → dialog closes; sound color unchanged; status bar unchanged
+- [ ] Press **Escape** → same as Cancel
+- [ ] Cancel on a sound that had Red → reopen → Red is still highlighted (no change was saved)
+
+### Color Picker dialog — Apply
+
+- [ ] Select **Red** → Apply → dialog closes; List View row shows 4 px red stripe immediately
+- [ ] Select **Blue** on a Grid View pad → Apply → pad background turns blue immediately
+- [ ] Select **Default** → Apply → color cleared; row/pad returns to standard appearance
+- [ ] Enter custom HEX `#FFAA00` → Apply → custom color saved and visible
+- [ ] Press **Enter** when Apply is enabled → same as clicking Apply
+
+### Color persistence
+
+- [ ] Apply a preset color → restart app → color still applied
+- [ ] Apply a custom HEX color → restart app → custom color still applied
+- [ ] Apply Default (clear) → restart app → color remains cleared
+
+### Duplicate sound keeps color
+
+- [ ] Assign color `#E53935` to a sound → right-click → Duplicate → duplicate has the same red stripe/pad color
+- [ ] Duplicate has no hotkey (existing behavior preserved)
+
+### Backup / import preserves custom color
+
+- [ ] Assign a custom HEX color to a sound → Settings → Export Backup → ZIP created
+- [ ] Import that ZIP on a clean library → custom color is present on the imported sound
+- [ ] Import an old backup (pre-v1.12, no custom colors) → import succeeds; sounds load with default appearance (no crash)
+
+### Mini Mode shows custom colors
+
+- [ ] Open Mini Mode → pads with assigned colors show those colors (preset and custom HEX)
+- [ ] Assign a new color via Color Picker → Apply → Mini Mode pad reflects the new color immediately (after FilterSoundsPanel rebuild)
+
+### Regression — other context actions unaffected
+
+- [ ] **Edit** → Sound Editor opens correctly for colored and uncolored sounds
+- [ ] **Favourite / Unfavourite** → works correctly alongside colors
+- [ ] **Duplicate** → creates copy; see duplicate test above
+- [ ] **Reveal in Folder** → File Explorer opens with file selected
+- [ ] **Export as MP3…** → export works for colored sounds; color has no effect on audio output
+- [ ] **Remove** → confirmation dialog appears; confirm removes sound; color data is not left behind
+
+### Regression — pro features unaffected by v1.12
+
+- [ ] Pro Sound Editor opens, cuts, removes blocks, undoes/redoes correctly
+- [ ] Instant Replay clips save, play, and open in the Sound Editor
+- [ ] Sound hotkeys, Stop All hotkey, Instant Replay hotkeys all fire correctly
 - [ ] Mic passthrough is unaffected
 - [ ] Monitor and Virtual output routing are unaffected
 - [ ] In-app updater still functions
@@ -1142,12 +1239,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.11.0
-  git push origin v1.11.0
+  git tag v1.12.0
+  git push origin v1.12.0
   ```
-- [ ] Create GitHub Release from tag `v1.11.0`
-- [ ] Add release notes summarising v1.11.0 Pro Sound Editor Phase 2 changes
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.11.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.12.0`
+- [ ] Add release notes summarising v1.12.0 Custom Color Picker changes
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.12.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

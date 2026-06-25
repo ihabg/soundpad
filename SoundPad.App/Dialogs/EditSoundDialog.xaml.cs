@@ -38,6 +38,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
     // ── Results ───────────────────────────────────────────────────────────────
     public string              ResultName       { get; private set; } = "";
     public string              ResultCategory   { get; private set; } = "General";
+    public List<string>?       ResultTags       { get; private set; }
     public float               ResultVolume     { get; private set; } = 1f;
     public double?             ResultTrimStart  { get; private set; }
     public double?             ResultTrimEnd    { get; private set; }
@@ -153,6 +154,9 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             CategoryBox.Items.Add(cat);
         }
         CategoryBox.Text = string.IsNullOrWhiteSpace(item.Category) ? "General" : item.Category;
+
+        // ── Tags
+        TagsBox.Text = item.Tags is { Count: > 0 } ? string.Join(", ", item.Tags) : "";
 
         // ── Volume
         int pct = (int)Math.Round(item.Volume * 100);
@@ -1426,7 +1430,14 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         ResultName     = name;
         ResultCategory = string.IsNullOrWhiteSpace(CategoryBox.Text)
             ? "General" : CategoryBox.Text.Trim();
-        ResultVolume   = (float)(VolumeSlider.Value / 100.0);
+        var parsedTags = TagsBox.Text
+            .Split(',')
+            .Select(t => t.Trim())
+            .Where(t => !string.IsNullOrEmpty(t))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        ResultTags   = parsedTags.Count > 0 ? parsedTags : null;
+        ResultVolume = (float)(VolumeSlider.Value / 100.0);
         ResultFadeIn   = fadeIn;
         ResultFadeOut  = fadeOut;
         ResultHotkey   = _pendingHotkey;

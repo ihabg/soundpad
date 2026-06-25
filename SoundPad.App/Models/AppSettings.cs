@@ -62,6 +62,10 @@ public class AppSettings
     // Default false preserves the v1.5 layout for existing users.
     public bool GridCompact { get; set; } = false;
 
+    // "Manual" | "Name A–Z" | "Name Z–A" | "Newest" | "Oldest"
+    // Default "Manual" preserves drag-reorder behavior for existing users.
+    public string LibrarySortOrder { get; set; } = "Manual";
+
     // Mini Mode / Floating Soundboard
     // All nullable/defaulted so old settings.json files deserialize cleanly.
     public bool    MiniAlwaysOnTop   { get; set; } = true;

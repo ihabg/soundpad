@@ -46,7 +46,10 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
     public double?             ResultFadeOut    { get; private set; }
     public HotkeyBinding?      ResultHotkey     { get; private set; }
     public bool                WasHotkeyChanged { get; private set; }
-    public List<AudioSegment>? ResultSegments   { get; private set; }
+    public List<AudioSegment>? ResultSegments    { get; private set; }
+    public bool                ResultReverseAudio  { get; private set; }
+    public bool                ResultNormalizeAudio { get; private set; }
+    public double              ResultPlaybackSpeed  { get; private set; } = 1.0;
 
     // ── Waveform data ─────────────────────────────────────────────────────────
     private const int WaveformBuckets = 360;
@@ -157,6 +160,13 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
         // ── Tags
         TagsBox.Text = item.Tags is { Count: > 0 } ? string.Join(", ", item.Tags) : "";
+
+        // ── Effects
+        ReverseCheckBox.IsChecked   = item.ReverseAudio;
+        NormalizeCheckBox.IsChecked = item.NormalizeAudio;
+        double safeSpeed = EffectProcessor.GetSafePlaybackSpeed(item);
+        SpeedSlider.Value   = safeSpeed;
+        SpeedValueText.Text = $"{safeSpeed:F2}×";
 
         // ── Volume
         int pct = (int)Math.Round(item.Volume * 100);
@@ -1259,7 +1269,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
     // ── Preview ───────────────────────────────────────────────────────────────
 
-    private void Preview_Click(object sender, RoutedEventArgs e)
+    private async void Preview_Click(object sender, RoutedEventArgs e)
     {
         if (_previewEngine is null) return;
 
@@ -1271,7 +1281,18 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
         StopPreview();
 
-        double editedDur     = ComputeEditedDuration();
+        double currentSpeed  = SpeedSlider?.Value ?? 1.0;
+        bool   dialogEffects = ReverseCheckBox?.IsChecked  == true
+                            || NormalizeCheckBox?.IsChecked == true
+                            || Math.Abs(currentSpeed - 1.0) > 0.001;
+
+        if (dialogEffects)
+        {
+            await PreviewWithEffectsAsync(currentSpeed);
+            return;
+        }
+
+        double editedDur      = ComputeEditedDuration();
         double startVisualSec = (_playheadVisualSec > 0 && _playheadVisualSec < editedDur)
             ? _playheadVisualSec : 0;
 
@@ -1301,6 +1322,60 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
         PreviewButton.Content  = "Stop Preview";
         PreviewStatusText.Text = "Playing…";
+    }
+
+    private async Task PreviewWithEffectsAsync(double currentSpeed)
+    {
+        if (_previewEngine is null) return;
+
+        PreviewButton.IsEnabled = false;
+        PreviewStatusText.Text  = "Rendering effects…";
+
+        bool   rev   = ReverseCheckBox?.IsChecked  == true;
+        bool   norm  = NormalizeCheckBox?.IsChecked == true;
+        double speed = Math.Clamp(currentSpeed, 0.5, 2.0);
+        var    segs  = ComputeEditorSegments(0);
+
+        float[] rendered;
+        try
+        {
+            rendered = await Task.Run(() =>
+                EffectProcessor.Render(_sound, segs, rev, norm, speed));
+        }
+        catch
+        {
+            PreviewStatusText.Text  = "Effect render failed.";
+            PreviewButton.IsEnabled = true;
+            return;
+        }
+
+        if (rendered.Length == 0)
+        {
+            PreviewStatusText.Text  = "Nothing to preview.";
+            PreviewButton.IsEnabled = true;
+            return;
+        }
+
+        var previewSound = new CachedSound(rendered);
+        float uiVol  = (float)(VolumeSlider.Value / 100.0);
+        float gain   = uiVol * uiVol;
+        int   sr     = previewSound.SampleRate * previewSound.Channels;
+        int   fadeInS  = _vFadeIn  > 0 ? (int)(_vFadeIn  * sr) : 0;
+        int   fadeOutS = _vFadeOut > 0 ? (int)(_vFadeOut * sr) : 0;
+        var   fullSegs = new List<(int S, int E)> { (0, previewSound.TotalSamples) };
+
+        _previewHandle      = _previewEngine.Play(previewSound, gain, fullSegs, fadeInS, fadeOutS);
+        _playStartVisualSec = 0;
+        _playStartTime      = DateTime.Now;
+        _playheadVisualSec  = 0;
+
+        _playTimer       = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(40) };
+        _playTimer.Tick += (_, _) => TickPlayhead();
+        _playTimer.Start();
+
+        PreviewButton.IsEnabled = true;
+        PreviewButton.Content   = "Stop Preview";
+        PreviewStatusText.Text  = "Playing…";
     }
 
     private void TickPlayhead()
@@ -1458,10 +1533,27 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             ResultSegments  = new List<AudioSegment>(_segments);
         }
 
+        ResultReverseAudio   = ReverseCheckBox.IsChecked  == true;
+        ResultNormalizeAudio = NormalizeCheckBox.IsChecked == true;
+        ResultPlaybackSpeed  = Math.Clamp(SpeedSlider.Value, 0.5, 2.0);
+
         DialogResult = true;
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
+    private void SpeedSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (SpeedValueText is not null)
+            SpeedValueText.Text = $"{e.NewValue:F2}×";
+    }
+
+    private void ResetEffects_Click(object sender, RoutedEventArgs e)
+    {
+        ReverseCheckBox.IsChecked   = false;
+        NormalizeCheckBox.IsChecked = false;
+        SpeedSlider.Value           = 1.0;
+    }
 
     // ── Parsing ───────────────────────────────────────────────────────────────
 

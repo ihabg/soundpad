@@ -41,7 +41,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private List<Deck>                             _decks        = new();
     private Deck                                   _activeDeck   = null!;
     private List<SoundItem>                        _library      => _activeDeck.Sounds;
-    private readonly Dictionary<Guid, CachedSound> _cachedSounds = new Dictionary<Guid, CachedSound>();
+    private readonly Dictionary<Guid, CachedSound> _cachedSounds      = new Dictionary<Guid, CachedSound>();
+    private readonly Dictionary<Guid, CachedSound> _processedSounds   = new();
+    private int                                     _effectRenderEpoch;
 
     // ── App-level settings (devices, mic state, hotkeys, window bounds) ─────────
     private AppSettings _settings;
@@ -1154,6 +1156,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         StopAllSounds();
         _cachedSounds.Clear();
+        _processedSounds.Clear();
         _rowControls.Clear();
 
         _activeDeck            = deck;
@@ -2923,9 +2926,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             $"{Path.GetFileNameWithoutExtension(finalPath)}.tmp-export-{Guid.NewGuid():N}.mp3");
 
         // Capture edit params on the UI thread before handing off.
-        var segments = GetSegments(sound, item);
+        var    segments   = GetSegments(sound, item);
         var (_, _, fadeInS, fadeOutS) = GetTrimFadeParams(sound, item);
-        float gain = ConvertUiVolumeToGain(item.Volume);
+        float  gain       = ConvertUiVolumeToGain(item.Volume);
+        bool   hasEffects = EffectProcessor.HasEffects(item);
+        bool   rev        = item.ReverseAudio;
+        bool   norm       = item.NormalizeAudio;
+        double speed      = EffectProcessor.GetSafePlaybackSpeed(item);
+        _processedSounds.TryGetValue(item.Id, out var cachedProcessed);
 
         _exportInProgress.Add(item.Id);
         StatusText.Text = "Exporting MP3…";
@@ -2935,8 +2943,25 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             bool tempCreated = false;
             try
             {
+                CachedSound          soundToExport = sound;
+                List<(int S, int E)> exportSegs    = segments;
+
+                if (hasEffects)
+                {
+                    var proc = cachedProcessed
+                        ?? new CachedSound(EffectProcessor.Render(sound, segments, rev, norm, speed));
+                    soundToExport = proc;
+                    exportSegs    = new List<(int S, int E)> { (0, proc.TotalSamples) };
+                    if (cachedProcessed is null)
+                        Dispatcher.InvokeAsync(() =>
+                        {
+                            if (!_processedSounds.ContainsKey(item.Id))
+                                _processedSounds[item.Id] = proc;
+                        });
+                }
+
                 // Mirror the exact playback pipeline so trim/fade/cuts/volume are applied.
-                var source = new CachedSoundSampleProvider(sound, segments, fadeInS, fadeOutS);
+                var source = new CachedSoundSampleProvider(soundToExport, exportSegs, fadeInS, fadeOutS);
                 ISampleProvider final = gain < 0.999f
                     ? new VolumeSampleProvider(source) { Volume = gain }
                     : source;
@@ -3056,6 +3081,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         item.FadeInSeconds    = dlg.ResultFadeIn;
         item.FadeOutSeconds   = dlg.ResultFadeOut;
         item.Segments         = dlg.ResultSegments;
+        item.ReverseAudio     = dlg.ResultReverseAudio;
+        item.NormalizeAudio   = dlg.ResultNormalizeAudio;
+        item.PlaybackSpeed    = dlg.ResultPlaybackSpeed;
+        _processedSounds.Remove(item.Id);
 
         if (dlg.WasHotkeyChanged)
         {
@@ -3097,6 +3126,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         var name = item.DisplayName;
         _cachedSounds.Remove(item.Id);
+        _processedSounds.Remove(item.Id);
         _library.Remove(item);
         DeckService.Save(_decks);
         RefreshCategoryFilter();
@@ -3184,6 +3214,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             FadeInSeconds    = source.FadeInSeconds,
             FadeOutSeconds   = source.FadeOutSeconds,
             PadColor         = source.PadColor,
+            Segments         = source.Segments?.ToList(),
+            ReverseAudio     = source.ReverseAudio,
+            NormalizeAudio   = source.NormalizeAudio,
+            PlaybackSpeed    = source.PlaybackSpeed,
             CreatedAt        = DateTime.UtcNow
             // Hotkey intentionally not copied — would create a conflict
         };
@@ -3550,7 +3584,49 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (_settings.InterruptPreviousSounds)
             ClearAllActivePlaybacks();
 
-        PlaySound(item.Id, sound, item);
+        if (EffectProcessor.HasEffects(item))
+            _ = PlayLibraryItemWithEffectsAsync(item, sound);
+        else
+            PlaySound(item.Id, sound, item);
+    }
+
+    private async Task PlayLibraryItemWithEffectsAsync(SoundItem item, CachedSound rawSound)
+    {
+        if (!_processedSounds.TryGetValue(item.Id, out var processed))
+        {
+            StatusText.Text = $"Rendering effects for {item.DisplayName}…";
+            var    segments    = GetSegments(rawSound, item);
+            bool   rev         = item.ReverseAudio;
+            bool   norm        = item.NormalizeAudio;
+            double speed       = EffectProcessor.GetSafePlaybackSpeed(item);
+            int    renderEpoch = _effectRenderEpoch;
+            try
+            {
+                var rendered = await Task.Run(() => EffectProcessor.Render(
+                    rawSound, segments, rev, norm, speed));
+
+                // Abort if Stop All was pressed while we were rendering.
+                if (renderEpoch != _effectRenderEpoch) return;
+
+                if (rendered.Length == 0)
+                {
+                    StatusText.Text = $"Nothing to play: {item.DisplayName}";
+                    return;
+                }
+                processed = new CachedSound(rendered);
+                _processedSounds[item.Id] = processed;
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Render failed: {item.DisplayName} — {ex.Message}";
+                return;
+            }
+        }
+
+        // Guard: if the sound was removed while rendering, do not start playback.
+        if (!_cachedSounds.ContainsKey(item.Id)) return;
+
+        PlaySound(item.Id, rawSound, item, processedSound: processed);
     }
 
     // Maps a 0–1 UI volume to a 0–1 audio gain using a squared (power-2) curve.
@@ -3563,7 +3639,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private static float ConvertUiVolumeToGain(float uiVolume)
         => uiVolume * uiVolume;
 
-    private void PlaySound(Guid soundId, CachedSound sound, SoundItem item)
+    private void PlaySound(Guid soundId, CachedSound sound, SoundItem item,
+        CachedSound? processedSound = null)
     {
         if (_monitorEngine is null && _virtualEngine is null)
         {
@@ -3573,17 +3650,30 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         try
         {
-            float volume   = ConvertUiVolumeToGain(item.Volume);
-            var   segments = GetSegments(sound, item);
+            float volume = ConvertUiVolumeToGain(item.Volume);
             var (_, _, fadeInS, fadeOutS) = GetTrimFadeParams(sound, item);
 
-            bool hasTrimFadeCuts = item.TrimStartSeconds.HasValue || item.TrimEndSeconds.HasValue
+            CachedSound           soundToPlay;
+            List<(int S, int E)>  segments;
+            if (processedSound is not null)
+            {
+                soundToPlay = processedSound;
+                segments    = new List<(int S, int E)> { (0, processedSound.TotalSamples) };
+            }
+            else
+            {
+                soundToPlay = sound;
+                segments    = GetSegments(sound, item);
+            }
+
+            bool hasTrimFadeCuts = processedSound is not null
+                || item.TrimStartSeconds.HasValue || item.TrimEndSeconds.HasValue
                 || item.FadeInSeconds.HasValue || item.FadeOutSeconds.HasValue
                 || (item.Segments is not null && item.Segments.Count > 0);
 
             PlaybackHandle? monitorHandle = hasTrimFadeCuts
-                ? _monitorEngine?.Play(sound, volume, segments, fadeInS, fadeOutS)
-                : _monitorEngine?.Play(sound, volume);
+                ? _monitorEngine?.Play(soundToPlay, volume, segments, fadeInS, fadeOutS)
+                : _monitorEngine?.Play(soundToPlay, volume);
 
             var monitorDevice = MonitorComboBox.SelectedItem as AudioDevice;
             var virtualDevice = VirtualComboBox.SelectedItem as AudioDevice;
@@ -3593,8 +3683,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
             PlaybackHandle? virtualHandle = sameDevice ? null
                 : hasTrimFadeCuts
-                    ? _virtualEngine?.Play(sound, volume, segments, fadeInS, fadeOutS)
-                    : _virtualEngine?.Play(sound, volume);
+                    ? _virtualEngine?.Play(soundToPlay, volume, segments, fadeInS, fadeOutS)
+                    : _virtualEngine?.Play(soundToPlay, volume);
 
             // Stop the previous instance of this same sound before registering the new one.
             if (_activePlaybacks.TryGetValue(soundId, out var previous))
@@ -3675,6 +3765,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // AddMixerInput, not the engine's tracked _active list).
     internal void StopAllSounds()
     {
+        _effectRenderEpoch++;
         ClearAllActivePlaybacks();
         StopVirtualTestTone();
         StatusText.Text = "Stopped";

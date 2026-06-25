@@ -39,7 +39,11 @@ public static class LibraryBackupService
                 FadeInSeconds     = s.FadeInSeconds,
                 FadeOutSeconds    = s.FadeOutSeconds,
                 PadColor          = s.PadColor,
-                Tags              = s.Tags?.ToList()
+                Tags              = s.Tags?.ToList(),
+                Segments          = s.Segments?.ToList(),
+                ReverseAudio      = s.ReverseAudio,
+                NormalizeAudio    = s.NormalizeAudio,
+                PlaybackSpeed     = s.PlaybackSpeed
             }).ToList()
         }).ToList();
 

@@ -39,4 +39,11 @@ public class SoundItem
     // User-defined tags for filtering. null or empty = untagged.
     // Nullable so old decks.json files without this field deserialize cleanly to null.
     public List<string>? Tags { get; set; }
+
+    // Non-destructive audio effects — rendered off-thread and cached per-session.
+    // Non-nullable with defaults so old decks.json files that omit these fields
+    // deserialize cleanly to no-effect state (false, false, 1.0).
+    public bool   ReverseAudio  { get; set; } = false;
+    public bool   NormalizeAudio { get; set; } = false;
+    public double PlaybackSpeed  { get; set; } = 1.0;
 }

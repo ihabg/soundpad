@@ -58,4 +58,12 @@ public class CachedSound
 
         AudioData = samples.ToArray();
     }
+
+    // Wraps a pre-computed float[] without file I/O.
+    // data must already be in TargetFormat (48 kHz, stereo, IEEE float).
+    // Used by EffectProcessor to wrap rendered audio for playback and export.
+    public CachedSound(float[] processedData)
+    {
+        AudioData = processedData;
+    }
 }

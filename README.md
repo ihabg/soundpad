@@ -11,7 +11,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 - **Profiles / Decks** — organize sounds into named decks; create, rename, duplicate, and delete decks; the active deck persists across restarts; sounds, categories, and hotkeys are all per-deck; switching decks stops active sound effects but does not interrupt mic passthrough; the Stop All hotkey remains global
 - **Grid / Pad View** — toggle between List and Grid view using the toolbar buttons; List View shows the full editing table and is best for managing sounds; Grid View shows large clickable pads (name, category, hotkey, and favorite star) optimized for quick soundboard use during Discord sessions or gaming; active pads highlight and show a ▶ indicator; hotkey presses highlight the correct pad; Stop All clears all pad highlights; search and category filters work in Grid View; deck switching refreshes the grid; right-click any pad for the same actions as List View; selected view persists across restarts; drag pads or rows to reorder sounds within the active deck — order persists after restart and affects both views; Grid View pad size is configurable (Small / Medium / Large); Compact Grid Mode hides category badges and favorite stars for a denser layout
 - **Mini Mode / Floating Soundboard** — click **Mini** in the toolbar to open a compact always-on-top floating window showing every pad in the active deck; play or stop sounds directly from Mini Mode; active state syncs bidirectionally with the main window — playing from either UI highlights the pad in both; Stop All works from either window; deck switching and active deck renames update Mini Mode automatically; the pin button toggles always-on-top; closing Mini Mode hides it without exiting the app; Mini Mode window size and position persist across restarts; hotkeys continue to work while Mini Mode has keyboard focus; designed for Discord and gaming use where the main window is hidden in the tray
-- **Sound colors** — right-click any sound in List View or Grid View → **Color** to assign one of 9 preset colors (Red, Orange, Yellow, Green, Blue, Purple, Pink, Gray, or Default); in List View the color appears as a 4 px vertical accent stripe on the left edge of the row; in Grid View the color fills the pad background; colors are stored per-sound as `PadColor`; old decks, settings, and backups without `PadColor` load correctly with the default appearance
+- **Sound colors** — right-click any sound in List View or Grid View → **Color…** to open the Color Picker dialog; choose one of 9 preset colors (Red, Orange, Yellow, Green, Blue, Purple, Pink, Gray, or Default to clear), or enter a custom HEX code like `#FFAA00`, or adjust RGB sliders (0–255); a live preview swatch updates as you type; Apply saves, Cancel discards; in List View the color appears as a 4 px vertical accent stripe on the left edge of the row; in Grid View the color fills the pad background; colors are stored per-sound as `PadColor`; old decks, settings, and backups without `PadColor` load correctly with the default appearance
 - **Favorites** — star any sound to pin it in the Favorites filter
 - **Recent sounds** — filter to the last 7 days of played sounds, ordered by most recently played
 - **Drag-and-drop import** — drag audio files directly onto the Sound Library panel to add them instantly
@@ -31,13 +31,13 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 - **Perceptual volume curve** — the volume slider feels natural (power-2 curve: 50 % UI = −12 dB)
 - **Pro Sound Editor** — CapCut-style block timeline; Select (A) and Cut (C) tools; cut splits a block without removing audio; remove blocks to ripple remaining audio together; drag block edges to trim; drag blocks to reorder; Undo (Ctrl+Z) and Redo (Ctrl+Y / Ctrl+Shift+Z); Copy (Ctrl+C) and Paste (Ctrl+V) blocks; time ruler above waveform; selected block info; Spacebar preview play/pause; zoom slider (1×–10×); draggable playhead arrow; snap cut to playhead; Fade In / Fade Out applied to the joined output; non-destructive — original files never modified; segments saved in decks.json and backups; Instant Replay clips use the same editor
 - **Category Manager** — create, rename, and delete custom sound categories; deleting a category with sounds prompts where to move them; chained operations resolve correctly
-- **Sound row context menu** — right-click any sound row or pad card: Edit, Favourite/Unfavourite, Duplicate (same audio file, same trim/fade/volume, no hotkey), Color (9 preset colors), Reveal in Folder, Remove
+- **Sound row context menu** — right-click any sound row or pad card: Edit, Favourite/Unfavourite, Duplicate (same audio file, same trim/fade/volume, no hotkey), Color… (opens Color Picker dialog), Reveal in Folder, Remove
 
 ---
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.11.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.12.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -347,11 +347,24 @@ Export as WAV, batch export, and selectable bitrate are planned for a later vers
 
 ## Sound / Pad colors
 
-Right-click any sound (in List View or Grid View) and choose **Color** to assign one of 9 preset colors to that sound.
+Right-click any sound (in List View or Grid View) and choose **Color…** to open the Color Picker dialog.
+
+### Color Picker dialog
+
+| Control | Description |
+|---|---|
+| **Preset colors** | Click a swatch to select Default, Red, Orange, Yellow, Green, Blue, Purple, Pink, or Gray |
+| **HEX input** | Type a 6-digit hex code like `#FFAA00` (the `#` prefix is optional) |
+| **RGB sliders / inputs** | Drag or type R, G, B values from 0–255; the HEX box and preview swatch update live |
+| **Live preview** | Swatch at the bottom of the dialog shows the selected color as you choose or type |
+| **Apply** | Saves the color and closes the dialog; disabled until a valid color is chosen or entered |
+| **Cancel / Escape** | Closes without changing the color |
+
+**Preset color values:**
 
 | Color | Hex |
 |---|---|
-| Default | — (uses the default card/row background) |
+| Default | — (removes color; row/pad returns to the standard background) |
 | Red | `#E53935` |
 | Orange | `#F4511E` |
 | Yellow | `#F9AB00` |
@@ -524,7 +537,7 @@ Right-click any sound row (List View) or pad card (Grid View) for quick actions:
 | **Edit** | Opens the Sound Editor for that sound |
 | **Favourite / Unfavourite** | Toggles the favourite star |
 | **Duplicate** | Creates a copy with the same audio file, trim/fade, volume, and color — no hotkey assigned |
-| **Color** | Assign one of 9 preset colors (or Default to clear); color shows as a stripe in List View and as the pad background in Grid View |
+| **Color…** | Opens the Color Picker dialog — choose a preset, enter a custom HEX or adjust RGB sliders, preview live, then Apply; Default removes the color |
 | **Reveal in Folder** | Opens File Explorer with the source audio file selected |
 | **Remove** | Removes the sound from the library; the audio file is not deleted |
 

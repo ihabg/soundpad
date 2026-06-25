@@ -7,7 +7,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Features
 
-- **Sound library** — add any MP3/WAV/OGG/FLAC/AAC file, give it a display name and category, set per-sound volume
+- **Sound library** — add any MP3/WAV/OGG/FLAC/AAC file, give it a display name, category, and tags; set per-sound volume; search by name, category, or tag; filter by tag; sort by Manual order, Name A–Z, Name Z–A, Newest, Oldest, Category, or Favorites first; Manual order enables drag-and-drop reorder
 - **Profiles / Decks** — organize sounds into named decks; create, rename, duplicate, and delete decks; the active deck persists across restarts; sounds, categories, and hotkeys are all per-deck; switching decks stops active sound effects but does not interrupt mic passthrough; the Stop All hotkey remains global
 - **Grid / Pad View** — toggle between List and Grid view using the toolbar buttons; List View shows the full editing table and is best for managing sounds; Grid View shows large clickable pads (name, category, hotkey, and favorite star) optimized for quick soundboard use during Discord sessions or gaming; active pads highlight and show a ▶ indicator; hotkey presses highlight the correct pad; Stop All clears all pad highlights; search and category filters work in Grid View; deck switching refreshes the grid; right-click any pad for the same actions as List View; selected view persists across restarts; drag pads or rows to reorder sounds within the active deck — order persists after restart and affects both views; Grid View pad size is configurable (Small / Medium / Large); Compact Grid Mode hides category badges and favorite stars for a denser layout
 - **Mini Mode / Floating Soundboard** — click **Mini** in the toolbar to open a compact always-on-top floating window showing every pad in the active deck; play or stop sounds directly from Mini Mode; active state syncs bidirectionally with the main window — playing from either UI highlights the pad in both; Stop All works from either window; deck switching and active deck renames update Mini Mode automatically; the pin button toggles always-on-top; closing Mini Mode hides it without exiting the app; Mini Mode window size and position persist across restarts; hotkeys continue to work while Mini Mode has keyboard focus; designed for Discord and gaming use where the main window is hidden in the tray
@@ -37,7 +37,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.12.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.13.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -157,7 +157,7 @@ Sounds can be reordered by dragging within the active deck. Reorder works in bot
 - **List View** — drag any row by its non-interactive area (not the Play button, Volume slider, or Hotkey button). A 2 px drop indicator line shows the insert position.
 - **Grid View** — drag any pad card. A card-sized placeholder shows the insert position. The placeholder matches the current pad size.
 - **Order persists** — the new order is saved to `decks.json` immediately and is reflected in both views after the drop.
-- **Reorder is blocked** when a category filter other than **All** is active, or when the search box is non-empty. A message appears in the status bar explaining why.
+- **Reorder is blocked** when a category filter other than **All** is active, the search box is non-empty, the tag filter is set to anything other than **Any Tag**, or the sort order is not **Manual order**. A message appears in the status bar explaining why.
 - **Deck.Sounds list order is the source of truth.** Reorder does not change sound IDs, hotkeys, colors, categories, trim/fade settings, or file paths.
 - External file-drop import (dragging audio files from File Explorer) is unaffected — it works in all views and filter states.
 
@@ -390,6 +390,46 @@ Colors are stored per sound as `PadColor` in `decks.json`. Old decks, settings f
 
 ---
 
+## Sound Library — Search, Tags, and Sort
+
+### Search
+
+A search box runs across the top of the Sound Library filter bar. Typing filters the library in real time — matching any of the sound's **name**, **category**, or **tags**. A **Clear** (×) button inside the search box resets it instantly.
+
+Search works in both List View and Grid View.
+
+### Tags
+
+Every sound can carry a list of free-form tags. Assign tags via **Edit Sound** — the Tags field accepts a comma-separated list (e.g. `meme, voice, game`). Tags are trimmed and deduplicated case-insensitively on save.
+
+Once any sound in the active deck has tags, a **Tag Filter** combo box appears in the filter bar. Select a tag to show only sounds that carry it; select **Any Tag** to remove the tag filter. The Tag Filter is hidden automatically when no sounds in the deck have tags.
+
+- Tags are stored in `decks.json` and included in backup ZIPs.
+- Old decks and backup ZIPs without tags load correctly — missing tags default to none.
+- Duplicating a sound copies its tags. Editing the duplicate's tags does not affect the original.
+
+### Sort
+
+The **Sort** combo box in the filter bar controls the display order of sounds:
+
+| Option | Order |
+|---|---|
+| **Manual order** (default) | The order sounds appear in the deck — drag rows or pads to reorder |
+| **Name A–Z** | Alphabetical by display name |
+| **Name Z–A** | Reverse alphabetical by display name |
+| **Newest first** | By creation date, most recently added first |
+| **Oldest first** | By creation date, oldest first |
+| **Category** | Alphabetical by category, then by display name within each category |
+| **Favorites first** | Starred sounds first, then alphabetical by display name |
+
+The selected sort is saved to `settings.json` and restored on restart. Old `settings.json` files without this field default to Manual order.
+
+**Manual order** is the only sort that allows drag-and-drop reorder. Any other sort order blocks drag reorder — the status bar explains why.
+
+**Recent** overrides the sort box — it is always sorted by most recently played, and the Sort box is disabled while Recent is selected.
+
+---
+
 ## Drag-and-drop import
 
 Drag one or more audio files (MP3, WAV, OGG, FLAC, AAC) from File Explorer directly onto the Sound Library panel. SoundPad copies the files to its app-data folder and adds them to the library immediately — no dialog needed.
@@ -536,7 +576,7 @@ Right-click any sound row (List View) or pad card (Grid View) for quick actions:
 |---|---|
 | **Edit** | Opens the Sound Editor for that sound |
 | **Favourite / Unfavourite** | Toggles the favourite star |
-| **Duplicate** | Creates a copy with the same audio file, trim/fade, volume, and color — no hotkey assigned |
+| **Duplicate** | Creates a copy with the same audio file, trim/fade, volume, color, and tags — no hotkey assigned |
 | **Color…** | Opens the Color Picker dialog — choose a preset, enter a custom HEX or adjust RGB sliders, preview live, then Apply; Default removes the color |
 | **Reveal in Folder** | Opens File Explorer with the source audio file selected |
 | **Remove** | Removes the sound from the library; the audio file is not deleted |

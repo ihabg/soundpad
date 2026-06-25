@@ -38,7 +38,8 @@ public static class LibraryBackupService
                 TrimEndSeconds    = s.TrimEndSeconds,
                 FadeInSeconds     = s.FadeInSeconds,
                 FadeOutSeconds    = s.FadeOutSeconds,
-                PadColor          = s.PadColor
+                PadColor          = s.PadColor,
+                Tags              = s.Tags?.ToList()
             }).ToList()
         }).ToList();
 

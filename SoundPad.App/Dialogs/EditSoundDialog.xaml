@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Edit Sound"
-        Width="490" Height="840"
-        MinWidth="490" MinHeight="840"
-        MaxWidth="490" MaxHeight="840"
+        Width="490" Height="890"
+        MinWidth="490" MinHeight="890"
+        MaxWidth="490" MaxHeight="890"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         FontFamily="Segoe UI"
@@ -51,7 +51,23 @@
                            FontSize="12"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            Margin="0,0,0,5"/>
-                <ComboBox x:Name="CategoryBox" IsEditable="True" Margin="0,0,0,14"/>
+                <ComboBox x:Name="CategoryBox" IsEditable="True" Margin="0,0,0,8"/>
+
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="60"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="Tags"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center"/>
+                    <ui:TextBox x:Name="TagsBox"
+                                Grid.Column="1"
+                                PlaceholderText="meme, game, voice"
+                                ToolTip="Comma-separated tags"/>
+                </Grid>
 
                 <TextBlock Text="Volume"
                            FontSize="12"

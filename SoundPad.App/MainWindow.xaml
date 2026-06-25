@@ -164,26 +164,50 @@
                             </StackPanel>
                         </DockPanel>
 
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="12"/>
-                                <ColumnDefinition Width="190"/>
-                            </Grid.ColumnDefinitions>
-
+                        <StackPanel>
+                            <!-- Row 1: Search -->
                             <ui:TextBox x:Name="SearchBox"
-                                        Grid.Column="0"
                                         PlaceholderText="Search sounds..."
+                                        ClearButtonEnabled="True"
+                                        Margin="0,0,0,6"
                                         TextChanged="SearchBox_TextChanged">
                                 <ui:TextBox.Icon>
                                     <ui:SymbolIcon Symbol="Search20"/>
                                 </ui:TextBox.Icon>
                             </ui:TextBox>
 
-                            <ComboBox x:Name="CategoryFilter"
-                                      Grid.Column="2"
-                                      SelectionChanged="CategoryFilter_SelectionChanged"/>
-                        </Grid>
+                            <!-- Row 2: Category | Tag | Sort -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition x:Name="TagFilterColumn" Width="0"/>
+                                    <ColumnDefinition x:Name="TagFilterSpacerColumn" Width="0"/>
+                                    <ColumnDefinition Width="140"/>
+                                </Grid.ColumnDefinitions>
+
+                                <ComboBox x:Name="CategoryFilter"
+                                          Grid.Column="0"
+                                          SelectionChanged="CategoryFilter_SelectionChanged"/>
+
+                                <ComboBox x:Name="TagFilter"
+                                          Grid.Column="2"
+                                          Visibility="Collapsed"
+                                          SelectionChanged="TagFilter_SelectionChanged"/>
+
+                                <ComboBox x:Name="SortBox"
+                                          Grid.Column="4"
+                                          SelectionChanged="SortBox_SelectionChanged">
+                                    <ComboBoxItem Content="Manual order"    Tag="Manual"/>
+                                    <ComboBoxItem Content="Name A–Z"        Tag="Name A-Z"/>
+                                    <ComboBoxItem Content="Name Z–A"        Tag="Name Z-A"/>
+                                    <ComboBoxItem Content="Newest first"    Tag="Newest"/>
+                                    <ComboBoxItem Content="Oldest first"    Tag="Oldest"/>
+                                    <ComboBoxItem Content="Category"        Tag="Category"/>
+                                    <ComboBoxItem Content="Favorites first" Tag="Favorites"/>
+                                </ComboBox>
+                            </Grid>
+                        </StackPanel>
                     </StackPanel>
 
                     <!-- Column header (pinned above the scrollable rows) -->

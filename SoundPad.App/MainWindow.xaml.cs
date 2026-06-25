@@ -958,6 +958,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         RefreshCategoryFilter();
         FilterSoundsPanel();
         ApplyLibraryViewButtons();
+        ApplySortBoxSelection();
         RefreshStopAllHotkeyDisplay();
 
         int loaded = _cachedSounds.Count;
@@ -1264,7 +1265,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // ── Filter / rebuild ──────────────────────────────────────────────────────
 
     // Rebuilds SoundsPanel showing only sounds that match the current search
-    // text and selected category.  Called after any library or filter change.
+    // text, selected category, selected tag, and sort order.
+    // Called after any library or filter change.
     private void FilterSoundsPanel()
     {
         // Cancel any in-progress drag; panels are about to be cleared.
@@ -1275,10 +1277,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         var search   = SearchBox?.Text.Trim() ?? "";
         var category = CategoryFilter?.SelectedItem as string ?? "All";
-
-        IEnumerable<SoundItem> source = category == "Recent"
-            ? _library.OrderByDescending(x => x.LastPlayedAt ?? DateTime.MinValue)
-            : _library;
+        var tag      = TagFilter?.SelectedItem as string ?? "Any Tag";
+        var sortKey  = (SortBox?.SelectedItem as ComboBoxItem)?.Tag as string ?? "Manual";
 
         _rowControls.Clear();
         SoundsPanel.Children.Clear();
@@ -1286,10 +1286,19 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         bool isGrid = _settings.LibraryView == "Grid";
 
-        foreach (var item in source)
+        // Base source: Recent uses its own temporal ordering.
+        IEnumerable<SoundItem> source = category == "Recent"
+            ? _library.OrderByDescending(x => x.LastPlayedAt ?? DateTime.MinValue)
+            : _library;
+
+        // Filter
+        var filtered = source.Where(item =>
         {
             bool matchSearch = string.IsNullOrEmpty(search)
-                            || item.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase);
+                || item.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || (item.Category ?? string.Empty).Contains(search, StringComparison.OrdinalIgnoreCase)
+                || (item.Tags?.Any(t => t.Contains(search, StringComparison.OrdinalIgnoreCase)) ?? false);
+
             bool matchCategory = category switch
             {
                 "All"       => true,
@@ -1299,9 +1308,31 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 _           => item.Category == category
             };
 
-            if (!matchSearch || !matchCategory)
-                continue;
+            bool matchTag = tag == "Any Tag"
+                || (item.Tags?.Contains(tag, StringComparer.OrdinalIgnoreCase) ?? false);
 
+            return matchSearch && matchCategory && matchTag;
+        });
+
+        // Sort (Recent keeps its own LastPlayedAt-desc ordering)
+        if (category != "Recent")
+        {
+            filtered = sortKey switch
+            {
+                "Name A-Z"  => filtered.OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase),
+                "Name Z-A"  => filtered.OrderByDescending(x => x.DisplayName, StringComparer.OrdinalIgnoreCase),
+                "Newest"    => filtered.OrderByDescending(x => x.CreatedAt),
+                "Oldest"    => filtered.OrderBy(x => x.CreatedAt),
+                "Category"  => filtered.OrderBy(x => x.Category ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                                       .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase),
+                "Favorites" => filtered.OrderByDescending(x => x.IsFavorite)
+                                       .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase),
+                _           => filtered // Manual — preserve library order
+            };
+        }
+
+        foreach (var item in filtered)
+        {
             if (isGrid)
                 GridPanel.Children.Add(BuildPadCard(item));
             else
@@ -1354,6 +1385,39 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         CategoryFilter.SelectedItem = CategoryFilter.Items.Contains(current) ? current : "All";
         CategoryFilter.SelectionChanged += CategoryFilter_SelectionChanged;
+
+        RefreshTagFilter();
+    }
+
+    // Repopulates the Tag filter ComboBox from the distinct tags in the library.
+    // Shows the ComboBox only when at least one sound has a tag.
+    private void RefreshTagFilter()
+    {
+        if (TagFilter is null) return;
+        var current = TagFilter.SelectedItem as string ?? "Any Tag";
+
+        TagFilter.SelectionChanged -= TagFilter_SelectionChanged;
+        TagFilter.Items.Clear();
+        TagFilter.Items.Add("Any Tag");
+
+        var allTags = _library
+            .SelectMany(x => x.Tags ?? Enumerable.Empty<string>())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var t in allTags)
+            TagFilter.Items.Add(t);
+
+        bool hasTags = allTags.Count > 0;
+        TagFilter.Visibility = hasTags ? Visibility.Visible : Visibility.Collapsed;
+        if (TagFilterColumn is not null)
+            TagFilterColumn.Width = hasTags ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        if (TagFilterSpacerColumn is not null)
+            TagFilterSpacerColumn.Width = hasTags ? new GridLength(8) : new GridLength(0);
+
+        TagFilter.SelectedItem = TagFilter.Items.Contains(current) ? current : "Any Tag";
+        TagFilter.SelectionChanged += TagFilter_SelectionChanged;
     }
 
     // ── Sound row builder (details/list view) ───────────────────────────────────
@@ -1693,6 +1757,21 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
+    private void ApplySortBoxSelection()
+    {
+        if (SortBox is null) return;
+        SortBox.SelectionChanged -= SortBox_SelectionChanged;
+        foreach (ComboBoxItem item in SortBox.Items)
+        {
+            if ((item.Tag as string) == _settings.LibrarySortOrder)
+            {
+                SortBox.SelectedItem = item;
+                break;
+            }
+        }
+        SortBox.SelectionChanged += SortBox_SelectionChanged;
+    }
+
     private void SyncGridSizeCombo()
     {
         GridSizeCombo.SelectionChanged -= GridSizeCombo_SelectionChanged;
@@ -1775,11 +1854,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private bool CanReorder(out string reason)
     {
-        var cat    = CategoryFilter?.SelectedItem as string ?? "All";
-        var search = SearchBox?.Text.Trim() ?? "";
-        if (cat != "All" || !string.IsNullOrEmpty(search))
+        var cat     = CategoryFilter?.SelectedItem as string ?? "All";
+        var search  = SearchBox?.Text.Trim() ?? "";
+        var tag     = TagFilter?.SelectedItem as string ?? "Any Tag";
+        var sortKey = (SortBox?.SelectedItem as ComboBoxItem)?.Tag as string ?? "Manual";
+        if (cat != "All" || !string.IsNullOrEmpty(search) || tag != "Any Tag" || sortKey != "Manual")
         {
-            reason = "Reorder is only available in All view with no search filter.";
+            reason = "Reorder is only available in All view with no filters and Manual sort order.";
             return false;
         }
         reason = "";
@@ -2968,6 +3049,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         item.DisplayName      = dlg.ResultName;
         item.Category         = dlg.ResultCategory;
+        item.Tags             = dlg.ResultTags;
         item.Volume           = dlg.ResultVolume;
         item.TrimStartSeconds = dlg.ResultTrimStart;
         item.TrimEndSeconds   = dlg.ResultTrimEnd;
@@ -3095,6 +3177,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             DisplayName      = source.DisplayName + " (copy)",
             FilePath         = source.FilePath,
             Category         = source.Category,
+            Tags             = source.Tags?.ToList(),
             Volume           = source.Volume,
             TrimStartSeconds = source.TrimStartSeconds,
             TrimEndSeconds   = source.TrimEndSeconds,
@@ -3354,7 +3437,22 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         => FilterSoundsPanel();
 
     private void CategoryFilter_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        bool isRecent = CategoryFilter?.SelectedItem as string == "Recent";
+        if (SortBox is not null) SortBox.IsEnabled = !isRecent;
+        FilterSoundsPanel();
+    }
+
+    private void TagFilter_SelectionChanged(object sender, SelectionChangedEventArgs e)
         => FilterSoundsPanel();
+
+    private void SortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var sortKey = (SortBox?.SelectedItem as ComboBoxItem)?.Tag as string ?? "Manual";
+        _settings.LibrarySortOrder = sortKey;
+        SaveSettings();
+        FilterSoundsPanel();
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     //  PLAYBACK

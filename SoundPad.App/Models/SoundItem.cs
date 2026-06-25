@@ -35,4 +35,8 @@ public class SoundItem
     // null or empty = old behavior: single segment from TrimStartSeconds to TrimEndSeconds.
     // Nullable so old decks.json files without this field deserialize cleanly to null.
     public List<AudioSegment>? Segments { get; set; }
+
+    // User-defined tags for filtering. null or empty = untagged.
+    // Nullable so old decks.json files without this field deserialize cleanly to null.
+    public List<string>? Tags { get; set; }
 }

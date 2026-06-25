@@ -1,4 +1,4 @@
-# SoundPad v1.12.0 — Release Checklist
+# SoundPad v1.13.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.12.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.13.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.12.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.12.0), and publisher
+- [ ] Run `SoundPad-Setup-1.13.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.13.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -250,7 +250,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.12.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.13.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
@@ -592,7 +592,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Reorder guards
 
-- [ ] Change category filter to anything other than "All" → attempt to drag a row or pad → status bar shows "Reorder is only available in All view with no search filter."
+- [ ] Change category filter to anything other than "All" → attempt to drag a row or pad → status bar shows "Reorder is only available in All view with no filters and Manual sort order."
 - [ ] Type text in the search box → attempt to drag → same status bar message
 - [ ] Drop indicator does not appear when reorder is blocked
 - [ ] Clearing the filter / search box restores reorder capability without restart
@@ -1224,6 +1224,88 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.13.0 new features
+
+### Tags — Edit Sound dialog
+
+- [ ] Right-click a sound → Edit → Tags field is visible between Category and Volume
+- [ ] Tags field shows placeholder text "meme, game, voice"
+- [ ] Enter `meme, voice, game` → Save → Edit the same sound again → Tags field pre-fills with the saved tags
+- [ ] Tags are trimmed (` meme ` → `meme`) and deduplicated case-insensitively (`Meme, meme` → `meme`)
+- [ ] Leave Tags empty → Save → Edit again → Tags field is empty (null stored, no crash)
+
+### Tags — Duplicate
+
+- [ ] Assign tags to a sound → right-click → Duplicate → duplicate has the same tags
+- [ ] Edit the duplicate's tags → original sound's tags are unchanged
+
+### Search
+
+- [ ] Type a sound's name in the search box → only matching sounds shown
+- [ ] Type a category name in the search box → only sounds in that category shown
+- [ ] Type a tag in the search box → only sounds with that tag shown
+- [ ] Clear button (×) inside the search box resets the filter immediately → all sounds return
+- [ ] Search is case-insensitive
+- [ ] Empty search box → all sounds shown (no filtering)
+
+### Tag Filter
+
+- [ ] No sounds have tags → Tag Filter combo box is hidden
+- [ ] Add tags to a sound → Tag Filter combo box appears in the filter bar
+- [ ] Tag Filter shows "Any Tag" plus each unique tag across all sounds in the deck
+- [ ] Select a tag → only sounds with that tag are shown
+- [ ] Select "Any Tag" → all sounds shown again
+- [ ] Remove all tags from all sounds → Tag Filter combo box hides automatically
+
+### Sort
+
+- [ ] Sort box defaults to **Manual order** on a fresh install
+- [ ] Sort box defaults to **Manual order** when loading old `settings.json` without `LibrarySortOrder`
+- [ ] Select **Name A–Z** → sounds sorted alphabetically by name
+- [ ] Select **Name Z–A** → sounds sorted reverse-alphabetically by name
+- [ ] Select **Newest first** → sounds sorted by creation date, most recently added first
+- [ ] Select **Oldest first** → sounds sorted by creation date, oldest first
+- [ ] Select **Category** → sounds sorted alphabetically by category; within each category, sorted alphabetically by name
+- [ ] Select **Favorites first** → starred sounds appear before unstarred; within each group, sorted alphabetically by name
+- [ ] Close and reopen the app → sort selection is restored from `settings.json`
+
+### Recent disables Sort
+
+- [ ] Select **Recent** category filter → Sort box grays out (disabled)
+- [ ] While Recent is active → sounds are ordered by most recently played (latest first)
+- [ ] Select any other category filter → Sort box re-enables
+
+### Drag reorder — extended guard
+
+- [ ] Set sort to anything other than Manual → attempt to drag a row or pad → status bar shows "Reorder is only available in All view with no filters and Manual sort order."
+- [ ] Set tag filter to anything other than Any Tag → attempt to drag → same status bar message
+- [ ] Set category to All, search empty, tag Any Tag, sort Manual → drag reorder works normally
+
+### Search / filter / sort in both views
+
+- [ ] Switch to Grid View → search box, category filter, tag filter, and sort box all work identically
+- [ ] Filter sounds in List View, switch to Grid View → same filtered result shown
+
+### Backup — tags preserved
+
+- [ ] Add tags to several sounds → Settings → Export Backup → ZIP created
+- [ ] Import that ZIP on a clean library → tags are present on all imported sounds
+- [ ] Import an old backup (pre-v1.13, no tags in JSON) → import succeeds; sounds load with no tags, no crash
+
+### Regression — existing features unaffected by v1.13
+
+- [ ] Play, stop, favorites, recent, categories, add, remove, duplicate, reveal, export MP3 all work
+- [ ] Edit sound saves name, category, volume, trim, fade, segments correctly alongside tags
+- [ ] Pro Sound Editor opens and saves correctly
+- [ ] Instant Replay saves clips, clips appear in library, hotkeys work
+- [ ] Mini Mode opens, shows pads, syncs playback state
+- [ ] Hotkeys (sound, Stop All, Instant Replay) fire correctly
+- [ ] Routing Wizard and device selection work
+- [ ] Backup export/import works for all pre-existing fields
+- [ ] In-app updater still functions
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -1239,12 +1321,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.12.0
-  git push origin v1.12.0
+  git tag v1.13.0
+  git push origin v1.13.0
   ```
-- [ ] Create GitHub Release from tag `v1.12.0`
-- [ ] Add release notes summarising v1.12.0 Custom Color Picker changes
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.12.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.13.0`
+- [ ] Add release notes summarising v1.13.0 Search, Tags, and Better Library UX changes
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.13.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

@@ -9,6 +9,7 @@ public static class AppPaths
         "SoundPad");
 
     public static string AppDataDir      => _base;
+    public static string LogsDirectory    => Path.Combine(_base, "Logs");
     public static string SoundsDirectory  => Path.Combine(_base, "Sounds");
     public static string SoundsJsonPath   => Path.Combine(_base, "sounds.json");
     public static string DecksJsonPath    => Path.Combine(_base, "decks.json");

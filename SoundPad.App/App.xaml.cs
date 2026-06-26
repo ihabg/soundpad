@@ -13,21 +13,37 @@ public partial class App : Application
     {
         StartupLogger.Log("App.Application_Startup begin");
 
+        // Initialize rolling log ASAP so runtime errors land in a dated file.
+        // Failure is silent — StartupLogger still covers very early fatal failures.
+        try
+        {
+            var version = System.Reflection.Assembly.GetExecutingAssembly()
+                              .GetName().Version;
+            var versionStr = version is null ? "?" : $"{version.Major}.{version.Minor}.{version.Build}";
+            AppLogger.Initialize(versionStr);
+            AppLogger.Info("Startup", "AppLogger initialized");
+        }
+        catch { /* cannot log this; StartupLogger is the fallback */ }
+
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             var ex = args.ExceptionObject as Exception;
-            StartupLogger.Log($"[FATAL AppDomain] {ex?.ToString() ?? args.ExceptionObject?.ToString()}");
+            var msg = ex?.ToString() ?? args.ExceptionObject?.ToString() ?? "(unknown)";
+            StartupLogger.Log($"[FATAL AppDomain] {msg}");
+            AppLogger.Error("Crash", "Unhandled AppDomain exception (fatal)", ex);
         };
 
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
             StartupLogger.Log($"[FATAL Task] {args.Exception}");
+            AppLogger.Error("Crash", "Unobserved Task exception", args.Exception);
             args.SetObserved();
         };
 
         DispatcherUnhandledException += (_, args) =>
         {
             StartupLogger.Log($"[FATAL Dispatcher] {args.Exception}");
+            AppLogger.Error("Crash", "Unhandled Dispatcher exception", args.Exception);
             args.Handled = true;
             try
             {
@@ -61,6 +77,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             StartupLogger.Log($"[FATAL] MainWindow constructor threw: {ex}");
+            AppLogger.Error("Startup", "MainWindow constructor threw — aborting", ex);
             System.Windows.MessageBox.Show(
                 $"SoundPad failed to start:\n\n{ex.Message}\n\nSee startup log:\n{StartupLogger.LogPath}",
                 "SoundPad — Startup Error",

@@ -1,5 +1,6 @@
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
+using System.IO;
 
 namespace SoundPad.App.Audio;
 
@@ -27,8 +28,21 @@ public class CachedSound
     public TimeSpan Duration     => TimeSpan.FromSeconds(
         (double)AudioData.Length / ((double)WaveFormat.SampleRate * WaveFormat.Channels));
 
+    // Files larger than this will not be loaded into RAM to avoid OOM crashes.
+    // 200 MB decoded is ~35 minutes of stereo audio at 48 kHz; well above any
+    // typical soundboard clip.  The check is on the compressed source file, so
+    // a 200 MB MP3 is rejected before decoding (which would expand it further).
+    private const long MaxSourceFileSizeBytes = 200L * 1024 * 1024;
+
     public CachedSound(string filePath)
     {
+        var fileSize = new FileInfo(filePath).Length;
+        if (fileSize > MaxSourceFileSizeBytes)
+            throw new InvalidOperationException(
+                $"Audio file is too large ({fileSize / (1024 * 1024)} MB). " +
+                $"Limit is {MaxSourceFileSizeBytes / (1024 * 1024)} MB. " +
+                "Trim the file to a shorter clip before importing.");
+
         using var reader = new AudioFileReader(filePath);
 
         // AudioFileReader gives us IEEE float samples, but the sample rate

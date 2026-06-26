@@ -38,7 +38,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.14.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.15.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -740,13 +740,55 @@ This folder is **not** touched by the installer or uninstaller, so your library 
 
 Key files written here:
 
-| File | Contents |
+| File / Folder | Contents |
 |---|---|
 | `decks.json` | All decks, sounds, categories, and hotkeys (v1.4+) |
 | `settings.json` | Device selection, toggles, window position, active deck |
 | `Sounds/` | Audio files imported into the library |
+| `Logs/` | Rolling daily log files (see Performance and stability below) |
 
 A `startup.log` file in this folder records app startup events and is overwritten on each launch — useful for diagnosing startup crashes.
+
+---
+
+## Performance and stability
+
+### Rolling daily logs
+
+SoundPad writes a dated log file to `%AppData%\SoundPad\Logs\soundpad-YYYY-MM-DD.log` on every run. The last 10 days of logs are kept; older files are pruned automatically on startup. Logs record the session header (version, OS, .NET runtime, machine name), device creation, playback and export errors, backup import/export results, and any unhandled exceptions.
+
+The `startup.log` in `%AppData%\SoundPad\` is a separate file that captures very early startup events (before the rolling logger is ready) and is overwritten on each launch.
+
+### Diagnostics card
+
+**Settings tab → Diagnostics** provides two quick actions:
+
+| Button | What it does |
+|---|---|
+| **Open Logs Folder** | Opens `%AppData%\SoundPad\Logs\` in File Explorer |
+| **Export Diagnostics** | Saves a plain-text snapshot of the current session to your Desktop, including app version, OS version, selected audio devices (Monitor, Virtual, Mic), Instant Replay state, deck and sound counts, cache counts, and the last 50 log lines |
+
+The diagnostics snapshot never includes sound file paths or sound display names — only counts and device names.
+
+### Large file guard
+
+Audio files larger than 200 MB are rejected when added to the library. A clear error message is shown in the status bar. This prevents accidental OOM crashes from loading multi-hour recordings into RAM.
+
+### Save safety
+
+Deck data (`decks.json`) and settings (`settings.json`) are now written through safe wrappers that catch IO errors and log them instead of crashing. Volume slider changes are debounced — the file is written once 500 ms after you stop dragging, not on every tick.
+
+### Search debounce
+
+Typing in the search box is debounced at 150 ms for better responsiveness on large libraries. Clearing the search box applies immediately (no debounce delay).
+
+### Shutdown safety
+
+Instant Replay capture is disposed on a background thread at app exit to avoid a potential STA-thread deadlock on Windows audio capture APIs.
+
+### No audio behavior changes
+
+v1.15.0 contains no intentional changes to audio routing, playback, or effect rendering. All features from v1.14.0 and earlier are preserved.
 
 ---
 

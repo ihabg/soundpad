@@ -90,6 +90,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private readonly Dictionary<Guid, RowControls>    _rowControls     = new();
     private DispatcherTimer?                           _playbackMonitor;
 
+    // ── Debounce timers ────────────────────────────────────────────────────────
+    private DispatcherTimer? _deckSaveDebounceTimer;
+    private DispatcherTimer? _searchDebounceTimer;
+
     // ── Drag reorder state ────────────────────────────────────────────────────
     private const  string  InternalReorderFormat = "SoundPadInternalReorder";
     private        Point   _dragStartPoint;
@@ -180,7 +184,46 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             && top  >= virtualTop  && top  < virtualBottom;
     }
 
-    private void SaveSettings() => AppSettingsService.Save(_settings);
+    private void SaveSettings()
+    {
+        try
+        {
+            AppSettingsService.Save(_settings);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Settings", "Failed to save settings", ex);
+            try { StatusText.Text = "⚠ Settings could not be saved"; } catch { }
+        }
+    }
+
+    private void TrySaveDecks()
+    {
+        try
+        {
+            DeckService.Save(_decks);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Decks", "Failed to save decks", ex);
+            try { StatusText.Text = "⚠ Deck data could not be saved"; } catch { }
+        }
+    }
+
+    private void ScheduleDeckSave()
+    {
+        if (_deckSaveDebounceTimer is null)
+        {
+            _deckSaveDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _deckSaveDebounceTimer.Tick += (_, _) =>
+            {
+                _deckSaveDebounceTimer.Stop();
+                TrySaveDecks();
+            };
+        }
+        _deckSaveDebounceTimer.Stop();
+        _deckSaveDebounceTimer.Start();
+    }
 
     // Called by the global DispatcherUnhandledException handler in App.xaml.cs
     // so the user sees a status-bar message instead of a silent crash.
@@ -949,12 +992,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
             catch (Exception ex)
             {
+                AppLogger.Warn("Library", $"Could not load '{item.DisplayName}'", ex);
                 Debug.WriteLine($"[Library] Could not load '{item.DisplayName}': {ex.Message}");
             }
         }
 
         if (hotkeysMigrated)
-            DeckService.Save(_decks);
+            TrySaveDecks();
 
         RebuildDeckBar();
         RefreshCategoryFilter();
@@ -1103,7 +1147,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         if (_library.Count > 0)
-            DeckService.Save(_decks);
+            TrySaveDecks();
     }
 
     // ── Deck management ───────────────────────────────────────────────────────
@@ -1161,13 +1205,17 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         _activeDeck            = deck;
         _settings.ActiveDeckId = deck.Id;
-        AppSettingsService.Save(_settings);
+        SaveSettings();
 
         foreach (var item in _library.ToList())
         {
             if (!File.Exists(item.FilePath)) continue;
             try   { _cachedSounds[item.Id] = new CachedSound(item.FilePath); }
-            catch (Exception ex) { Debug.WriteLine($"[Deck] Could not load '{item.DisplayName}': {ex.Message}"); }
+            catch (Exception ex)
+            {
+                AppLogger.Warn("Library", $"Could not load '{item.DisplayName}' on deck switch", ex);
+                Debug.WriteLine($"[Deck] Could not load '{item.DisplayName}': {ex.Message}");
+            }
         }
 
         ReregisterAllHotkeysAndReport("deck-switch");
@@ -1186,7 +1234,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         var newDeck = new Deck { Name = dlg.ResultName };
         _decks.Add(newDeck);
-        DeckService.Save(_decks);
+        TrySaveDecks();
         SwitchToDeck(newDeck);
     }
 
@@ -1197,7 +1245,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (dlg.ShowDialog() != true) return;
 
         deck.Name = dlg.ResultName;
-        DeckService.Save(_decks);
+        TrySaveDecks();
         RebuildDeckBar();
         StatusText.Text = $"Deck renamed to: {deck.Name}";
         if (deck.Id == _activeDeck.Id)
@@ -1237,7 +1285,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         };
 
         _decks.Add(copy);
-        DeckService.Save(_decks);
+        TrySaveDecks();
         SwitchToDeck(copy);
     }
 
@@ -1260,7 +1308,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             SwitchToDeck(_decks.First(d => d.Id != deck.Id));
 
         _decks.Remove(deck);
-        DeckService.Save(_decks);
+        TrySaveDecks();
         RebuildDeckBar();
         StatusText.Text = $"Deleted deck: {deck.Name}";
     }
@@ -1542,7 +1590,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             int pct             = (int)Math.Round(e.NewValue);
             volPct.Text         = $"{pct}%";
             capturedItem.Volume = pct / 100f;
-            DeckService.Save(_decks);
+            ScheduleDeckSave();
         };
 
         var volRow = new DockPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
@@ -1575,7 +1623,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         favBtn.Click += (_, _) =>
         {
             capturedItem.IsFavorite = !capturedItem.IsFavorite;
-            DeckService.Save(_decks);
+            TrySaveDecks();
             FilterSoundsPanel();
         };
 
@@ -2007,7 +2055,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _library.RemoveAt(fromIndex);
         _library.Insert(adjusted, item);
 
-        DeckService.Save(_decks);
+        TrySaveDecks();
         FilterSoundsPanel();
         StatusText.Text = $"Moved: {item.DisplayName}";
     }
@@ -2522,7 +2570,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         _cachedSounds[item.Id] = cached;
         _library.Add(item);
-        DeckService.Save(_decks);
+        TrySaveDecks();
         RefreshCategoryFilter();
         FilterSoundsPanel();
         ActiveDeckChanged?.Invoke(_activeDeck); // refresh Mini Mode
@@ -2838,7 +2886,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         favMenuItem.Click += (_, _) =>
         {
             item.IsFavorite = !item.IsFavorite;
-            DeckService.Save(_decks);
+            TrySaveDecks();
             FilterSoundsPanel();
         };
 
@@ -2882,7 +2930,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var dlg = new Dialogs.ColorPickerDialog(this, item.PadColor);
         if (dlg.ShowDialog() != true) return;
         item.PadColor = dlg.ResultColor;
-        DeckService.Save(_decks);
+        TrySaveDecks();
         FilterSoundsPanel();
         StatusText.Text = $"Updated color for {item.DisplayName}";
     }
@@ -2995,6 +3043,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                     ? $"MP3 encoder unavailable (0x{comEx.HResult:X8}) — install the Windows Media Feature Pack."
                     : $"Export failed: {ex.Message}";
 
+                AppLogger.Error("Export", $"MP3 export failed: {item.DisplayName}", ex);
                 Dispatcher.Invoke(() =>
                 {
                     _exportInProgress.Remove(item.Id);
@@ -3038,7 +3087,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
             _cachedSounds[item.Id] = sound;
             _library.Add(item);
-            DeckService.Save(_decks);
+            TrySaveDecks();
             RefreshCategoryFilter();
             FilterSoundsPanel();
             StatusText.Text = $"Added: {item.DisplayName}";
@@ -3110,7 +3159,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
         }
 
-        DeckService.Save(_decks);
+        TrySaveDecks();
         RefreshCategoryFilter();
         FilterSoundsPanel();
         StatusText.Text = $"Updated: {item.DisplayName}";
@@ -3128,7 +3177,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _cachedSounds.Remove(item.Id);
         _processedSounds.Remove(item.Id);
         _library.Remove(item);
-        DeckService.Save(_decks);
+        TrySaveDecks();
         RefreshCategoryFilter();
         FilterSoundsPanel();
         var fileMsg = TryDeleteSoundFileIfUnused(item);
@@ -3223,7 +3272,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         };
         _cachedSounds[copy.Id] = cachedSound;
         _library.Add(copy);
-        DeckService.Save(_decks);
+        TrySaveDecks();
         RefreshCategoryFilter();
         FilterSoundsPanel();
         StatusText.Text = $"Duplicated: {copy.DisplayName}";
@@ -3265,7 +3314,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 string.Equals(s.Category, c, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
-        DeckService.Save(_decks);
+        TrySaveDecks();
         RefreshCategoryFilter();
         FilterSoundsPanel();
         StatusText.Text = "Categories updated.";
@@ -3345,7 +3394,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             item.Hotkey = null;
             ReregisterAllHotkeysAndReport("hotkey-clear");
-            DeckService.Save(_decks);
+            TrySaveDecks();
             FilterSoundsPanel();
             StatusText.Text = $"Hotkey cleared: {item.DisplayName}";
             return;
@@ -3382,7 +3431,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        DeckService.Save(_decks);
+        TrySaveDecks();
         FilterSoundsPanel();
         StatusText.Text = $"Hotkey set: {item.DisplayName} → {newBinding.DisplayText}";
     }
@@ -3468,7 +3517,27 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // ── Search and category filter ─────────────────────────────────────────────
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        => FilterSoundsPanel();
+    {
+        // Clear immediately for instant feedback; debounce typed input to ~150ms.
+        if (string.IsNullOrEmpty(SearchBox.Text))
+        {
+            _searchDebounceTimer?.Stop();
+            FilterSoundsPanel();
+            return;
+        }
+
+        if (_searchDebounceTimer is null)
+        {
+            _searchDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            _searchDebounceTimer.Tick += (_, _) =>
+            {
+                _searchDebounceTimer.Stop();
+                FilterSoundsPanel();
+            };
+        }
+        _searchDebounceTimer.Stop();
+        _searchDebounceTimer.Start();
+    }
 
     private void CategoryFilter_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -3576,7 +3645,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         item.LastPlayedAt = DateTime.UtcNow;
-        DeckService.Save(_decks);
+        TrySaveDecks();
 
         if (CategoryFilter?.SelectedItem as string == "Recent")
             FilterSoundsPanel();
@@ -3618,6 +3687,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
             catch (Exception ex)
             {
+                AppLogger.Error("Effects", $"Render failed: {item.DisplayName}", ex);
                 StatusText.Text = $"Render failed: {item.DisplayName} — {ex.Message}";
                 return;
             }
@@ -3791,6 +3861,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             MonitorComboBox.SelectedIndex     = monitorIndex;
             MonitorComboBox.SelectionChanged += MonitorComboBox_SelectionChanged;
             CreateMonitorEngine(monitorDevices[monitorIndex].Number);
+            AppLogger.Info("Devices", $"Monitor: [{monitorDevices[monitorIndex].Number}] {monitorDevices[monitorIndex].Name}");
 
             var virtualDevices = AudioDevice.GetAllWithNone();
             int virtualIndex = FindDeviceIndex(virtualDevices, _settings.VirtualDeviceName, _settings.VirtualDeviceNumber,
@@ -3807,6 +3878,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             var selectedVirtual = virtualDevices[virtualIndex];
             if (!selectedVirtual.IsNone)
                 CreateVirtualEngine(selectedVirtual.Number);
+            AppLogger.Info("Devices", $"Virtual: [{selectedVirtual.Number}] {selectedVirtual.Name}");
 
             if (monitorMissing)
                 StatusText.Text = $"Saved monitor device \"{_settings.MonitorDeviceName}\" not found — using default.";
@@ -3819,6 +3891,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
         catch (Exception ex)
         {
+            AppLogger.Error("Devices", "PopulateDeviceLists failed", ex);
             StatusText.Text = $"Device list error: {ex.Message}";
         }
     }
@@ -3888,6 +3961,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         catch (Exception ex)
         {
             _monitorEngine  = null;
+            AppLogger.Error("Devices", $"CreateMonitorEngine failed (device #{deviceNumber})", ex);
             StatusText.Text = $"Monitor device error: {ex.Message}";
         }
     }
@@ -3899,6 +3973,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         catch (Exception ex)
         {
             _virtualEngine  = null;
+            AppLogger.Error("Devices", $"CreateVirtualEngine failed (device #{deviceNumber})", ex);
             StatusText.Text = $"Virtual device error: {ex.Message}";
         }
     }
@@ -4170,6 +4245,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (dialog.ShowDialog() != true) return;
 
+        StatusText.Text = "Exporting backup…";
         try
         {
             LibraryBackupService.Export(_decks, dialog.FileName);
@@ -4177,6 +4253,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
         catch (Exception ex)
         {
+            AppLogger.Error("Backup", "Backup export failed", ex);
             StatusText.Text = $"Export failed: {ex.Message}";
         }
     }
@@ -4191,6 +4268,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (dialog.ShowDialog() != true) return;
 
+        StatusText.Text = "Importing backup…";
         ImportResult result;
         try
         {
@@ -4198,6 +4276,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
         catch (Exception ex)
         {
+            AppLogger.Error("Backup", "Backup import failed", ex);
             StatusText.Text = $"Import failed: {ex.Message}";
             return;
         }
@@ -4208,13 +4287,17 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (File.Exists(item.FilePath))
             {
                 try   { _cachedSounds[item.Id] = new CachedSound(item.FilePath); }
-                catch (Exception ex) { Debug.WriteLine($"[Import] Could not preload '{item.DisplayName}': {ex.Message}"); }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn("Library", $"Could not preload '{item.DisplayName}' after import", ex);
+                    Debug.WriteLine($"[Import] Could not preload '{item.DisplayName}': {ex.Message}");
+                }
             }
         }
 
         if (result.AllNewSounds.Count > 0 || result.DecksAdded > 0)
         {
-            DeckService.Save(_decks);
+            TrySaveDecks();
             RebuildDeckBar();
             RefreshCategoryFilter();
             FilterSoundsPanel();
@@ -4341,7 +4424,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (added > 0)
         {
-            DeckService.Save(_decks);
+            TrySaveDecks();
             RefreshCategoryFilter();
             FilterSoundsPanel();
         }
@@ -4505,6 +4588,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
+        // Flush any pending debounced deck save so no data is lost on close.
+        if (_deckSaveDebounceTimer?.IsEnabled == true)
+        {
+            _deckSaveDebounceTimer.Stop();
+            TrySaveDecks();
+        }
+
         // Only persist bounds while Normal; maximized/minimized dimensions
         // aren't meaningful as a restored size for next launch.
         if (WindowState == WindowState.Normal)
@@ -4538,7 +4628,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var irService = _instantReplay;
         _instantReplay = null;
         if (irService is not null)
-            _ = Task.Run(() => irService.Dispose());
+            _ = Task.Run(() =>
+            {
+                try { irService.Dispose(); }
+                catch (Exception ex) { AppLogger.Error("IR", "InstantReplay dispose failed", ex); }
+            });
 
         _trayIcon?.Dispose();
         _trayIcon = null;
@@ -4547,6 +4641,83 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _micPassthrough?.Dispose();
         _monitorEngine?.Dispose();
         _virtualEngine?.Dispose();
+    }
+
+    // ── Diagnostics ────────────────────────────────────────────────────────────
+
+    private void OpenLogsFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(AppPaths.LogsDirectory);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName        = AppPaths.LogsDirectory,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Could not open logs folder: {ex.Message}";
+        }
+    }
+
+    private void ExportDiagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title        = "Export Diagnostics",
+            Filter       = "Text file (*.txt)|*.txt",
+            FileName     = $"SoundPad-Diagnostics-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.txt",
+            DefaultExt   = ".txt",
+            AddExtension = true
+        };
+
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            var verStr  = version is null ? "?" : $"{version.Major}.{version.Minor}.{version.Build}";
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"SoundPad Diagnostics — {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            sb.AppendLine($"Version : {verStr}");
+            sb.AppendLine($"OS      : {Environment.OSVersion}");
+            sb.AppendLine($".NET    : {Environment.Version}");
+            sb.AppendLine();
+
+            sb.AppendLine("=== Devices ===");
+            sb.AppendLine($"Monitor : [{_settings.MonitorDeviceNumber}] {_settings.MonitorDeviceName}");
+            sb.AppendLine($"Virtual : [{_settings.VirtualDeviceNumber}] {_settings.VirtualDeviceName}");
+            sb.AppendLine($"Mic     : [{_settings.MicDeviceNumber}] {_settings.MicDeviceName}");
+            sb.AppendLine();
+
+            sb.AppendLine("=== Instant Replay ===");
+            sb.AppendLine($"Active  : {_instantReplay is not null}");
+            sb.AppendLine($"IR Mic  : [{_settings.InstantReplayMicDeviceNumber}] {_settings.InstantReplayMicDeviceName}");
+            sb.AppendLine();
+
+            sb.AppendLine("=== Library ===");
+            sb.AppendLine($"Decks        : {_decks.Count}");
+            sb.AppendLine($"Sounds total : {_decks.Sum(d => d.Sounds.Count)}");
+            sb.AppendLine($"Sounds active: {_library.Count}");
+            sb.AppendLine($"Loaded       : {_cachedSounds.Count}");
+            sb.AppendLine($"Processed    : {_processedSounds.Count}");
+            sb.AppendLine();
+
+            sb.AppendLine("=== Last 20 log lines ===");
+            foreach (var line in AppLogger.GetLastLines(20))
+                sb.AppendLine(line);
+
+            File.WriteAllText(dialog.FileName, sb.ToString());
+            StatusText.Text = $"Diagnostics exported: {Path.GetFileName(dialog.FileName)}";
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Diagnostics", "Export diagnostics failed", ex);
+            StatusText.Text = $"Diagnostics export failed: {ex.Message}";
+        }
     }
 
 }

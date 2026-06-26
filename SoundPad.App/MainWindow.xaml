@@ -1122,6 +1122,41 @@
                             </StackPanel>
                         </ui:Card>
 
+                        <!-- ── Diagnostics ──────────────────────────────────────────── -->
+                        <ui:Card Padding="20" Margin="0,0,0,0">
+                            <StackPanel>
+                                <TextBlock Text="DIAGNOSTICS"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Margin="0,0,0,12"/>
+
+                                <TextBlock Text="Logs are written to %AppData%\SoundPad\Logs\ (last 10 days kept)."
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,12"/>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:Button Content="Open Logs Folder"
+                                               Appearance="Secondary"
+                                               Margin="0,0,8,0"
+                                               Click="OpenLogsFolder_Click">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="Folder20"/>
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                    <ui:Button Content="Export Diagnostics"
+                                               Appearance="Secondary"
+                                               Click="ExportDiagnostics_Click">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="DocumentText20"/>
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                </StackPanel>
+                            </StackPanel>
+                        </ui:Card>
+
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

@@ -1,4 +1,4 @@
-# SoundPad v1.14.0 — Release Checklist
+# SoundPad v1.15.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -11,7 +11,7 @@ Check off each item as you verify it.
 - [ ] `.\scripts\publish-release.ps1` completes without errors
 - [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
 - [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.14.0.exe` exists after installer build
+- [ ] `artifacts\installer\SoundPad-Setup-1.15.0.exe` exists after installer build
 
 ---
 
@@ -37,8 +37,8 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.14.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.14.0), and publisher
+- [ ] Run `SoundPad-Setup-1.15.0.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version (1.15.0), and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
@@ -250,7 +250,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.14.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.15.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
@@ -1417,6 +1417,98 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ---
 
+## Feature tests — v1.15.0 new features
+
+### Logging — startup
+
+- [ ] App opens normally (no crash, no startup error in status bar)
+- [ ] `%AppData%\SoundPad\Logs\` folder is created automatically on first launch
+- [ ] A dated log file `soundpad-YYYY-MM-DD.log` exists in that folder after launch
+- [ ] Open the log file — it contains a session header with app version, OS version, .NET version, and machine name
+- [ ] A `[INFO] [Startup]` line confirms AppLogger initialized
+
+### Logging — log retention
+
+- [ ] Manually create dummy files `soundpad-2020-01-01.log` and `soundpad-2020-06-15.log` in the Logs folder
+- [ ] Restart the app → both dummy files are deleted (older than 10 days)
+- [ ] Logs from the last 10 days are not deleted
+
+### Save safety — deck operations
+
+- [ ] Add a sound → app does not crash; no error in status bar
+- [ ] Remove a sound → app does not crash; no error in status bar
+- [ ] Toggle a sound's favorite star → app does not crash; favorite state persists after restart
+- [ ] Drag-reorder two sounds → app does not crash; new order persists after restart
+
+### Save safety — volume debounce
+
+- [ ] Drag the volume slider rapidly back and forth for 2–3 seconds → status bar does not flash on every tick
+- [ ] Release the slider → wait ~500 ms → deck save fires once (confirm by checking the log for a single `[INFO] [Decks]` save, or verify `decks.json` is updated once after settling)
+- [ ] Close the app immediately after a volume change (within the debounce window) → reopen → volume is at the value it was when closed (flush-on-exit works)
+
+### Search debounce
+
+- [ ] Type a character in the search box in a deck with many sounds (10+) → library filters without noticeable stutter
+- [ ] Clear the search box by pressing the × button → library reverts immediately (no 150 ms delay on clear)
+- [ ] Type a partial name → library filters within ~150 ms after you stop typing
+
+### Diagnostics — Open Logs Folder
+
+- [ ] Settings tab → Diagnostics card → click **Open Logs Folder** → File Explorer opens at `%AppData%\SoundPad\Logs\`
+- [ ] If the Logs folder does not yet exist, clicking the button does not crash
+
+### Diagnostics — Export Diagnostics
+
+- [ ] Settings tab → Diagnostics card → click **Export Diagnostics** → Save dialog opens
+- [ ] Save the file → a plain-text `.txt` file is created at the chosen location
+- [ ] Open the file and verify it contains all of the following:
+  - `=== SoundPad Diagnostics ===` header with timestamp
+  - App version (e.g. `Version : 1.15.0`)
+  - OS version and .NET version
+  - `=== Devices ===` section with Monitor, Virtual, and **Mic** lines
+  - `=== Instant Replay ===` section with `Active` (true/false) and IR Mic device
+  - `=== Library ===` section with `Decks`, `Sounds total` (sum across all decks), `Sounds active` (active deck only), `Loaded`, and `Processed` lines
+  - `=== Recent Log ===` section with the last 50 log lines
+- [ ] The file does **not** contain any sound display names or audio file paths
+
+### Diagnostics — cross-deck sound count
+
+- [ ] Create two decks, add 3 sounds to Deck A and 2 sounds to Deck B
+- [ ] While on Deck A, export Diagnostics → `Sounds total` = 5, `Sounds active` = 3
+- [ ] Switch to Deck B, export Diagnostics → `Sounds total` = 5, `Sounds active` = 2
+
+### Large file guard
+
+- [ ] Attempt to add an audio file larger than 200 MB to the library (or drop it onto the panel) → import is rejected; a clear error message appears in the status bar
+- [ ] App does not crash; no partial entry added to the library
+- [ ] The warning is also recorded in the daily log file as a `[WARN] [Library]` entry
+
+### Error logging — MP3 export failure
+
+- [ ] Attempt to export as MP3 to a read-only location (e.g. `C:\Windows\`) → status bar shows the error; no crash
+- [ ] Open the daily log → a `[ERROR] [Export]` entry is present with the failure message
+
+### Backup import/export
+
+- [ ] Settings → Export Backup → ZIP created without crash; status bar confirms success
+- [ ] Settings → Import Backup → import valid ZIP → sounds appear in library without crash
+- [ ] Import a backup containing a sound file that cannot be preloaded (e.g. delete the audio file from the ZIP before importing, or use a corrupt audio file) → import completes; missing/unloadable sound shows a `[WARN] [Library]` entry in the daily log; app does not crash
+
+### Regression — all existing features preserved
+
+- [ ] Audio Effects (Reverse, Normalize, Speed) still work and persist
+- [ ] Pro Sound Editor still opens, cuts, removes blocks, undoes/redoes correctly
+- [ ] Hotkeys (sound, Stop All, Instant Replay Save Clip, Toggle IR) still fire globally
+- [ ] Mini Mode opens, shows pads, syncs playback state bidirectionally
+- [ ] Instant Replay captures audio, saves clips, opens clips in the Sound Editor
+- [ ] Routing Wizard and device selection work; Mic Passthrough enabled/disabled without crash
+- [ ] Grid View and List View toggle; pad sizes; compact mode all work
+- [ ] Drag-and-drop reorder in both List and Grid views still functions
+- [ ] Deck create, rename, duplicate, delete all work correctly
+- [ ] In-app updater still checks for updates without crash
+
+---
+
 ## Uninstall test
 
 - [ ] Uninstall via Settings → Apps
@@ -1432,12 +1524,12 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.14.0
-  git push origin v1.14.0
+  git tag v1.15.0
+  git push origin v1.15.0
   ```
-- [ ] Create GitHub Release from tag `v1.14.0`
-- [ ] Add release notes summarising v1.14.0 Audio Effects Phase 1 changes
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.14.0.exe` as a release asset
+- [ ] Create GitHub Release from tag `v1.15.0`
+- [ ] Add release notes summarising v1.15.0 Performance and Stability changes
+- [ ] Upload `artifacts\installer\SoundPad-Setup-1.15.0.exe` as a release asset
 - [ ] Verify the download link works and the installer runs cleanly
 
 ---

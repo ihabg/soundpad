@@ -44,9 +44,70 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 3. Optionally tick **Create a Desktop shortcut** during setup.
 4. Click **Launch SoundPad** at the end of the wizard, or find it in the Start Menu.
 
-> **Windows SmartScreen warning** — SoundPad is not yet code-signed. If Windows shows  
-> "Windows protected your PC", click **More info → Run anyway**. Code signing is a  
-> planned future step.
+> **Windows SmartScreen warning** — SoundPad is not yet code-signed. Windows may show  
+> "Windows protected your PC" on first run. See [Windows SmartScreen and Smart App Control](#windows-smartscreen-and-smart-app-control) below.
+
+---
+
+## Download and verify
+
+The official download source is the **[GitHub Releases page](https://github.com/ihabg/SoundPad/releases)**.
+
+Two release artifacts are available for each version:
+
+| File | Description |
+|---|---|
+| `SoundPad-Setup-X.Y.Z.exe` | **Recommended** — installer, installs per-user to `%LocalAppData%\Programs\SoundPad` |
+| `SoundPad-Portable-X.Y.Z.zip` | No install required — extract anywhere and run `SoundPad.App.exe` directly |
+
+A SHA256 checksum file is published alongside each artifact (`.sha256`) and the hash is also included in the release notes.
+
+### Verifying the SHA256 checksum
+
+Open a PowerShell window in the folder where you downloaded the file and run:
+
+```powershell
+Get-FileHash .\SoundPad-Setup-X.Y.Z.exe -Algorithm SHA256
+```
+
+Compare the `Hash` field in the output to the value in `SoundPad-Setup-X.Y.Z.exe.sha256` (or the release notes). They must match exactly. A mismatch means the file was corrupted or tampered with — delete it and re-download from the official Releases page.
+
+For the portable ZIP:
+
+```powershell
+Get-FileHash .\SoundPad-Portable-X.Y.Z.zip -Algorithm SHA256
+```
+
+---
+
+## Windows SmartScreen and Smart App Control
+
+**SoundPad is currently unsigned.** Because it has not yet obtained a code-signing certificate, Windows may display security warnings when you run the installer or the portable exe for the first time.
+
+### Windows SmartScreen
+
+If Windows shows **"Windows protected your PC"**:
+
+1. Click **More info**
+2. Click **Run anyway**
+
+This warning appears for any recently published unsigned executable, not because the file is harmful.
+
+### Smart App Control
+
+Smart App Control (Windows 11 only) is stricter than SmartScreen and may block unsigned apps outright. If SoundPad is blocked:
+
+- **Verify the SHA256 checksum** to confirm the file is authentic (see above)
+- **Download only from the official GitHub Releases page**
+- **Build from source** if you prefer not to run unsigned binaries — see [Building from source](#building-from-source)
+
+Smart App Control reputation builds over time as more users run the signed release. Code signing is a planned future step that will eliminate these warnings.
+
+> **Do not disable Windows security to run SoundPad.** If you are blocked and the SHA256 matches, the safest options are building from source or waiting for a signed release.
+
+### Developer machines
+
+On machines with Smart App Control enabled, running a freshly built `dotnet run` or `dotnet publish` output may also be blocked. Developer machines typically disable Smart App Control (it can only be turned off, not on, once changed — see Windows Security settings). This affects the dev build only, not end-user installs.
 
 ---
 

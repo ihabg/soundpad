@@ -8,10 +8,40 @@ Check off each item as you verify it.
 ## Build verification
 
 - [ ] `dotnet build SoundPad.App/SoundPad.App.csproj -c Release` → **0 errors / 0 warnings**
-- [ ] `.\scripts\publish-release.ps1` completes without errors
-- [ ] `artifacts\publish\SoundPad.App.exe` exists after publish
-- [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup)
-- [ ] `artifacts\installer\SoundPad-Setup-1.15.0.exe` exists after installer build
+- [ ] `.\scripts\build-installer.ps1` completes without errors (requires Inno Setup) — this also runs publish automatically
+- [ ] All five artifacts exist in `artifacts\installer\` after the script finishes (see Release artifacts below)
+
+---
+
+## Release artifacts
+
+Run `.\scripts\build-installer.ps1`. Confirm all five artifacts are present before uploading:
+
+- [ ] `artifacts\installer\SoundPad-Setup-X.Y.Z.exe` — installer
+- [ ] `artifacts\installer\SoundPad-Setup-X.Y.Z.exe.sha256` — installer checksum
+- [ ] `artifacts\installer\SoundPad-Portable-X.Y.Z.zip` — portable ZIP
+- [ ] `artifacts\installer\SoundPad-Portable-X.Y.Z.zip.sha256` — portable ZIP checksum
+- [ ] `artifacts\installer\release-manifest.json` — machine-readable manifest
+
+### Verify checksums
+
+Cross-check both hashes using `Get-FileHash` to confirm the `.sha256` files are correct:
+
+```powershell
+Get-FileHash .\artifacts\installer\SoundPad-Setup-X.Y.Z.exe     -Algorithm SHA256
+Get-FileHash .\artifacts\installer\SoundPad-Portable-X.Y.Z.zip  -Algorithm SHA256
+```
+
+- [ ] Installer SHA256 matches `SoundPad-Setup-X.Y.Z.exe.sha256`
+- [ ] Portable ZIP SHA256 matches `SoundPad-Portable-X.Y.Z.zip.sha256`
+- [ ] `release-manifest.json` is valid JSON with correct version, filenames, hashes, and releaseDate
+
+### Folder hygiene
+
+Before uploading, verify `artifacts\installer\` contains only the intended files for this release. Old artifacts from previous versions are not deleted automatically — remove them manually to avoid uploading the wrong files.
+
+- [ ] No installer `.exe` from a previous version present (or intentionally kept)
+- [ ] `release-manifest.json` shows the correct version number
 
 ---
 
@@ -37,13 +67,24 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ## Installer test
 
-- [ ] Run `SoundPad-Setup-1.15.0.exe` — no UAC prompt (per-user install)
-- [ ] Installer wizard shows correct app name, version (1.15.0), and publisher
+- [ ] Run `SoundPad-Setup-X.Y.Z.exe` — no UAC prompt (per-user install)
+- [ ] Installer wizard shows correct app name, version, and publisher
 - [ ] App icon appears on installer wizard pages
 - [ ] Installation completes to `%LocalAppData%\Programs\SoundPad`
 - [ ] Start Menu shortcut created and launches the app
 - [ ] Desktop shortcut created if the user ticked the option
 - [ ] App launches after installer finishes
+
+---
+
+## Portable ZIP test
+
+- [ ] Extract `SoundPad-Portable-X.Y.Z.zip` to a clean temporary folder
+- [ ] Run `SoundPad.App.exe` from the extracted folder — app launches without installer
+- [ ] All UI tabs are visible and functional
+- [ ] Sounds play correctly
+- [ ] App data (`%AppData%\SoundPad\`) is created and used normally (library and settings persist)
+- [ ] Closing and reopening from the same extracted folder restores settings
 
 ---
 
@@ -1524,18 +1565,49 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] All changes committed on `main` with 0 modified files
 - [ ] Create and push Git tag:  
   ```
-  git tag v1.15.0
-  git push origin v1.15.0
+  git tag vX.Y.Z
+  git push origin vX.Y.Z
   ```
-- [ ] Create GitHub Release from tag `v1.15.0`
-- [ ] Add release notes summarising v1.15.0 Performance and Stability changes
-- [ ] Upload `artifacts\installer\SoundPad-Setup-1.15.0.exe` as a release asset
-- [ ] Verify the download link works and the installer runs cleanly
+- [ ] Create GitHub Release from that tag
+- [ ] Add release notes summarising the changes for this version
+- [ ] Include the installer SHA256 hash in the release notes body
+
+### Upload all release artifacts
+
+Upload every file from `artifacts\installer\` to the GitHub Release:
+
+- [ ] `SoundPad-Setup-X.Y.Z.exe`
+- [ ] `SoundPad-Setup-X.Y.Z.exe.sha256`
+- [ ] `SoundPad-Portable-X.Y.Z.zip`
+- [ ] `SoundPad-Portable-X.Y.Z.zip.sha256`
+- [ ] `release-manifest.json`
+
+- [ ] Verify all download links work and file sizes look correct in the GitHub Release page
+
+### Microsoft Security Intelligence submission
+
+If the installer is flagged or blocked by Windows Defender / Smart App Control on clean machines, submit the installer for manual analysis:
+
+1. Go to **[Microsoft Security Intelligence](https://www.microsoft.com/en-us/wdsi/filesubmission)**
+2. Upload `SoundPad-Setup-X.Y.Z.exe`
+3. Select **"Software developer"** and describe SoundPad honestly
+4. Submit and record the submission ID
+
+This builds reputation for the binary and reduces the likelihood of false positives in future releases. It does not guarantee immediate approval and is a best-effort step.
+
+- [ ] Submission made (or confirmed not needed — skip if installer runs cleanly on clean machines)
+
+### Test updater from previous version
+
+- [ ] Install previous version (e.g. from previous GitHub Release)
+- [ ] Launch the app → Settings → Check for Updates → update panel shows the new version
+- [ ] Download & Install flow works end to end
+- [ ] App closes and new installer launches
 
 ---
 
 ## Post-release
 
-- [ ] Note in release notes that the app is unsigned and SmartScreen may warn
-- [ ] (Future) Obtain EV code-signing certificate to eliminate SmartScreen prompt
+- [ ] Confirm release notes mention that the app is unsigned and SmartScreen may warn
+- [ ] (Future) Obtain EV code-signing certificate to eliminate SmartScreen and Smart App Control prompts
 - [ ] (Future) Ship a built-in SoundPad virtual audio driver to remove VB-CABLE dependency

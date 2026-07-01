@@ -1,4 +1,4 @@
-# SoundPad v1.15.0 — Release Checklist
+# SoundPad v1.16.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -291,7 +291,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.15.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.16.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 

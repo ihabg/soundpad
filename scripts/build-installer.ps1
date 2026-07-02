@@ -18,21 +18,29 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path $PSScriptRoot -Parent
 
-# -- Read version from installer/SoundPad.iss ---------------------------------
+# -- Read version from SoundPad.App/SoundPad.App.csproj -----------------------
+$csprojPath = Join-Path $root "SoundPad.App\SoundPad.App.csproj"
+if (-not (Test-Path $csprojPath)) {
+    Write-Host "[ERROR] SoundPad.App\SoundPad.App.csproj not found." -ForegroundColor Red
+    exit 1
+}
+
+[xml]$csproj = Get-Content $csprojPath -Raw
+$appVersion = $csproj.Project.PropertyGroup |
+    Where-Object { $null -ne $_.Version } |
+    Select-Object -First 1 -ExpandProperty Version
+if (-not $appVersion) {
+    Write-Host "[ERROR] Could not read <Version> from SoundPad.App.csproj." -ForegroundColor Red
+    exit 1
+}
+Write-Host ""
+Write-Host "[INFO] Version: $appVersion  (read from SoundPad.App.csproj)" -ForegroundColor Cyan
+
 $issPath = Join-Path $root "installer\SoundPad.iss"
 if (-not (Test-Path $issPath)) {
     Write-Host "[ERROR] installer\SoundPad.iss not found." -ForegroundColor Red
     exit 1
 }
-
-$issContent = Get-Content $issPath -Raw
-if ($issContent -notmatch '#define AppVersion\s+"([^"]+)"') {
-    Write-Host "[ERROR] Could not read AppVersion from SoundPad.iss." -ForegroundColor Red
-    exit 1
-}
-$appVersion = $Matches[1]
-Write-Host ""
-Write-Host "[INFO] Version: $appVersion" -ForegroundColor Cyan
 
 # -- Step 1 / 3 - Publish -----------------------------------------------------
 Write-Host ""
@@ -86,7 +94,8 @@ if (-not $isccPath) {
 Write-Host "  Found: $isccPath" -ForegroundColor Gray
 Write-Host ""
 
-& $isccPath $issPath
+# Pass the csproj version to ISCC so it overrides the #define in the .iss file.
+& $isccPath $issPath "/DAppVersion=$appVersion"
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""

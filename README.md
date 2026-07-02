@@ -38,7 +38,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.16.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.17.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -657,6 +657,72 @@ While the Sound Editor is open, clicking **Play Preview** renders effects using 
 ### Vinyl-style pitch note
 
 Speed change uses a resampling approach: playing at 2× speed also raises pitch by one octave; 0.5× lowers it by one octave. True pitch-shifting without speed change is planned for a future release.
+
+---
+
+## Sound Composer
+
+Click the **Sound Composer** button in the toolbar to open the multi-track audio composer. Build a new mix from sounds already in your SoundPad library and save it as a new WAV item in the active deck.
+
+### Tracks and clips
+
+The composer timeline is a multi-track canvas (up to 8 tracks). Each clip on the timeline references a sound from your library and can be positioned, trimmed, cut, and configured independently.
+
+- **Add Sound** — opens a picker to add a sound from your library. It can be added to the selected track (at the playhead) or as a new track.
+- **Drag clips** — drag a clip body to move it left/right within its track or up/down to a different track. Clips on the source track are automatically cleaned up when it becomes empty.
+- **Trim handles** — hover near a clip's left or right edge; the cursor changes to a resize arrow. Drag to trim the clip's start or end point. Toggle handles on/off with the **Trim Handles** checkbox.
+
+### Tools
+
+| Tool | Shortcut | What it does |
+|---|---|---|
+| **Select** | A | Click a clip to select it; click empty space to deselect |
+| **Cut** | C | Click inside a clip to split it in two at that point |
+| **Ripple** | R | Drag a clip and all clips after it on the same track shift together |
+
+### Cut / Split
+
+Press **C**, then click inside any clip to split it at that position. The left half retains the original clip's fade-in; the right half retains the fade-out. No audio is removed — cut alone just divides the clip.
+
+**Delete Left** / **Delete Right** in the toolbar trim the selected clip to everything after or before the current playhead position.
+
+### Clip settings
+
+Select any clip and use the **Selected Clip** panel on the right side of the composer:
+
+- **Volume** — 0–200 % slider with live label
+- **Fade In / Fade Out** — seconds, applied at render time
+- **Apply** — commits volume and fade changes with undo support
+- **Audio Settings…** — opens a detailed dialog with dB nudge buttons (+1/−1/+3/−3 dB) and fade presets (0.1 s, 0.25 s, 0.5 s)
+
+Per-track volume sliders appear in the left label panel and are also undoable.
+
+### Snap guides
+
+When **Snap** is checked, clip edges and cut positions snap to the playhead and to the edges of neighbouring clips within 12 pixels. The snap zone is pixel-based, so it stays consistent at any zoom level.
+
+### Zoom and navigation
+
+Use **+** / **−** / **Fit** to zoom the timeline. The ruler and track canvas scroll in sync. Click anywhere on the ruler to jump the playhead to that position.
+
+### Waveform preview
+
+Each clip renders a peak waveform in the background the first time it appears. Waveforms update automatically as clips are added or the timeline is rebuilt.
+
+### Undo / Redo
+
+Every edit (add, move, trim, cut, split, delete, volume, fade, track volume) is undoable:
+
+- **Ctrl+Z** — Undo
+- **Ctrl+Y** — Redo
+
+### Preview
+
+Click **Preview** (or press **Space**) to render the current mix from the playhead position through the Monitor Output device. Click **Stop** (or press **Space** again) to stop.
+
+### Save to Library
+
+Click **Save to Library** to render the full mix to a WAV file and add it to the active deck as a new sound. The name comes from the **Name** field in the toolbar. The saved sound can be played, edited, hotkeyed, and exported like any other library item.
 
 ---
 

@@ -1,4 +1,4 @@
-# SoundPad v1.16.0 — Release Checklist
+# SoundPad v1.17.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  
 Check off each item as you verify it.
@@ -291,7 +291,7 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 
 ### Update check — already on latest
 
-- [ ] Settings → Check for Updates (while running v1.16.0) → status bar shows "SoundPad is up to date."
+- [ ] Settings → Check for Updates (while running v1.17.0) → status bar shows "SoundPad is up to date."
 - [ ] No update panel appears when already on latest
 - [ ] CheckUpdatesButton re-enables immediately after result
 
@@ -1547,6 +1547,159 @@ Run `artifacts\publish\SoundPad.App.exe` directly (not via dotnet run):
 - [ ] Drag-and-drop reorder in both List and Grid views still functions
 - [ ] Deck create, rename, duplicate, delete all work correctly
 - [ ] In-app updater still checks for updates without crash
+
+---
+
+## Feature tests — v1.17.0 new features
+
+### Sound Composer — open and initial state
+
+- [ ] Click the **Sound Composer** button in the toolbar → composer dialog opens (1200 × 660, centred over main window)
+- [ ] One empty track row is visible in the label panel
+- [ ] All three tool buttons visible: Select (Primary / active), Cut, Ripple
+- [ ] Undo and Redo buttons are disabled on open
+- [ ] Snap checkbox is present and unchecked by default
+- [ ] Trim Handles checkbox is present and checked by default
+- [ ] Status bar shows "Ready — Select tool active"
+
+### Sound Composer — adding sounds
+
+- [ ] Click **Add Sound** → sound picker overlay appears with a search box and the active deck's sounds listed
+- [ ] Type in the search box → list filters in real time
+- [ ] Double-click a sound (or click **Add as New Track**) → clip appears on a new track at position 0
+- [ ] Select a clip, then click **Add to Selected Track** → new clip added to the selected track at the playhead position
+- [ ] Click **Cancel** in the picker → overlay dismisses; nothing added
+- [ ] Clip block shows the sound name in the clip body
+
+### Sound Composer — waveform preview
+
+- [ ] After adding a clip, within ~2 seconds the clip block renders a peak waveform inside it
+- [ ] Waveform is visible at default zoom
+- [ ] Adding the same sound twice → waveform appears immediately on the second clip (cached)
+- [ ] Zooming in → waveform redraws correctly at the new scale
+
+### Sound Composer — Select tool and clip info panel
+
+- [ ] Press **A** (or click Select button) → Select tool is active (Primary appearance)
+- [ ] Click a clip → clip highlights with a coloured selection outline
+- [ ] Right panel shows: Source name, Track number, Start time, Duration, Volume slider, Fade In box, Fade Out box, Apply button, Audio Settings button
+- [ ] Click elsewhere → clip deselects; right panel shows "No clip selected" placeholder
+- [ ] Drag clip body → Start label in panel updates in real time
+
+### Sound Composer — drag and reorder
+
+- [ ] Drag a clip left/right within its track → clip repositions; other clips are unaffected (Select tool)
+- [ ] Drag a clip to a different track row → clip moves to the new track
+- [ ] Source track is removed automatically if it becomes empty (and was not the only track)
+- [ ] Release drag → timeline rebuilds cleanly with no duplicate clips
+
+### Sound Composer — Ripple tool
+
+- [ ] Press **R** (or click Ripple button) → Ripple tool becomes active
+- [ ] Drag a clip → that clip and all clips to its right on the same track shift together
+- [ ] Clips on other tracks are unaffected during a Ripple drag
+- [ ] Release → timeline rebuilds; relative spacing of ripple-dragged clips is preserved
+
+### Sound Composer — Cut tool
+
+- [ ] Press **C** (or click Cut button) → Cut tool becomes active; cursor changes to crosshair over clips
+- [ ] Hover over a clip → yellow dashed cut preview hairline follows the mouse
+- [ ] Click inside a clip → clip splits into two adjacent clips; total covered time is unchanged
+- [ ] With Snap ON and playhead near the click position (< 12 px) → hairline snaps to playhead; click cuts exactly at playhead
+- [ ] With Snap OFF → click cuts at exact mouse position regardless of playhead distance
+- [ ] Left clip after cut: FadeIn = original FadeIn, FadeOut = 0
+- [ ] Right clip after cut: FadeIn = 0, FadeOut = original FadeOut
+
+### Sound Composer — Trim handles
+
+- [ ] Trim Handles checkbox is checked → hover near left edge of a clip → cursor changes to SizeWE resize arrow
+- [ ] Drag left edge inward → clip shrinks from the left; Start and Duration in the right panel update live
+- [ ] Drag right edge inward → clip shrinks from the right; Duration in right panel updates live
+- [ ] Clip cannot be trimmed below the minimum clip duration (~50 ms)
+- [ ] Uncheck Trim Handles → resize cursors no longer appear on clip edges
+
+### Sound Composer — Delete Left / Delete Right
+
+- [ ] Select a clip; position playhead inside it; click **Del Left** → portion of clip before playhead is removed; remaining clip starts at playhead
+- [ ] Select a clip; position playhead inside it; click **Del Right** → portion of clip after playhead is removed; clip ends at playhead
+- [ ] Both operations are undoable
+
+### Sound Composer — clip audio settings panel
+
+- [ ] Select a clip → adjust Volume slider in the right panel → PanelVolumeLabel updates live (e.g. "75%")
+- [ ] Edit Fade In box → type "0.5" → click **Apply** → clip fade-in is updated; Apply is undoable (Ctrl+Z reverts)
+- [ ] Edit Fade Out box → type "0.3" → click **Apply** → clip fade-out is updated
+- [ ] Click **Audio Settings…** → ClipSettingsDialog opens for the selected clip, pre-filled with current volume and fades
+- [ ] In ClipSettingsDialog: use dB nudge buttons (−3/−1/+1/+3 dB) → Volume slider moves correctly
+- [ ] In ClipSettingsDialog: click Apply → dialog closes; clip volume updated; change is undoable
+
+### Sound Composer — per-track volume
+
+- [ ] Track label panel shows a volume slider for each track (default: 100%)
+- [ ] Drag a track volume slider → track is louder or quieter in preview
+- [ ] Track volume change is undoable (Ctrl+Z reverts to value before the drag began)
+
+### Sound Composer — Undo / Redo
+
+- [ ] Undo button is disabled on open; Redo button is disabled on open
+- [ ] Perform an edit (add clip, move, cut, trim) → Undo button enables
+- [ ] Click Undo → edit is reversed; Redo button enables
+- [ ] Click Redo → edit is re-applied
+- [ ] Press Ctrl+Z / Ctrl+Y → same behaviour as buttons
+- [ ] Undo multiple times in sequence → each operation reverses in LIFO order
+- [ ] Performing a new edit after undoing clears the redo stack
+
+### Sound Composer — snap guides
+
+- [ ] Check **Snap** checkbox
+- [ ] Drag a clip near another clip's edge (within ~12 px in screen space) → clip snaps to align edges
+- [ ] Drag a clip near the playhead (within ~12 px) → clip snaps to playhead
+- [ ] Zoom in to maximum → snap zone still feels consistent (not wider or narrower than ~12 px on screen)
+- [ ] Uncheck Snap → clip edges no longer snap during drag
+
+### Sound Composer — zoom and ruler
+
+- [ ] Click **+** → timeline expands; ruler tick spacing adjusts; horizontal scrollbar appears
+- [ ] Click **−** → timeline contracts
+- [ ] Click **Fit** → timeline zooms to fit all clips in the visible area
+- [ ] Click on the ruler → playhead jumps to that position
+- [ ] Ruler scrolls in sync with the timeline canvas
+
+### Sound Composer — preview
+
+- [ ] Click **Preview** → mix renders and plays through Monitor Output from the playhead position
+- [ ] While playing, Stop button is enabled
+- [ ] Click **Stop** → playback stops
+- [ ] Press **Space** → same as Preview / Stop toggle
+- [ ] Close the composer while previewing → playback stops cleanly (no hung audio)
+
+### Sound Composer — save to library
+
+- [ ] Enter a name in the **Name** field (top left of toolbar)
+- [ ] Click **Save to Library** → dialog closes
+- [ ] New sound appears in the active deck with the entered name
+- [ ] New sound is a WAV file that plays correctly through Monitor Output
+- [ ] Rendered mix reflects the track layout, clip volumes, and fades
+- [ ] Saved sound can be opened in the Pro Sound Editor without crash
+
+### Sound Composer — cancel
+
+- [ ] Click **Cancel** → dialog closes without adding anything to the library
+- [ ] Library is unchanged after Cancel
+
+### Regression — Pro Sound Editor unaffected
+
+- [ ] Right-click any existing library sound → Edit → Pro Sound Editor opens without crash
+- [ ] Cut, Remove Block, Undo, Redo all work normally in the Pro Sound Editor
+- [ ] Spacebar play/pause works in the Pro Sound Editor
+- [ ] Sound Editor saved changes play correctly from the main library
+
+### Regression — mic, routing, and hotkeys unaffected
+
+- [ ] Open and close the Sound Composer → hotkeys still fire correctly
+- [ ] Mic Passthrough active while Composer is open → passthrough continues uninterrupted
+- [ ] Monitor and Virtual output routing unchanged after using the Composer
+- [ ] Stop All button in the main window works normally after using the Composer
 
 ---
 

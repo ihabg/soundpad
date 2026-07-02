@@ -1,0 +1,384 @@
+<ui:FluentWindow x:Class="SoundPad.App.Dialogs.SoundComposerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Sound Composer"
+        Width="1200" Height="660"
+        MinWidth="800" MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Segoe UI"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica"
+        WindowCornerPreference="Round"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>   <!-- 0: TitleBar  -->
+            <RowDefinition Height="Auto"/>   <!-- 1: Toolbar   -->
+            <RowDefinition Height="*"/>      <!-- 2: Timeline  -->
+            <RowDefinition Height="Auto"/>   <!-- 3: Status    -->
+        </Grid.RowDefinitions>
+
+        <!-- ── Title bar ─────────────────────────────────────────────────── -->
+        <ui:TitleBar Grid.Row="0"
+                     Title="Sound Composer"
+                     ShowMinimize="False"
+                     ShowMaximize="True">
+            <ui:TitleBar.Icon>
+                <ui:SymbolIcon Symbol="MusicNote2Play20"/>
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
+
+        <!-- ── Toolbar ───────────────────────────────────────────────────── -->
+        <Border Grid.Row="1"
+                Padding="12,6,12,6"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+            <StackPanel Orientation="Horizontal">
+
+                <!-- Mix name -->
+                <TextBlock Text="Name:" VerticalAlignment="Center"
+                           Margin="0,0,6,0" Opacity="0.7"/>
+                <ui:TextBox x:Name="MixNameBox"
+                            Width="130"
+                            PlaceholderText="Untitled Mix"
+                            Margin="0,0,12,0"/>
+
+                <!-- Tools -->
+                <ui:Button x:Name="SelectToolButton"
+                           Content="Select"
+                           Click="SelectTool_Click"
+                           Appearance="Primary"
+                           Margin="0,0,4,0"
+                           ToolTip="Select tool (A)"/>
+                <ui:Button x:Name="CutToolButton"
+                           Content="Cut"
+                           Click="CutTool_Click"
+                           Margin="0,0,4,0"
+                           ToolTip="Cut tool (C)"/>
+                <ui:Button x:Name="RippleToolButton"
+                           Content="Ripple"
+                           Click="RippleTool_Click"
+                           Margin="0,0,12,0"
+                           ToolTip="Ripple tool (R) — drag moves clip and all clips after it on the same track"/>
+
+                <!-- Undo / Redo -->
+                <ui:Button x:Name="UndoButton"
+                           Content="Undo"
+                           Click="Undo_Click"
+                           IsEnabled="False"
+                           Margin="0,0,4,0"
+                           ToolTip="Undo (Ctrl+Z)"/>
+                <ui:Button x:Name="RedoButton"
+                           Content="Redo"
+                           Click="Redo_Click"
+                           IsEnabled="False"
+                           Margin="0,0,12,0"
+                           ToolTip="Redo (Ctrl+Y)"/>
+
+                <!-- Snap -->
+                <CheckBox x:Name="SnapCheckBox"
+                          Content="Snap"
+                          VerticalAlignment="Center"
+                          Margin="0,0,12,0"
+                          ToolTip="Snap clip edges and cuts to playhead and other clip edges"/>
+
+                <!-- Trim Handles -->
+                <CheckBox x:Name="TrimHandlesCheckBox"
+                          Content="Trim Handles"
+                          VerticalAlignment="Center"
+                          IsChecked="True"
+                          Margin="0,0,12,0"
+                          Click="TrimHandlesCheckBox_Click"
+                          ToolTip="Enable left/right edge drag handles on clips for trimming"/>
+
+                <!-- Add Sound -->
+                <ui:Button x:Name="AddSoundButton"
+                           Content="Add Sound"
+                           Click="AddSound_Click"
+                           Margin="0,0,12,0"
+                           ToolTip="Add a sound from your library"/>
+
+                <!-- Separator -->
+                <TextBlock Text="|" VerticalAlignment="Center"
+                           Opacity="0.25" Margin="0,0,12,0"/>
+
+                <!-- Delete Left / Right -->
+                <ui:Button x:Name="DeleteLeftButton"
+                           Content="Del Left"
+                           Click="DeleteLeft_Click"
+                           Margin="0,0,4,0"
+                           ToolTip="Delete left of playhead on selected clip"/>
+                <ui:Button x:Name="DeleteRightButton"
+                           Content="Del Right"
+                           Click="DeleteRight_Click"
+                           Margin="0,0,12,0"
+                           ToolTip="Delete right of playhead on selected clip"/>
+
+                <!-- Separator -->
+                <TextBlock Text="|" VerticalAlignment="Center"
+                           Opacity="0.25" Margin="0,0,12,0"/>
+
+                <!-- Zoom -->
+                <ui:Button Content="+"
+                           Click="ZoomIn_Click"
+                           Width="36"
+                           Margin="0,0,3,0"
+                           ToolTip="Zoom In"/>
+                <ui:Button Content="-"
+                           Click="ZoomOut_Click"
+                           Width="36"
+                           Margin="0,0,3,0"
+                           ToolTip="Zoom Out"/>
+                <ui:Button Content="Fit"
+                           Click="ZoomFit_Click"
+                           Width="44"
+                           Margin="0,0,12,0"
+                           ToolTip="Zoom to Fit timeline"/>
+
+                <!-- Playback -->
+                <ui:Button x:Name="PreviewButton"
+                           Content="Preview"
+                           Click="Preview_Click"
+                           Margin="0,0,4,0"
+                           ToolTip="Preview from playhead (Space)"/>
+                <ui:Button x:Name="StopButton"
+                           Content="Stop"
+                           Click="Stop_Click"
+                           IsEnabled="False"
+                           Margin="0,0,12,0"
+                           ToolTip="Stop preview (Space)"/>
+
+                <!-- Save / Cancel -->
+                <ui:Button x:Name="SaveButton"
+                           Content="Save to Library"
+                           Click="Save_Click"
+                           Appearance="Primary"
+                           Margin="0,0,4,0"/>
+                <ui:Button Content="Cancel"
+                           Click="Cancel_Click"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Main area: label panel (left) + timeline (center) + clip info (right) ── -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="210" MinWidth="100"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="230" MinWidth="160"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: track labels -->
+            <Border Grid.Column="0"
+                    BorderThickness="0,0,1,0"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="26"/>   <!-- ruler spacer -->
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0"
+                            Background="{DynamicResource LayerFillColorDefaultBrush}"/>
+                    <ScrollViewer x:Name="LabelScrollViewer"
+                                  Grid.Row="1"
+                                  VerticalScrollBarVisibility="Hidden"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="TrackLabelPanel"/>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- Center: ruler + track canvas -->
+            <ScrollViewer x:Name="TimelineScrollViewer"
+                          Grid.Column="1"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto"
+                          ScrollChanged="TimelineScrollViewer_ScrollChanged"
+                          PreviewMouseWheel="TimelineScrollViewer_PreviewMouseWheel">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="26"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Ruler -->
+                    <Canvas x:Name="RulerCanvas"
+                            Grid.Row="0" Height="26"
+                            Background="{DynamicResource LayerFillColorDefaultBrush}"
+                            MouseLeftButtonDown="Ruler_MouseLeftButtonDown"
+                            MouseMove="Ruler_MouseMove"
+                            MouseLeftButtonUp="Ruler_MouseLeftButtonUp"/>
+
+                    <!-- Track blocks -->
+                    <Canvas x:Name="TimelineCanvas"
+                            Grid.Row="1"
+                            Background="{DynamicResource ApplicationBackgroundBrush}"
+                            MouseLeftButtonDown="Timeline_MouseLeftButtonDown"
+                            MouseMove="Timeline_MouseMove"
+                            MouseLeftButtonUp="Timeline_MouseLeftButtonUp"
+                            MouseLeave="Timeline_MouseLeave"
+                            MouseRightButtonUp="Timeline_MouseRightButtonUp"/>
+                </Grid>
+            </ScrollViewer>
+
+            <!-- Right: selected clip info panel -->
+            <Border Grid.Column="2"
+                    BorderThickness="1,0,0,0"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                    Background="{DynamicResource LayerFillColorDefaultBrush}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="12,10,12,10">
+                        <TextBlock Text="Selected Clip"
+                                   FontWeight="SemiBold"
+                                   FontSize="12"
+                                   Margin="0,0,0,10"/>
+
+                        <!-- Shown when nothing is selected -->
+                        <TextBlock x:Name="ClipInfoPlaceholder"
+                                   Text="No clip selected"
+                                   Opacity="0.45"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,24,0,0"/>
+
+                        <!-- Shown when a clip is selected -->
+                        <StackPanel x:Name="ClipInfoContent"
+                                    Visibility="Collapsed">
+
+                            <TextBlock Text="Source" Opacity="0.55" FontSize="11" Margin="0,0,0,2"/>
+                            <TextBlock x:Name="PanelSourceLabel"
+                                       TextTrimming="CharacterEllipsis"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,8"/>
+
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                    <TextBlock Text="Track" Opacity="0.55" FontSize="11" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="PanelTrackLabel" FontWeight="SemiBold"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Start" Opacity="0.55" FontSize="11" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="PanelStartLabel" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock Text="Duration" Opacity="0.55" FontSize="11" Margin="0,0,0,2"/>
+                            <TextBlock x:Name="PanelDurationLabel"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,10"/>
+
+                            <Border BorderThickness="0,1,0,0"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Volume" Opacity="0.55" FontSize="11" Margin="0,0,0,2"/>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="36"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider x:Name="PanelVolumeSlider"
+                                        Grid.Column="0"
+                                        Minimum="0" Maximum="200"
+                                        LargeChange="10" SmallChange="1"
+                                        VerticalAlignment="Center"
+                                        ValueChanged="PanelVolumeSlider_ValueChanged"/>
+                                <TextBlock x:Name="PanelVolumeLabel"
+                                           Grid.Column="1"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Right"
+                                           FontWeight="SemiBold"
+                                           FontSize="11"
+                                           Margin="4,0,0,0"/>
+                            </Grid>
+
+                            <TextBlock Text="Fade In (s)" Opacity="0.55" FontSize="11" Margin="0,0,0,2"/>
+                            <TextBox x:Name="PanelFadeInBox" Margin="0,0,0,8"/>
+
+                            <TextBlock Text="Fade Out (s)" Opacity="0.55" FontSize="11" Margin="0,0,0,2"/>
+                            <TextBox x:Name="PanelFadeOutBox" Margin="0,0,0,14"/>
+
+                            <ui:Button x:Name="PanelApplyButton"
+                                       Content="Apply"
+                                       Appearance="Primary"
+                                       HorizontalAlignment="Stretch"
+                                       Click="PanelApply_Click"
+                                       Margin="0,0,0,6"/>
+                            <ui:Button x:Name="PanelAudioSettingsButton"
+                                       Content="Audio Settings…"
+                                       HorizontalAlignment="Stretch"
+                                       Click="PanelAudioSettings_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <!-- ── Status bar ─────────────────────────────────────────────────── -->
+        <Border Grid.Row="3"
+                Padding="14,4,14,4"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+            <TextBlock x:Name="StatusText"
+                       Text="Ready — Select tool active"
+                       Opacity="0.6"
+                       FontSize="12"/>
+        </Border>
+
+        <!-- ── Sound picker overlay ──────────────────────────────────────── -->
+        <Grid x:Name="SoundPickerOverlay"
+              Grid.Row="2"
+              Visibility="Collapsed"
+              Panel.ZIndex="50"
+              Background="#A0000000">
+            <Border Width="420" MaxHeight="500"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource ApplicationBackgroundBrush}"
+                    CornerRadius="8" Padding="20">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Add Sound" FontSize="16"
+                               FontWeight="SemiBold" Margin="0,0,0,12"/>
+                    <ui:TextBox x:Name="PickerSearchBox" Grid.Row="1"
+                                PlaceholderText="Search sounds..."
+                                TextChanged="PickerSearch_TextChanged"/>
+                    <ListBox x:Name="SoundPickerList" Grid.Row="2"
+                             MinHeight="160" MaxHeight="280"
+                             Margin="0,8,0,0" SelectionMode="Single"
+                             MouseDoubleClick="PickerAddNewTrack_Click"/>
+                    <Grid Grid.Row="3" Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ui:Button Grid.Column="0"
+                                   Content="Cancel"
+                                   Click="PickerCancel_Click"
+                                   HorizontalAlignment="Left"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <ui:Button x:Name="PickerAddToTrackButton"
+                                       Content="Add to Selected Track"
+                                       Click="PickerAddToTrack_Click"
+                                       IsEnabled="False"
+                                       Margin="0,0,8,0"
+                                       ToolTip="Add clip to selected track at current playhead"/>
+                            <ui:Button Content="Add as New Track"
+                                       Click="PickerAddNewTrack_Click"
+                                       Appearance="Primary"/>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</ui:FluentWindow>

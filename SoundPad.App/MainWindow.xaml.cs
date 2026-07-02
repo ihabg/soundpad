@@ -2906,10 +2906,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         };
         removeMenuItem.Click += (_, _) => RemoveSound(item);
 
+        var mixMenuItem = new MenuItem { Header = "Create Mix…" };
+        mixMenuItem.Click += (_, _) => OpenSoundComposer(item);
+
         var ctx = new ContextMenu();
         ctx.Items.Add(editMenuItem);
         ctx.Items.Add(favMenuItem);
         ctx.Items.Add(dupMenuItem);
+        ctx.Items.Add(mixMenuItem);
         var colorMenuItem = new MenuItem { Header = "Color…" };
         colorMenuItem.Click += (_, _) => OpenColorPicker(item);
         ctx.Items.Add(colorMenuItem);
@@ -2933,6 +2937,36 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         TrySaveDecks();
         FilterSoundsPanel();
         StatusText.Text = $"Updated color for {item.DisplayName}";
+    }
+
+    private void OpenSoundComposer(SoundItem item)
+    {
+        if (!_cachedSounds.ContainsKey(item.Id))
+        {
+            StatusText.Text = "Cannot open Composer: sound file is not loaded.";
+            return;
+        }
+        if (_monitorEngine is not AudioPlaybackEngine engine)
+        {
+            StatusText.Text = "Cannot open Composer: no playback device configured.";
+            return;
+        }
+
+        var deckSounds = _library
+            .Where(s => _cachedSounds.ContainsKey(s.Id))
+            .ToList();
+
+        var dlg = new Dialogs.SoundComposerDialog(this, item, _cachedSounds, deckSounds, engine);
+        if (dlg.ShowDialog() != true) return;
+        if (dlg.ResultItem is null || dlg.ResultSound is null) return;
+
+        _cachedSounds[dlg.ResultItem.Id] = dlg.ResultSound;
+        _library.Add(dlg.ResultItem);
+        TrySaveDecks();
+        RefreshCategoryFilter();
+        FilterSoundsPanel();
+        ActiveDeckChanged?.Invoke(_activeDeck);
+        StatusText.Text = $"Mix saved: {dlg.ResultItem.DisplayName}";
     }
 
     // ── Export as MP3 ──────────────────────────────────────────────────────────

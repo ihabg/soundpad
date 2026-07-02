@@ -1,0 +1,185 @@
+<ui:FluentWindow x:Class="SoundPad.App.Dialogs.ClipSettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Clip Audio Settings"
+        Width="420" Height="490"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Segoe UI"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica"
+        WindowCornerPreference="Round"
+        ResizeMode="NoResize">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0"
+                     Title="Clip Audio Settings"
+                     ShowMinimize="False"
+                     ShowMaximize="False">
+            <ui:TitleBar.Icon>
+                <ui:SymbolIcon Symbol="Settings20"/>
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
+
+        <Grid Grid.Row="1" Margin="20,14,20,18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>   <!-- 0: Source -->
+                <RowDefinition Height="Auto"/>   <!-- 1: Track -->
+                <RowDefinition Height="Auto"/>   <!-- 2: Start -->
+                <RowDefinition Height="Auto"/>   <!-- 3: Duration -->
+                <RowDefinition Height="14"/>     <!-- 4: divider spacer -->
+                <RowDefinition Height="Auto"/>   <!-- 5: Volume -->
+                <RowDefinition Height="Auto"/>   <!-- 6: dB / Gain -->
+                <RowDefinition Height="14"/>     <!-- 7: divider spacer -->
+                <RowDefinition Height="Auto"/>   <!-- 8: Fade In -->
+                <RowDefinition Height="Auto"/>   <!-- 9: Fade Out -->
+                <RowDefinition Height="*"/>      <!-- 10: spacer -->
+                <RowDefinition Height="Auto"/>   <!-- 11: Buttons -->
+            </Grid.RowDefinitions>
+
+            <!-- Source -->
+            <Grid Grid.Row="0" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Source:" VerticalAlignment="Center" Opacity="0.6"/>
+                <TextBlock x:Name="SourceLabel" Grid.Column="1" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" FontWeight="SemiBold"/>
+            </Grid>
+
+            <!-- Track -->
+            <Grid Grid.Row="1" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Track:" VerticalAlignment="Center" Opacity="0.6"/>
+                <TextBlock x:Name="TrackLabel" Grid.Column="1" VerticalAlignment="Center"/>
+            </Grid>
+
+            <!-- Start time -->
+            <Grid Grid.Row="2" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Start:" VerticalAlignment="Center" Opacity="0.6"/>
+                <TextBlock x:Name="StartLabel" Grid.Column="1" VerticalAlignment="Center"/>
+            </Grid>
+
+            <!-- Duration -->
+            <Grid Grid.Row="3" Margin="0,0,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Duration:" VerticalAlignment="Center" Opacity="0.6"/>
+                <TextBlock x:Name="DurationLabel" Grid.Column="1" VerticalAlignment="Center"/>
+            </Grid>
+
+            <!-- Divider -->
+            <Border Grid.Row="4"
+                    BorderThickness="0,1,0,0" VerticalAlignment="Bottom"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"/>
+
+            <!-- Volume row -->
+            <Grid Grid.Row="5" Margin="0,4,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="46"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Volume:" VerticalAlignment="Center" Opacity="0.6"/>
+                <Slider x:Name="VolumeSlider"
+                        Grid.Column="1"
+                        Minimum="0" Maximum="200"
+                        LargeChange="10" SmallChange="1"
+                        VerticalAlignment="Center"
+                        ValueChanged="VolumeSlider_ValueChanged"/>
+                <TextBlock x:Name="VolumeLabel"
+                           Grid.Column="2"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           Margin="6,0,0,0"
+                           FontWeight="SemiBold"/>
+            </Grid>
+
+            <!-- dB row -->
+            <Grid Grid.Row="6" Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Gain:" VerticalAlignment="Center" Opacity="0.6"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <TextBlock x:Name="DbLabel"
+                               VerticalAlignment="Center" FontWeight="SemiBold" MinWidth="72"/>
+                    <ui:Button Content="-3 dB" Click="DbMinus3_Click" Width="52" Margin="0,0,3,0"/>
+                    <ui:Button Content="-1 dB" Click="DbMinus1_Click" Width="52" Margin="0,0,3,0"/>
+                    <ui:Button Content="+1 dB" Click="DbPlus1_Click"  Width="52" Margin="0,0,3,0"/>
+                    <ui:Button Content="+3 dB" Click="DbPlus3_Click"  Width="52"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Divider 2 -->
+            <Border Grid.Row="7"
+                    BorderThickness="0,1,0,0" VerticalAlignment="Bottom"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"/>
+
+            <!-- Fade In row -->
+            <Grid Grid.Row="8" Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Fade In:" VerticalAlignment="Center" Opacity="0.6"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <TextBox x:Name="FadeInBox"
+                             Width="58" VerticalAlignment="Center" Margin="0,0,8,0"
+                             Text="0"/>
+                    <ui:Button Content="0.1s"  Click="FadeIn01_Click"   Width="40" Margin="0,0,3,0"/>
+                    <ui:Button Content="0.25s" Click="FadeIn025_Click"  Width="46" Margin="0,0,3,0"/>
+                    <ui:Button Content="0.5s"  Click="FadeIn05_Click"   Width="40" Margin="0,0,3,0"/>
+                    <ui:Button Content="0"     Click="FadeInClear_Click" Width="30"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Fade Out row -->
+            <Grid Grid.Row="9" Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Fade Out:" VerticalAlignment="Center" Opacity="0.6"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <TextBox x:Name="FadeOutBox"
+                             Width="58" VerticalAlignment="Center" Margin="0,0,8,0"
+                             Text="0"/>
+                    <ui:Button Content="0.1s"  Click="FadeOut01_Click"   Width="40" Margin="0,0,3,0"/>
+                    <ui:Button Content="0.25s" Click="FadeOut025_Click"  Width="46" Margin="0,0,3,0"/>
+                    <ui:Button Content="0.5s"  Click="FadeOut05_Click"   Width="40" Margin="0,0,3,0"/>
+                    <ui:Button Content="0"     Click="FadeOutClear_Click" Width="30"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Buttons -->
+            <StackPanel Grid.Row="11" Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Margin="0,10,0,0">
+                <ui:Button Content="Cancel"
+                           Click="Cancel_Click"
+                           Margin="0,0,8,0"/>
+                <ui:Button x:Name="ApplyButton"
+                           Content="Apply"
+                           Appearance="Primary"
+                           Click="Apply_Click"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</ui:FluentWindow>

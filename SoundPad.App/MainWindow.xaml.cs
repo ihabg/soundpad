@@ -27,17 +27,17 @@ namespace SoundPad.App;
 
 public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 {
-    // ── Audio engines ──────────────────────────────────────────────────────────
-    // Two independent engines: one per physical output device.
-    // _virtualEngine is null when "None" is selected for Virtual Output.
+    
+    
+    
     private AudioPlaybackEngine? _monitorEngine;
     private AudioPlaybackEngine? _virtualEngine;
 
-    // ── Sound library / decks ─────────────────────────────────────────────────
-    // _decks holds all decks; _activeDeck is the currently visible one.
-    // _library is a computed shorthand for _activeDeck.Sounds so the rest of
-    // the code continues to work without a mass rename.
-    // _cachedSounds maps each SoundItem's Guid to its preloaded float samples.
+    
+    
+    
+    
+    
     private List<Deck>                             _decks        = new();
     private Deck                                   _activeDeck   = null!;
     private List<SoundItem>                        _library      => _activeDeck.Sounds;
@@ -45,34 +45,34 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private readonly Dictionary<Guid, CachedSound> _processedSounds   = new();
     private int                                     _effectRenderEpoch;
 
-    // ── App-level settings (devices, mic state, hotkeys, window bounds) ─────────
+    
     private AppSettings _settings;
 
-    // ── Supporting objects ─────────────────────────────────────────────────────
+    
     private HotkeyManager?        _hotkeys;
     private HotkeyService?        _hotkeyService;
     private MicPassthrough?       _micPassthrough;
     private WinForms.NotifyIcon?  _trayIcon;
 
-    // Set to true by ExitApp() so Window_Closing knows to proceed with shutdown
-    // rather than hide to tray when CloseToTray is enabled.
+    
+    
     private bool _isExiting;
 
-    // Tracks an in-progress test tone so it can be stopped by Stop All or replaced
-    // when the user clicks Test Discord Output again. Null when no tone is playing.
+    
+    
     private OffsetSampleProvider? _virtualTestToneProvider;
 
-    // URL of the latest GitHub release, populated when an update check returns UpdateAvailable.
+    
     private string? _lastReleaseUrl;
 
-    // In-app updater state — populated when an update with a downloadable asset is found.
+    
     private string?                  _lastUpdateTag;
     private string?                  _installerAssetUrl;
     private string?                  _installerAssetName;
     private CancellationTokenSource? _downloadCts;
     private bool                     _isDownloading;
 
-    // ── Active playback tracking ──────────────────────────────────────────────
+    
     private sealed record RowControls(Action<bool> SetActive);
 
     private sealed class ActivePlayback
@@ -90,40 +90,40 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private readonly Dictionary<Guid, RowControls>    _rowControls     = new();
     private DispatcherTimer?                           _playbackMonitor;
 
-    // ── Debounce timers ────────────────────────────────────────────────────────
+    
     private DispatcherTimer? _deckSaveDebounceTimer;
     private DispatcherTimer? _searchDebounceTimer;
 
-    // ── Drag reorder state ────────────────────────────────────────────────────
+    
     private const  string  InternalReorderFormat = "SoundPadInternalReorder";
     private        Point   _dragStartPoint;
     private        bool    _dragReady;
-    private        Guid    _dragSourceId   = Guid.Empty; // Sound being dragged
-    private        Guid    _pendingPlayId  = Guid.Empty; // Pad card press pending play/stop
+    private        Guid    _dragSourceId   = Guid.Empty; 
+    private        Guid    _pendingPlayId  = Guid.Empty; 
     private        Border? _dropIndicator;
-    private        int     _dropIndicatorIndex = -1;     // -1 = not in any panel
+    private        int     _dropIndicatorIndex = -1;     
 
-    // ── Mini Mode ─────────────────────────────────────────────────────────────
-    // Events allow MiniWindow to react to playback and deck changes without
-    // MainWindow needing any direct reference to the Mini window's internals.
+    
+    
+    
     internal event Action<Guid, bool>? PlaybackStateChanged;
     internal event Action<Deck>?       ActiveDeckChanged;
     private  MiniWindow?               _miniWindow;
 
-    // ── Instant Replay ────────────────────────────────────────────────────────
-    // Null when the feature is off. Created when the user enables Instant Replay.
+    
+    
     private InstantReplayService? _instantReplay;
     private DispatcherTimer?      _irSignalTimer;
-    // True while a background Stop/Start is in progress; blocks re-entrant operations.
+    
     private bool                  _irOperationPending;
 
-    // ── MP3 export ────────────────────────────────────────────────────────────
-    // Tracks sounds currently being exported to prevent duplicate concurrent exports.
+    
+    
     private readonly HashSet<Guid> _exportInProgress = new();
 
-    // ── Constructor ────────────────────────────────────────────────────────────
-    // Settings are loaded before InitializeComponent so the saved window
-    // bounds can be applied before the window is ever shown (no visible jump).
+    
+    
+    
     public MainWindow()
     {
         StartupLogger.Log("Constructor begin");
@@ -149,7 +149,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             StartupLogger.Log($"InitializeComponent FAILED ({ex.GetType().Name}): {ex.Message}");
             StartupLogger.Log($"  Stack: {ex.StackTrace}");
-            throw; // propagate so App_Startup shows an error dialog
+            throw; 
         }
 
         RestoreWindowBounds();
@@ -172,7 +172,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    // Guards against restoring a position on a monitor that's no longer connected.
+    
     private static bool IsOnScreen(double left, double top)
     {
         double virtualLeft   = SystemParameters.VirtualScreenLeft;
@@ -225,14 +225,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _deckSaveDebounceTimer.Start();
     }
 
-    // Called by the global DispatcherUnhandledException handler in App.xaml.cs
-    // so the user sees a status-bar message instead of a silent crash.
+    
+    
     public void ShowFatalError(string message)
     {
         try { StatusText.Text = message; } catch { }
     }
 
-    // ── System tray ────────────────────────────────────────────────────────────
+    
 
     private void InitializeTrayIcon()
     {
@@ -257,8 +257,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _trayIcon.DoubleClick     += (_, _) => Dispatcher.Invoke(ShowFromTray);
     }
 
-    // Returns the best available icon for both the WPF window and the tray.
-    // Priority: bundled Resources\app.ico > exe's own associated icon > OS default.
+    
+    
     private static System.Drawing.Icon GetAppIcon()
     {
         var resourceIco = Path.Combine(AppContext.BaseDirectory, "Resources", "app.ico");
@@ -282,7 +282,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return System.Drawing.SystemIcons.Application;
     }
 
-    // Converts a Win32 HICON to a WPF ImageSource so Window.Icon can be set.
+    
     private void SetWindowIcon(System.Drawing.Icon icon)
     {
         try
@@ -302,8 +302,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         Activate();
     }
 
-    // Called from the tray "Exit" item and any path that needs a real shutdown.
-    // Sets _isExiting so Window_Closing does not cancel the close for CloseToTray.
+    
+    
     private void ExitApp()
     {
         _isExiting = true;
@@ -342,8 +342,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         CloseToTraySwitch.Checked   += CloseToTraySwitch_Checked;
         CloseToTraySwitch.Unchecked += CloseToTraySwitch_Unchecked;
 
-        // Sync the toggle with the actual registry state so it stays accurate
-        // even if the user manually edited the registry or moved the exe.
+        
+        
         bool actualStartup = ReadStartWithWindowsRegistryState();
         if (_settings.StartWithWindows != actualStartup)
         {
@@ -351,8 +351,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             SaveSettings();
         }
 
-        // Unhook while setting IsChecked to avoid triggering a registry write
-        // on every startup (the registry is already in the correct state).
+        
+        
         StartWithWindowsSwitch.Checked   -= StartWithWindowsSwitch_Checked;
         StartWithWindowsSwitch.Unchecked -= StartWithWindowsSwitch_Unchecked;
         StartWithWindowsSwitch.IsChecked  = _settings.StartWithWindows;
@@ -360,7 +360,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StartWithWindowsSwitch.Unchecked += StartWithWindowsSwitch_Unchecked;
     }
 
-    // ── Behavior toggle handlers ───────────────────────────────────────────────
+    
 
     private void InterruptSoundsSwitch_Checked(object sender, RoutedEventArgs e)
     {
@@ -430,7 +430,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             var result = await UpdateCheckService.CheckAsync(GetAppVersion());
 
-            // Continuation runs back on the UI thread (SynchronizationContext captured at call site).
+            
             _settings.LastUpdateCheckUtc = DateTime.UtcNow;
             SaveSettings();
 
@@ -586,7 +586,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         LaunchInstallerAndExit(localPath);
-        // Only reached when Process.Start failed — ExitApp() closes the app on success.
+        
         _isDownloading = false;
         _downloadCts?.Dispose();
         _downloadCts = null;
@@ -685,7 +685,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         SaveSettings();
     }
 
-    // ── Startup with Windows (HKCU Run key, no admin required) ────────────────
+    
 
     private const string StartupRegistryPath  = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string StartupRegistryValue = "SoundPad";
@@ -722,7 +722,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             StatusText.Text = $"Startup setting failed: {ex.Message}";
 
-            // Revert the toggle and saved setting so they stay consistent.
+            
             _settings.StartWithWindows = !enable;
             SaveSettings();
             StartWithWindowsSwitch.Checked   -= StartWithWindowsSwitch_Checked;
@@ -743,11 +743,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         catch { return false; }
     }
 
-    // If StartWithWindows is on, verifies the registry entry points to the
-    // currently running exe. Fixes it silently when it differs (e.g. after
-    // publishing replaces the dev-build path). Shows a status message only
-    // on failure; success is intentionally silent so it does not obscure the
-    // library-loaded message shown just before this runs.
+    
+    
+    
+    
+    
     private void SyncStartupRegistryPath()
     {
         if (!_settings.StartWithWindows) return;
@@ -773,10 +773,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────
+    
 
-    // Returns true for known virtual audio router products so we can show
-    // the Discord routing hint when one of these is selected as Virtual Output.
+    
+    
     private static bool IsVirtualAudioRouterDevice(string name) =>
         name.Contains("CABLE",       StringComparison.OrdinalIgnoreCase) ||
         name.Contains("Voicemeeter", StringComparison.OrdinalIgnoreCase);
@@ -787,9 +787,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return v is null ? "1.0.0" : $"{v.Major}.{v.Minor}.{v.Build}";
     }
 
-    // Finds the index of a previously-saved device in a freshly-enumerated list.
-    // Matches by name first (most stable across restarts), falling back to the
-    // saved device number. Returns -1 if neither matches.
+    
+    
+    
     private static int FindDeviceIndex<T>(IList<T> items, string? savedName, int? savedNumber,
                                            Func<T, string> nameOf, Func<T, int> numberOf)
     {
@@ -810,10 +810,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return -1;
     }
 
-    // ── OnSourceInitialized: earliest safe point for hotkeys ──────────────────
-    // WPF guarantees both the Win32 HWND and its HwndSource exist here.
-    // Library hotkeys aren't loaded yet at this point, so registration is
-    // deferred until ContextIdle in MainWindow_Loaded.
+    
+    
+    
+    
     protected override void OnSourceInitialized(EventArgs e)
     {
         StartupLogger.Log("OnSourceInitialized begin");
@@ -856,7 +856,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void OnStopAllHotkeyTriggered() => StopAllSounds();
 
-    // ── Loaded: sound library + device lists ──────────────────────────────────
+    
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         StartupLogger.Log("MainWindow_Loaded begin");
@@ -866,7 +866,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             LoadLibrary();
             StartupLogger.Log("LoadLibrary done");
 
-            // Attach panel-level drag handlers once (panels are XAML singletons).
+            
             SoundsPanel.PreviewMouseMove += SoundsPanel_PreviewMouseMove;
             GridPanel.PreviewMouseMove   += GridPanel_PreviewMouseMove;
 
@@ -915,8 +915,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                     OpenMiniMode();
             }));
 
-            // Auto update check: only when enabled, and only once per 24 hours.
-            // Runs at ApplicationIdle so it never competes with startup rendering.
+            
+            
             if (_settings.EnableAutoUpdateChecks)
             {
                 var lastCheck = _settings.LastUpdateCheckUtc;
@@ -942,7 +942,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         MicVolumeLabel.Text   = $"{(int)MicVolumeSlider.Value}%";
 
         if (_settings.MicPassthroughEnabled)
-            MicPassthroughCheckBox.IsChecked = true; // triggers MicPassthroughCheckBox_Checked -> StartMicPassthrough()
+            MicPassthroughCheckBox.IsChecked = true; 
     }
 
     private void RestoreSelectedTab()
@@ -960,24 +960,24 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         SaveSettings();
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  SOUND LIBRARY
-    // ══════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
-    // Loads decks from decks.json (or migrates sounds.json on first run),
-    // sets the active deck, preloads audio, then renders the library UI.
+    
+    
     private void LoadLibrary()
     {
         _decks      = DeckService.Load(_settings);
         _activeDeck = _decks.Find(d => d.Id == _settings.ActiveDeckId) ?? _decks[0];
 
-        // On first launch the active deck has no sounds — seed from bundled samples.
+        
         if (_library.Count == 0)
             SeedDefaultSounds();
 
         bool hotkeysMigrated = MigrateDefaultHotkeys();
 
-        // Preload each sound.  Skip missing or unreadable files gracefully.
+        
         foreach (var item in _library.ToList())
         {
             if (!File.Exists(item.FilePath))
@@ -1013,13 +1013,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             : "Library empty — click '+ Add Sound'";
     }
 
-    // Single registration point used by every code path that touches hotkeys:
-    // startup (via ContextIdle Dispatcher.BeginInvoke), hotkey capture dialog
-    // Save/Clear, and Stop All dialog Save/Clear.
-    // Always writes diagnostics to Debug output so failures are visible in the
-    // VS Output window even when StatusText is later overridden by a success msg.
-    // Sets StatusText only on failure; interactive callers override it on success.
-    // Returns the raw result so callers can inspect specific failures for rollback.
+    
+    
+    
+    
+    
+    
+    
     private HotkeyRegistrationResult ReregisterAllHotkeysAndReport(string context)
     {
         int soundCount = _library.Count(x => x.Hotkey is not null);
@@ -1080,9 +1080,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return result;
     }
 
-    // One-time migration: the first four sounds keep their original default
-    // hotkeys (Ctrl+Alt+1..4) the first time hotkey data is seen for them.
-    // HotkeyInitialized guards against re-seeding after a deliberate user clear.
+    
+    
+    
     private bool MigrateDefaultHotkeys()
     {
         bool changed = false;
@@ -1105,7 +1105,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private static HotkeyBinding CreateDefaultHotkey(int slotIndex)
     {
-        uint vk = (uint)(0x31 + slotIndex); // '1'..'4'
+        uint vk = (uint)(0x31 + slotIndex); 
         return new HotkeyBinding
         {
             Modifiers   = (uint)(ModifierKeys.Control | ModifierKeys.Alt),
@@ -1114,7 +1114,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         };
     }
 
-    // On first launch, copies bundled sample sounds into %AppData%\SoundPad\Sounds.
+    
     private void SeedDefaultSounds()
     {
         var builtinDir = Path.Combine(AppContext.BaseDirectory, "Sounds");
@@ -1150,7 +1150,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             TrySaveDecks();
     }
 
-    // ── Deck management ───────────────────────────────────────────────────────
+    
 
     private void RebuildDeckBar()
     {
@@ -1266,7 +1266,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             CustomCategories = source.CustomCategories.ToList(),
             Sounds           = source.Sounds.Select(s => new SoundItem
             {
-                Id                = Guid.NewGuid(), // new ID per sound
+                Id                = Guid.NewGuid(), 
                 DisplayName       = s.DisplayName,
                 FilePath          = s.FilePath,
                 Category          = s.Category,
@@ -1303,7 +1303,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             "Delete Deck", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes) return;
 
-        // If deleting the active deck, switch to another first.
+        
         if (deck.Id == _activeDeck.Id)
             SwitchToDeck(_decks.First(d => d.Id != deck.Id));
 
@@ -1313,14 +1313,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = $"Deleted deck: {deck.Name}";
     }
 
-    // ── Filter / rebuild ──────────────────────────────────────────────────────
+    
 
-    // Rebuilds SoundsPanel showing only sounds that match the current search
-    // text, selected category, selected tag, and sort order.
-    // Called after any library or filter change.
+    
+    
+    
     private void FilterSoundsPanel()
     {
-        // Cancel any in-progress drag; panels are about to be cleared.
+        
         _dragReady    = false;
         _dragSourceId = Guid.Empty;
         _pendingPlayId = Guid.Empty;
@@ -1337,12 +1337,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         bool isGrid = _settings.LibraryView == "Grid";
 
-        // Base source: Recent uses its own temporal ordering.
+        
         IEnumerable<SoundItem> source = category == "Recent"
             ? _library.OrderByDescending(x => x.LastPlayedAt ?? DateTime.MinValue)
             : _library;
 
-        // Filter
+        
         var filtered = source.Where(item =>
         {
             bool matchSearch = string.IsNullOrEmpty(search)
@@ -1365,7 +1365,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return matchSearch && matchCategory && matchTag;
         });
 
-        // Sort (Recent keeps its own LastPlayedAt-desc ordering)
+        
         if (category != "Recent")
         {
             filtered = sortKey switch
@@ -1378,7 +1378,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                                        .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase),
                 "Favorites" => filtered.OrderByDescending(x => x.IsFavorite)
                                        .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase),
-                _           => filtered // Manual — preserve library order
+                _           => filtered 
             };
         }
 
@@ -1408,8 +1408,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             LibraryCountText.Content = $"{visibleCount}";
     }
 
-    // Repopulates the Category ComboBox from the distinct categories in the
-    // library.  Keeps the current selection when it still exists.
+    
+    
     private void RefreshCategoryFilter()
     {
         if (CategoryFilter is null) return;
@@ -1440,8 +1440,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         RefreshTagFilter();
     }
 
-    // Repopulates the Tag filter ComboBox from the distinct tags in the library.
-    // Shows the ComboBox only when at least one sound has a tag.
+    
+    
     private void RefreshTagFilter()
     {
         if (TagFilter is null) return;
@@ -1471,10 +1471,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         TagFilter.SelectionChanged += TagFilter_SelectionChanged;
     }
 
-    // ── Sound row builder (details/list view) ───────────────────────────────────
+    
 
-    // Column widths shared by the static XAML header and every row built here,
-    // so the two stay pixel-aligned: Play | Name | Category | Hotkey | Volume | Created | Actions
+    
+    
     private static void AddRowColumns(Grid grid)
     {
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
@@ -1486,8 +1486,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
     }
 
-    // Creates one details-list row for a SoundItem. Hotkey display now comes
-    // from the item's own HotkeyBinding, not its position in the library.
+    
+    
     private Border BuildSoundRow(SoundItem item)
     {
         var capturedItem = item;
@@ -1497,7 +1497,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var grid = new Grid();
         AddRowColumns(grid);
 
-        // ── Col 0: Play / Stop toggle ────────────────────────────────────
+        
         var playStopBtn = new UiButton
         {
             Appearance          = ControlAppearance.Transparent,
@@ -1516,7 +1516,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         Grid.SetColumn(playStopBtn, 0);
         grid.Children.Add(playStopBtn);
 
-        // ── Col 1: Name ──────────────────────────────────────────────────
+        
         var nameBlock = new TextBlock
         {
             Text              = item.DisplayName,
@@ -1530,7 +1530,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         Grid.SetColumn(nameBlock, 1);
         grid.Children.Add(nameBlock);
 
-        // ── Col 2: Category ──────────────────────────────────────────────
+        
         var catBadge = new UiBadge
         {
             Content             = categoryText,
@@ -1542,7 +1542,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         Grid.SetColumn(catBadge, 2);
         grid.Children.Add(catBadge);
 
-        // ── Col 3: Hotkey (click to open the capture dialog) ──────────────
+        
         var hotkeyContent = new TextBlock
         {
             Text         = item.Hotkey?.DisplayText ?? "No hotkey",
@@ -1565,7 +1565,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         Grid.SetColumn(hotkeyBtn, 3);
         grid.Children.Add(hotkeyBtn);
 
-        // ── Col 4: Volume ────────────────────────────────────────────────
+        
         int initPct = (int)Math.Round(item.Volume * 100);
 
         var volPct = new TextBlock
@@ -1600,7 +1600,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         Grid.SetColumn(volRow, 4);
         grid.Children.Add(volRow);
 
-        // ── Col 5: Created ───────────────────────────────────────────────
+        
         var createdText = new TextBlock
         {
             Text              = item.CreatedAt.ToLocalTime().ToString("MMM d, yyyy"),
@@ -1611,7 +1611,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         Grid.SetColumn(createdText, 5);
         grid.Children.Add(createdText);
 
-        // ── Col 6: Actions (subtle icon buttons) ────────────────────────
+        
         var favBtn = new UiButton
         {
             Appearance = ControlAppearance.Transparent,
@@ -1660,10 +1660,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         Grid.SetColumn(actionsPanel, 6);
         grid.Children.Add(actionsPanel);
 
-        // ── Row container: hover highlight + double-click to play ──────────
-        // When PadColor is set: a 4px full-height stripe is docked to the left.
-        // Row left padding is zeroed so the stripe touches the row edge;
-        // the grid compensates with its own top/bottom margin.
+        
+        
+        
+        
         UIElement rowContent = grid;
         var rowPadding       = new Thickness(14, 8, 14, 8);
         if (item.PadColor is not null)
@@ -1700,8 +1700,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         row.MouseEnter += (_, _) => { if (!_activePlaybacks.ContainsKey(capturedItem.Id)) row.Background = hoverBg; };
         row.MouseLeave += (_, _) => { if (!_activePlaybacks.ContainsKey(capturedItem.Id)) row.Background = Brushes.Transparent; };
 
-        // Record drag-start info; skip when the press originates on a button or slider
-        // so interactive controls (play, edit, hotkey, volume) still work normally.
+        
+        
         row.PreviewMouseLeftButtonDown += (_, e) =>
         {
             _dragReady = false;
@@ -1723,7 +1723,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 PlayLibraryItem(capturedItem);
         };
 
-        // ── SetActive callback ────────────────────────────────────────────────
+        
         Action<bool> setActive = active =>
         {
             if (active)
@@ -1739,13 +1739,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         };
         _rowControls[item.Id] = new RowControls(setActive);
 
-        // ── Context menu ──────────────────────────────────────────────────
+        
         row.ContextMenu = BuildSoundContextMenu(capturedItem);
 
         return row;
     }
 
-    // ── Grid / Pad View ───────────────────────────────────────────────────────
+    
 
     private void ListViewButton_Click(object sender, RoutedEventArgs e) => SetLibraryView("List");
     private void GridViewButton_Click(object sender, RoutedEventArgs e) => SetLibraryView("Grid");
@@ -1856,8 +1856,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _       => (160, 130),
     };
 
-    // ── Drag reorder: panel-level mouse-move handlers ─────────────────────────
-    // Attached once in MainWindow_Loaded; fire for any mouse move within the panel.
+    
+    
 
     private void SoundsPanel_PreviewMouseMove(object sender, MouseEventArgs e)
     {
@@ -1888,7 +1888,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
 
         _dragReady     = false;
-        _pendingPlayId = Guid.Empty; // Prevent click-to-play from firing on mouse-up
+        _pendingPlayId = Guid.Empty; 
         var dragId     = _dragSourceId;
         _dragSourceId  = Guid.Empty;
 
@@ -1898,7 +1898,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         RemoveDropIndicator();
     }
 
-    // ── Drag reorder: helpers ─────────────────────────────────────────────────
+    
 
     private static bool IsInternalReorder(IDataObject data)
         => data.GetDataPresent(InternalReorderFormat);
@@ -1923,7 +1923,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         bool isCurrentlyGrid = _dropIndicator?.Tag is "Grid";
         if (_dropIndicator is not null && isCurrentlyGrid == isGrid) return;
 
-        // Type changed or not yet created — remove stale and recreate.
+        
         if (_dropIndicator is not null)
         {
             foreach (var p in new Panel[] { SoundsPanel, GridPanel })
@@ -1979,7 +1979,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var mousePos = e.GetPosition(panel);
         int newIndex = isGrid ? GetGridDropIndex(mousePos) : GetListDropIndex(mousePos);
 
-        if (_dropIndicatorIndex == newIndex) return; // No change needed
+        if (_dropIndicatorIndex == newIndex) return; 
 
         if (_dropIndicatorIndex >= 0 && panel.Children.Contains(_dropIndicator))
             panel.Children.Remove(_dropIndicator);
@@ -1989,8 +1989,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _dropIndicatorIndex = newIndex;
     }
 
-    // Returns the logical insert index (among real children, excluding indicator)
-    // for the List View StackPanel based on vertical mouse position.
+    
+    
     private int GetListDropIndex(Point mouseInPanel)
     {
         var real = SoundsPanel.Children.Cast<UIElement>()
@@ -2008,9 +2008,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return real.Count;
     }
 
-    // Returns the logical insert index for the Grid View WrapPanel.
-    // Iterates cards in order; inserts before the first card whose visual
-    // position is "after" the cursor (left half or row below).
+    
+    
+    
     private int GetGridDropIndex(Point mouseInPanel)
     {
         var real = GridPanel.Children.Cast<UIElement>()
@@ -2022,11 +2022,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             var bounds = real[i].TransformToAncestor(GridPanel)
                                   .TransformBounds(new Rect(real[i].RenderSize));
-            // Cursor is within this card's row and in its left half → insert before it
+            
             if (mouseInPanel.Y < bounds.Bottom &&
                 mouseInPanel.X < bounds.Left + bounds.Width / 2)
                 return i;
-            // Cursor is in the gap above this card → insert before it
+            
             if (mouseInPanel.Y < bounds.Top)
                 return i;
         }
@@ -2039,17 +2039,17 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (!Guid.TryParse(e.Data.GetData(InternalReorderFormat) as string, out var draggedId)) return;
 
         int fromIndex = _library.FindIndex(x => x.Id == draggedId);
-        if (fromIndex < 0) return; // Item no longer in active deck (e.g., deck was switched)
+        if (fromIndex < 0) return; 
 
         bool isGrid      = _settings.LibraryView == "Grid";
         var  panel       = isGrid ? (Panel)GridPanel : SoundsPanel;
         var  mouseInPanel = e.GetPosition(panel);
         int  dropIndex   = isGrid ? GetGridDropIndex(mouseInPanel) : GetListDropIndex(mouseInPanel);
 
-        // Compute the adjusted target after the item is removed
+        
         int targetIndex = Math.Clamp(dropIndex, 0, _library.Count);
         int adjusted    = fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
-        if (fromIndex == adjusted) return; // No actual move
+        if (fromIndex == adjusted) return; 
 
         var item = _library[fromIndex];
         _library.RemoveAt(fromIndex);
@@ -2060,9 +2060,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = $"Moved: {item.DisplayName}";
     }
 
-    // ── Mini Mode ─────────────────────────────────────────────────────────────
+    
 
-    // Called from the toolbar button and from MiniOpenOnStartup at startup.
+    
     private void OpenMiniMode()
     {
         if (_miniWindow is null)
@@ -2083,43 +2083,43 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void MiniModeButton_Click(object sender, RoutedEventArgs e) => OpenMiniMode();
 
-    // Queried by MiniWindow to decide play vs stop on pad click.
+    
     internal bool IsActivePlayback(Guid soundId) => _activePlaybacks.ContainsKey(soundId);
 
-    // Returns a snapshot of currently active sound IDs so MiniWindow can
-    // sync active highlights when it first opens or rebuilds after a deck switch.
+    
+    
     internal IReadOnlyList<Guid> GetActivePlaybackIds() => _activePlaybacks.Keys.ToList();
 
-    // Called by MiniWindow pin button to persist the always-on-top preference.
+    
     internal void SaveMiniAlwaysOnTop(bool value)
     {
         _settings.MiniAlwaysOnTop = value;
         SaveSettings();
     }
 
-    // Called by MiniWindow close button so position is persisted on hide.
+    
     internal void SaveMiniPositionFrom(MiniWindow mini)
     {
         mini.SavePositionTo(_settings);
         SaveSettings();
     }
 
-    // ── Instant Replay ────────────────────────────────────────────────────────
+    
 
-    // Restores IR switch and combo state from settings, then starts capture if
-    // the feature was previously enabled.  Called once at startup (ContextIdle).
+    
+    
     private void RestoreInstantReplaySettings()
     {
-        // Populate device combos first so they are ready before the switch fires.
+        
         PopulateInstantReplayCaptureDevices();
         PopulateInstantReplayMicDevices();
 
-        // Restore buffer length combo without triggering the handler.
+        
         InstantReplayMinutesCombo.SelectionChanged -= InstantReplayMinutesCombo_SelectionChanged;
         InstantReplayMinutesCombo.SelectedIndex     = Math.Clamp(_settings.InstantReplayMinutes - 1, 0, 4);
         InstantReplayMinutesCombo.SelectionChanged += InstantReplayMinutesCombo_SelectionChanged;
 
-        // Restore include-mic checkbox without triggering its handlers.
+        
         InstantReplayIncludeMicCheckBox.Checked   -= InstantReplayIncludeMicCheckBox_Checked;
         InstantReplayIncludeMicCheckBox.Unchecked -= InstantReplayIncludeMicCheckBox_Unchecked;
         InstantReplayIncludeMicCheckBox.IsChecked  = _settings.InstantReplayIncludeMicrophone;
@@ -2129,7 +2129,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         UpdateInstantReplayUI(running: false);
         RefreshInstantReplayHotkeyDisplay();
 
-        // Setting IsChecked = true triggers InstantReplaySwitch_Checked → EnableInstantReplay().
+        
         if (_settings.InstantReplayEnabled)
             InstantReplaySwitch.IsChecked = true;
     }
@@ -2145,7 +2145,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
             if (mics.Count > 0)
             {
-                // Try to match by saved name first, fall back to device number, then index 0.
+                
                 int idx = -1;
                 if (!string.IsNullOrEmpty(_settings.InstantReplayMicDeviceName))
                     for (int i = 0; i < mics.Count; i++)
@@ -2158,13 +2158,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
             InstantReplayMicDeviceCombo.SelectionChanged += InstantReplayMicDeviceCombo_SelectionChanged;
         }
-        catch { /* mic enumeration failed — combo stays empty */ }
+        catch {  }
     }
 
     private void PopulateInstantReplayCaptureDevices()
     {
-        // Double guard: detach the handler AND set the flag so SelectionChanged
-        // cannot start a capture restart while we are rebuilding the item list.
+        
+        
         bool wasPending = _irOperationPending;
         _irOperationPending = true;
         InstantReplayCaptureDeviceCombo.SelectionChanged -= InstantReplayCaptureDeviceCombo_SelectionChanged;
@@ -2173,7 +2173,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             var devices = IrCaptureDevice.GetAll();
             InstantReplayCaptureDeviceCombo.ItemsSource = devices;
 
-            int idx = 0; // default: "Default output device"
+            int idx = 0; 
             if (_settings.InstantReplayCaptureDeviceId is not null)
             {
                 for (int i = 0; i < devices.Count; i++)
@@ -2187,12 +2187,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         finally
         {
             InstantReplayCaptureDeviceCombo.SelectionChanged += InstantReplayCaptureDeviceCombo_SelectionChanged;
-            _irOperationPending = wasPending; // restore (false on startup, unchanged if nested)
+            _irOperationPending = wasPending; 
         }
     }
 
-    // Programmatically reverts the toggle switch to OFF without firing its handlers,
-    // used when Enable fails or when Stop is called from a non-switch code path.
+    
+    
     private void RevertInstantReplaySwitchToOff()
     {
         InstantReplaySwitch.Checked   -= InstantReplaySwitch_Checked;
@@ -2202,9 +2202,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         InstantReplaySwitch.Unchecked += InstantReplaySwitch_Unchecked;
     }
 
-    // Updates every IR-related control to match the running state.
-    // The toggle switch IsEnabled is intentionally never changed here — the user
-    // must always be able to turn Instant Replay OFF regardless of other state.
+    
+    
+    
     private void UpdateInstantReplayUI(bool running)
     {
         if (InstantReplayStatusDot is not null)
@@ -2220,8 +2220,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (InstantReplayRecPill is not null)
             InstantReplayRecPill.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
 
-        // Sync the toggle switch checked state without triggering its handlers.
-        // IsEnabled is NOT changed — the toggle must always remain interactive.
+        
+        
         if (InstantReplaySwitch is not null)
         {
             InstantReplaySwitch.Checked   -= InstantReplaySwitch_Checked;
@@ -2231,7 +2231,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             InstantReplaySwitch.Unchecked += InstantReplaySwitch_Unchecked;
         }
 
-        // Lock all settings controls while IR is running.
+        
         if (InstantReplayMinutesCombo is not null)
             InstantReplayMinutesCombo.IsEnabled = !running;
         if (InstantReplayCaptureDeviceCombo is not null)
@@ -2241,15 +2241,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (InstantReplayMicDeviceCombo is not null)
             InstantReplayMicDeviceCombo.IsEnabled = !running;
 
-        // Clear mic signal text when stopping.
+        
         if (!running && InstantReplayMicSignalText is not null)
             InstantReplayMicSignalText.Text = "";
 
-        // Show the "turn IR OFF to change" hint only while running.
+        
         if (InstantReplayLockedHint is not null)
             InstantReplayLockedHint.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
 
-        // Start or stop the 500 ms signal level poll.
+        
         if (running)
         {
             if (_irSignalTimer is null)
@@ -2267,7 +2267,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    // Fires every 500 ms while Instant Replay is running; updates the signal indicator.
+    
     private void OnIrSignalTick(object? sender, EventArgs e)
     {
         if (_instantReplay is null || !_instantReplay.IsRunning)
@@ -2279,7 +2279,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (InstantReplaySignalText is null) return;
 
-        float meterPeak     = _instantReplay.DeviceMasterPeak;  // AudioMeterInformation COM read
+        float meterPeak     = _instantReplay.DeviceMasterPeak;  
         bool  hasSignal     = _instantReplay.IsReceivingAudio;
         int   callbackCount = _instantReplay.DataAvailableCount;
         float capturePeak   = _instantReplay.LastPeak;
@@ -2291,21 +2291,21 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 : -96f;
             InstantReplaySignalText.Text =
                 $"Capturing audio  ·  Peak: {dbfs:F1} dBFS  ·  {_instantReplay.CaptureDeviceName}";
-            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)); // green
+            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)); 
         }
         else if (callbackCount == 0)
         {
             InstantReplaySignalText.Text =
                 $"Waiting for audio data from: {_instantReplay.CaptureDeviceName}\n" +
                 $"Format: {_instantReplay.CaptureFormatDesc}";
-            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x00)); // amber
+            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x00)); 
         }
         else if (meterPeak > 0.01f)
         {
             InstantReplaySignalText.Text =
                 $"Device meter: {meterPeak * 100:F0}% — audio detected but capture is silent\n" +
                 $"Format: {_instantReplay.CaptureFormatDesc}  ·  Callbacks: {callbackCount}  ·  Last: {_instantReplay.LastBytesRecorded} B";
-            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36)); // red
+            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36)); 
         }
         else
         {
@@ -2313,10 +2313,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 $"No audio on: {_instantReplay.CaptureDeviceName}\n" +
                 $"Meter: {meterPeak * 100:F0}%  ·  Callbacks: {callbackCount}  ·  Last: {_instantReplay.LastBytesRecorded} B\n" +
                 $"Select the output device that is currently playing audio.";
-            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x00)); // amber
+            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x00)); 
         }
 
-        // Update mic signal indicator.
+        
         if (InstantReplayMicSignalText is not null)
         {
             if (!_settings.InstantReplayIncludeMicrophone)
@@ -2357,12 +2357,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             ClearInstantReplayToggleHotkeyButton.IsEnabled = _settings.InstantReplayToggleHotkey is not null;
     }
 
-    // ── Toggle handlers ───────────────────────────────────────────────────────
+    
 
     private void InstantReplaySwitch_Checked(object sender, RoutedEventArgs e)   => EnableInstantReplay();
     private void InstantReplaySwitch_Unchecked(object sender, RoutedEventArgs e) => DisableInstantReplay();
 
-    // Called by the hotkey (Toggle ON/OFF); keeps the switch in sync.
+    
     private void ToggleInstantReplay()
     {
         if (_instantReplay is null || !_instantReplay.IsRunning)
@@ -2379,7 +2379,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             _instantReplay.Start(_settings.InstantReplayCaptureDeviceId);
 
-            // Optionally start microphone capture if the user has enabled it.
+            
             bool micFailed = false;
             if (_settings.InstantReplayIncludeMicrophone
                 && InstantReplayMicDeviceCombo?.SelectedItem is MicDevice irMic)
@@ -2390,7 +2390,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 }
                 catch (Exception micEx)
                 {
-                    // Mic failure does not abort system capture — IR stays ON, warning shown.
+                    
                     micFailed = true;
                     StatusText.Text = $"Instant Replay is ON — mic capture failed: {micEx.Message}";
                 }
@@ -2408,12 +2408,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
         catch (Exception ex)
         {
-            // Start() failed — dispose on a background thread to avoid STA deadlock.
+            
             var failedService = _instantReplay;
             _instantReplay = null;
             _settings.InstantReplayEnabled = false;
             SaveSettings();
-            UpdateInstantReplayUI(running: false); // also reverts switch
+            UpdateInstantReplayUI(running: false); 
             StatusText.Text = $"Instant Replay failed to start: {ex.Message}";
             if (failedService is not null)
                 _ = Task.Run(() => failedService.Dispose());
@@ -2422,24 +2422,24 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void DisableInstantReplay()
     {
-        // Null the field immediately so the rest of the UI sees IR as off right away,
-        // then dispose on a background thread — WasapiCapture.Dispose() calls
-        // captureThread.Join() which would otherwise cause a COM STA deadlock on
-        // the UI thread (the WASAPI thread needs STA to complete COM cleanup).
+        
+        
+        
+        
         var service = _instantReplay;
         _instantReplay = null;
         _settings.InstantReplayEnabled = false;
         SaveSettings();
-        UpdateInstantReplayUI(running: false); // stops signal timer, reverts switch
+        UpdateInstantReplayUI(running: false); 
         StatusText.Text = "Instant Replay is OFF.";
         if (service is not null)
             _ = Task.Run(() => service.Dispose());
     }
 
-    // ── Buffer length ─────────────────────────────────────────────────────────
-    // Both combos (buffer length and capture device) are disabled while IR is ON,
-    // so these handlers only ever fire while IR is OFF.  Just persist the setting;
-    // it takes effect on the next Enable.
+    
+    
+    
+    
 
     private void InstantReplayMinutesCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -2481,12 +2481,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         SaveSettings();
     }
 
-    // ── Save Clip ─────────────────────────────────────────────────────────────
+    
 
     private void SaveInstantReplayClip_Click(object sender, RoutedEventArgs e) => SaveInstantReplayClip();
 
-    // Saves the buffered audio as a WAV, adds it to the active deck, refreshes
-    // UI/Mini Mode, and opens the Sound Editor for trimming and naming.
+    
+    
     private void SaveInstantReplayClip()
     {
         if (_instantReplay is null || !_instantReplay.IsRunning)
@@ -2502,13 +2502,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        // Retrieve mic ring if mic capture was active.
+        
         float[]? micSamples = null;
         if (_settings.InstantReplayIncludeMicrophone && _instantReplay.IsMicRunning)
             micSamples = _instantReplay.GetRecentMicSamples();
 
-        // Mix mic into system audio (sample-by-sample sum, clamped to [-1, 1]).
-        // If mic has no data, pass system audio through unchanged.
+        
+        
         float[] samples;
         string? mixNote = null;
         if (micSamples is { Length: > 0 })
@@ -2573,7 +2573,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         TrySaveDecks();
         RefreshCategoryFilter();
         FilterSoundsPanel();
-        ActiveDeckChanged?.Invoke(_activeDeck); // refresh Mini Mode
+        ActiveDeckChanged?.Invoke(_activeDeck); 
 
         string saveNote =
             !_instantReplay.IsReceivingAudio ? " (WARNING: no system audio signal — check Capture device)" :
@@ -2581,10 +2581,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                                                "";
         StatusText.Text = $"Clip saved: {item.DisplayName}{saveNote}";
 
-        EditSound(item); // open Sound Editor for rename / trim / fade
+        EditSound(item); 
     }
 
-    // ── Hotkey assignment ─────────────────────────────────────────────────────
+    
 
     private void SetInstantReplayClipHotkey_Click(object sender, RoutedEventArgs e)
     {
@@ -2720,7 +2720,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var accentBrush  = (Brush)Application.Current.Resources["SystemAccentColorPrimaryBrush"];
         var categoryText = string.IsNullOrWhiteSpace(item.Category) ? "General" : item.Category;
 
-        // ── Pad dimensions and compact mode ──────────────────────────────────
+        
         var (cardW, cardH) = GetPadDimensions();
         bool compact       = _settings.GridCompact;
         double nameFontSz  = _settings.GridPadSize switch
@@ -2730,7 +2730,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             _       => compact ? 15.0 : 13.0,
         };
 
-        // ── Playing indicator ────────────────────────────────────────────────
+        
         var playingIndicator = new TextBlock
         {
             Text              = "▶",
@@ -2740,7 +2740,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             Visibility        = Visibility.Collapsed
         };
 
-        // ── Top row: favorite (left, hidden in compact) + hotkey (right) ─────
+        
         var hotkeyBlock = new TextBlock
         {
             Text              = item.Hotkey?.DisplayText ?? "",
@@ -2767,7 +2767,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             topRow.Children.Add(favBlock);
         }
 
-        // ── Center: sound name ───────────────────────────────────────────────
+        
         var nameBlock = new TextBlock
         {
             Text                = item.DisplayName,
@@ -2781,7 +2781,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             Margin              = new Thickness(0, 4, 0, 4)
         };
 
-        // ── Bottom row: category badge (hidden in compact) + playing indicator
+        
         var bottomRow = new DockPanel();
         DockPanel.SetDock(playingIndicator, Dock.Right);
         bottomRow.Children.Add(playingIndicator);
@@ -2797,7 +2797,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             bottomRow.Children.Add(catBadge);
         }
 
-        // ── Layout ───────────────────────────────────────────────────────────
+        
         var layout = new Grid();
         layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -2809,7 +2809,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         layout.Children.Add(nameBlock);
         layout.Children.Add(bottomRow);
 
-        // ── Card border ──────────────────────────────────────────────────────
+        
         var card = new Border
         {
             Width           = cardW,
@@ -2824,7 +2824,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             Child           = layout
         };
 
-        // ── SetActive callback ────────────────────────────────────────────────
+        
         Action<bool> setActive = active =>
         {
             if (active)
@@ -2841,9 +2841,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         };
         _rowControls[item.Id] = new RowControls(setActive);
 
-        // ── Click: play / stop ───────────────────────────────────────────────
-        // Press sets a pending play intent; release executes it only if no drag occurred.
-        // The panel-level PreviewMouseMove clears _pendingPlayId when a drag initiates.
+        
+        
+        
         card.MouseLeftButtonDown += (_, _) =>
         {
             _dragSourceId   = capturedItem.Id;
@@ -2862,16 +2862,16 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 PlayLibraryItem(capturedItem);
         };
 
-        // ── Hover ────────────────────────────────────────────────────────────
+        
         card.MouseEnter += (_, _) => { if (!_activePlaybacks.ContainsKey(capturedItem.Id)) card.Opacity = 0.85; };
         card.MouseLeave += (_, _) =>
         {
             card.Opacity = 1.0;
-            // Cancel pending play if the mouse leaves before releasing (likely a drag)
+            
             if (_pendingPlayId == capturedItem.Id) _pendingPlayId = Guid.Empty;
         };
 
-        // ── Context menu ─────────────────────────────────────────────────────
+        
         card.ContextMenu = BuildSoundContextMenu(capturedItem);
 
         return card;
@@ -2969,7 +2969,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = $"Mix saved: {dlg.ResultItem.DisplayName}";
     }
 
-    // ── Export as MP3 ──────────────────────────────────────────────────────────
+    
 
     private void ExportSoundAsMp3(SoundItem item)
     {
@@ -3007,7 +3007,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         string tempPath  = Path.Combine(dir,
             $"{Path.GetFileNameWithoutExtension(finalPath)}.tmp-export-{Guid.NewGuid():N}.mp3");
 
-        // Capture edit params on the UI thread before handing off.
+        
         var    segments   = GetSegments(sound, item);
         var (_, _, fadeInS, fadeOutS) = GetTrimFadeParams(sound, item);
         float  gain       = ConvertUiVolumeToGain(item.Volume);
@@ -3042,20 +3042,20 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                         });
                 }
 
-                // Mirror the exact playback pipeline so trim/fade/cuts/volume are applied.
+                
                 var source = new CachedSoundSampleProvider(soundToExport, exportSegs, fadeInS, fadeOutS);
                 ISampleProvider final = gain < 0.999f
                     ? new VolumeSampleProvider(source) { Volume = gain }
                     : source;
 
-                // MediaFoundationEncoder requires PCM; convert float → 16-bit PCM.
+                
                 var waveProvider = new SampleToWaveProvider16(final);
 
-                // Encode to temp file first — never touch the final path until success.
+                
                 MediaFoundationEncoder.EncodeToMp3(waveProvider, tempPath, desiredBitRate: 192_000);
                 tempCreated = true;
 
-                // Atomic promotion: replace final path only after successful encode.
+                
                 File.Move(tempPath, finalPath, overwrite: true);
                 tempCreated = false;
 
@@ -3093,7 +3093,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return string.Concat(name.Select(c => Array.IndexOf(invalid, c) >= 0 ? '_' : c)).Trim();
     }
 
-    // ── Add Sound ──────────────────────────────────────────────────────────────
+    
 
     private void AddSound_Click(object sender, RoutedEventArgs e)
     {
@@ -3132,7 +3132,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    // ── Edit Sound ─────────────────────────────────────────────────────────────
+    
 
     private void EditSound(SoundItem item)
     {
@@ -3199,7 +3199,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = $"Updated: {item.DisplayName}";
     }
 
-    // ── Remove Sound ───────────────────────────────────────────────────────────
+    
 
     private void RemoveSound(SoundItem item)
     {
@@ -3229,15 +3229,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         try   { fullPath = Path.GetFullPath(removedItem.FilePath); }
         catch { return null; }
 
-        // Only delete files inside %AppData%\SoundPad\Sounds
+        
         string managedDir = Path.GetFullPath(AppPaths.SoundsDirectory);
         if (!managedDir.EndsWith(Path.DirectorySeparatorChar))
             managedDir += Path.DirectorySeparatorChar;
         if (!fullPath.StartsWith(managedDir, StringComparison.OrdinalIgnoreCase))
             return "External file was not deleted.";
 
-        // _library.Remove(item) already ran, so _decks now reflects the post-removal state.
-        // If any remaining sound in any deck still points to this path, keep the file.
+        
+        
         bool usedElsewhere = _decks
             .SelectMany(d => d.Sounds)
             .Any(s =>
@@ -3279,7 +3279,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    // ── Duplicate Sound ───────────────────────────────────────────────────────
+    
 
     private void DuplicateSound(SoundItem source)
     {
@@ -3302,7 +3302,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             NormalizeAudio   = source.NormalizeAudio,
             PlaybackSpeed    = source.PlaybackSpeed,
             CreatedAt        = DateTime.UtcNow
-            // Hotkey intentionally not copied — would create a conflict
+            
         };
         _cachedSounds[copy.Id] = cachedSound;
         _library.Add(copy);
@@ -3312,7 +3312,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = $"Duplicated: {copy.DisplayName}";
     }
 
-    // ── Reveal in Folder ─────────────────────────────────────────────────────
+    
 
     private static void RevealInFolder(SoundItem item)
     {
@@ -3321,7 +3321,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         catch { }
     }
 
-    // ── Category Manager ─────────────────────────────────────────────────────
+    
 
     private void CategoryManager_Click(object sender, RoutedEventArgs e)
     {
@@ -3342,7 +3342,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
         }
 
-        // Persist empty categories that have no sounds assigned yet.
+        
         _activeDeck.CustomCategories = dlg.FinalCategories
             .Where(c => !_library.Any(s =>
                 string.Equals(s.Category, c, StringComparison.OrdinalIgnoreCase)))
@@ -3354,11 +3354,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = "Categories updated.";
     }
 
-    // ── Hotkey assignment ────────────────────────────────────────────────────
+    
 
-    // Returns the display name of whatever already owns this combination
-    // (a sound, or "Stop All Sounds"), or null if the combination is free.
-    // excludeSoundId lets a sound's own current binding be excluded from the check.
+    
+    
+    
     private string? FindHotkeyOwner(HotkeyBinding binding, Guid? excludeSoundId)
     {
         var sound = _library.FirstOrDefault(x => (excludeSoundId is null || x.Id != excludeSoundId)
@@ -3385,8 +3385,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return null;
     }
 
-    // Conflict check for IR hotkey dialogs — same as FindHotkeyOwner but allows
-    // excluding one of the two IR slots to avoid "conflicts with itself" false positives.
+    
+    
     private string? FindHotkeyOwnerForIR(HotkeyBinding binding, bool excludeClip, bool excludeToggle)
     {
         var sound = _library.FirstOrDefault(x => x.Hotkey is not null
@@ -3422,7 +3422,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         var dlg = new HotkeyCaptureDialog(this, item.DisplayName, item.Hotkey);
         if (dlg.ShowDialog() != true)
-            return; // cancelled — nothing changes
+            return; 
 
         if (dlg.WasCleared)
         {
@@ -3454,7 +3454,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var result = ReregisterAllHotkeysAndReport("hotkey-save");
         if (result.FailedSoundIds.Contains(item.Id))
         {
-            // Roll back and restore the previously-working hotkey set.
+            
             item.Hotkey = previousBinding;
             ReregisterAllHotkeysAndReport("hotkey-save-rollback");
             MessageBox.Show(
@@ -3470,7 +3470,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = $"Hotkey set: {item.DisplayName} → {newBinding.DisplayText}";
     }
 
-    // ── Stop All hotkey assignment ──────────────────────────────────────────
+    
 
     private void RefreshStopAllHotkeyDisplay()
     {
@@ -3492,7 +3492,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         var dlg = new HotkeyCaptureDialog(this, "Stop All Sounds", _settings.StopAllHotkey);
         if (dlg.ShowDialog() != true)
-            return; // cancelled — nothing changes
+            return; 
 
         if (dlg.WasCleared)
         {
@@ -3520,7 +3520,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var result = ReregisterAllHotkeysAndReport("stop-all-save");
         if (result.StopAllFailed)
         {
-            // Roll back and restore the previously-working hotkey set.
+            
             _settings.StopAllHotkey = previous;
             ReregisterAllHotkeysAndReport("stop-all-save-rollback");
             MessageBox.Show(
@@ -3548,11 +3548,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = "Stop All hotkey cleared";
     }
 
-    // ── Search and category filter ─────────────────────────────────────────────
+    
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        // Clear immediately for instant feedback; debounce typed input to ~150ms.
+        
         if (string.IsNullOrEmpty(SearchBox.Text))
         {
             _searchDebounceTimer?.Stop();
@@ -3591,11 +3591,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         FilterSoundsPanel();
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  PLAYBACK
-    // ══════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
-    // ── Active playback helpers ────────────────────────────────────────────────
+    
 
     private void EnsurePlaybackMonitor()
     {
@@ -3708,7 +3708,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 var rendered = await Task.Run(() => EffectProcessor.Render(
                     rawSound, segments, rev, norm, speed));
 
-                // Abort if Stop All was pressed while we were rendering.
+                
                 if (renderEpoch != _effectRenderEpoch) return;
 
                 if (rendered.Length == 0)
@@ -3727,19 +3727,19 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
         }
 
-        // Guard: if the sound was removed while rendering, do not start playback.
+        
         if (!_cachedSounds.ContainsKey(item.Id)) return;
 
         PlaySound(item.Id, rawSound, item, processedSound: processed);
     }
 
-    // Maps a 0–1 UI volume to a 0–1 audio gain using a squared (power-2) curve.
-    // Human loudness perception is roughly logarithmic, so a linear gain slider
-    // feels "flat" — moving from 100% to 50% barely sounds different.
-    // Squaring the value maps the midpoint (0.5) to a gain of 0.25 (−12 dB),
-    // which matches what most people expect "half volume" to sound like.
-    // The stored SoundItem.Volume (0–1) is still the raw UI value; the curve
-    // is applied only at playback so existing JSON files are unaffected.
+    
+    
+    
+    
+    
+    
+    
     private static float ConvertUiVolumeToGain(float uiVolume)
         => uiVolume * uiVolume;
 
@@ -3790,7 +3790,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                     ? _virtualEngine?.Play(soundToPlay, volume, segments, fadeInS, fadeOutS)
                     : _virtualEngine?.Play(soundToPlay, volume);
 
-            // Stop the previous instance of this same sound before registering the new one.
+            
             if (_activePlaybacks.TryGetValue(soundId, out var previous))
             {
                 if (previous.MonitorHandle is not null)
@@ -3832,10 +3832,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return (start, end, fadeIn, fadeOut);
     }
 
-    // Converts TrimStart/TrimEnd or AudioSegment list into an ordered list of
-    // (S, E) sample-index pairs for multi-segment playback and export.
-    // When Segments is null/empty: old single-segment behavior using TrimStart/TrimEnd.
-    // When Segments is set: those kept blocks are used directly.
+    
+    
+    
+    
     private static List<(int S, int E)> GetSegments(CachedSound sound, SoundItem item)
     {
         int sr          = sound.SampleRate * sound.Channels;
@@ -3860,13 +3860,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return result.Count > 0 ? result : [(globalStart, globalEnd)];
     }
 
-    // ── Stop All ──────────────────────────────────────────────────────────────
+    
 
     private void StopButton_Click(object sender, RoutedEventArgs e) => StopAllSounds();
 
-    // Public stop-all entry point: clears active sounds, stops the test tone,
-    // and updates the status bar.  Mic passthrough is unaffected (it uses
-    // AddMixerInput, not the engine's tracked _active list).
+    
+    
+    
     internal void StopAllSounds()
     {
         _effectRenderEpoch++;
@@ -3875,9 +3875,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = "Stopped";
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  OUTPUT DEVICES
-    // ══════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void PopulateDeviceLists()
     {
@@ -4012,16 +4012,16 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  AUDIO PERFORMANCE PRESETS
-    // ══════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private (int desiredLatency, int numberOfBuffers) GetPresetParams() =>
         _settings.AudioPerformancePreset switch
         {
             "Stable"      => (300, 3),
             "Low Latency" => (60,  2),
-            _             => (100, 2),  // "Balanced" and unknown values
+            _             => (100, 2),  
         };
 
     private void UpdatePresetDescription(string preset)
@@ -4069,19 +4069,19 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         string previousPreset = _settings.AudioPerformancePreset;
         if (newPreset == previousPreset) return;
 
-        // Remember mic passthrough state; stop it before touching engines.
+        
         bool micWasActive = _micPassthrough is not null;
         if (micWasActive) StopMicPassthrough();
 
-        // Stop all playing sounds and the test tone.
+        
         ClearAllActivePlaybacks();
         StopVirtualTestTone();
 
-        // Commit the new preset so GetPresetParams() picks it up.
+        
         _settings.AudioPerformancePreset = newPreset;
         UpdatePresetDescription(newPreset);
 
-        // Recreate monitor engine.
+        
         int? monitorNum = (_monitorEngine is not null)
             ? (MonitorComboBox.SelectedItem as AudioDevice)?.Number
             : null;
@@ -4092,7 +4092,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (monitorNum.HasValue)
             CreateMonitorEngine(monitorNum.Value);
 
-        // Recreate virtual engine.
+        
         int? virtualNum = (_virtualEngine is not null)
             ? (VirtualComboBox.SelectedItem as AudioDevice)?.Number
             : null;
@@ -4103,7 +4103,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (virtualNum.HasValue)
             CreateVirtualEngine(virtualNum.Value);
 
-        // If either required engine failed to create, roll back.
+        
         bool monitorFailed = monitorNum.HasValue && _monitorEngine is null;
         bool virtualFailed = virtualNum.HasValue && _virtualEngine is null;
 
@@ -4112,7 +4112,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             StatusText.Text = $"Preset '{newPreset}' failed — reverting to '{previousPreset}'.";
             _settings.AudioPerformancePreset = previousPreset;
 
-            // Recreate with original preset values.
+            
             if (monitorNum.HasValue)
             {
                 _monitorEngine?.Dispose();
@@ -4133,14 +4133,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             SaveSettings();
         }
 
-        // Restore mic passthrough if it was running.
+        
         if (micWasActive && _virtualEngine is not null)
             StartMicPassthrough();
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  MICROPHONE
-    // ══════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void PopulateMicList()
     {
@@ -4263,7 +4263,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StartMicPassthrough();
     }
 
-    // ── Import / Export Library Backup ────────────────────────────────────────
+    
 
     private void ExportBackup_Click(object sender, RoutedEventArgs e)
     {
@@ -4315,7 +4315,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        // Preload audio for all newly added sounds (already inserted into decks by the service).
+        
         foreach (var item in result.AllNewSounds)
         {
             if (File.Exists(item.FilePath))
@@ -4348,7 +4348,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = (parts.Count > 0 ? string.Join(", ", parts) : "Nothing to import") + ".";
     }
 
-    // ── Drag and drop ──────────────────────────────────────────────────────────
+    
 
     private static readonly HashSet<string> _audioExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -4473,13 +4473,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             StatusText.Text = $"Added {added} sound(s)";
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  DISCORD / GAME ROUTING WIZARD
-    // ══════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
-    // Updates every wizard UI element to reflect the current routing state.
-    // Safe to call at any time; the null-guard on WizardMonitorDot protects
-    // against edge-case calls before InitializeComponent completes.
+    
+    
+    
     private void RefreshRoutingWizard()
     {
         if (WizardMonitorDot is null) return;
@@ -4487,19 +4487,19 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var successBrush = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"];
         var cautionBrush  = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"];
 
-        // ── Monitor status ──────────────────────────────────────────────────
+        
         var monitorDevice = MonitorComboBox.SelectedItem as AudioDevice;
         WizardMonitorDot.Foreground  = successBrush;
         WizardMonitorStatusText.Text = monitorDevice?.Name ?? "Not selected";
 
-        // ── Virtual output status ───────────────────────────────────────────
+        
         var virtualDevice  = VirtualComboBox.SelectedItem as AudioDevice;
         bool virtualIsNone = virtualDevice is null || virtualDevice.IsNone;
 
         WizardVirtualDot.Foreground  = virtualIsNone ? cautionBrush : successBrush;
         WizardVirtualStatusText.Text = virtualIsNone ? "None" : virtualDevice!.Name;
 
-        // ── Mic passthrough status ──────────────────────────────────────────
+        
         bool micEnabled = MicPassthroughCheckBox.IsChecked == true;
         WizardMicStatusRow.Visibility = micEnabled ? Visibility.Visible : Visibility.Collapsed;
         if (micEnabled)
@@ -4510,7 +4510,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             WizardMicStatusText.Text = micOk ? micDevice!.Name : "No microphone selected";
         }
 
-        // ── Warning banners and recommended panel ───────────────────────────
+        
         bool sameDevice  = !virtualIsNone && AudioDevice.AreSameOutputDevice(monitorDevice, virtualDevice);
         bool micNoDevice = micEnabled && MicComboBox.SelectedItem is null;
         var  best        = FindBestVirtualCableDevice();
@@ -4526,8 +4526,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             WizardRecommendedDeviceName.Text = $"Will select: {best.Name}";
     }
 
-    // Returns the highest-priority virtual cable device found in the current
-    // VirtualComboBox list, or null when no virtual cable is installed.
+    
+    
     private AudioDevice? FindBestVirtualCableDevice()
     {
         if (VirtualComboBox.ItemsSource is not IEnumerable<AudioDevice> devices)
@@ -4566,15 +4566,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        // Setting SelectedItem triggers VirtualComboBox_SelectionChanged which
-        // recreates the virtual engine, saves settings, and calls RefreshRoutingWizard.
+        
+        
         VirtualComboBox.SelectedItem = best;
         StatusText.Text = $"Virtual Output set to: {best.Name}";
     }
 
-    // Removes the current test tone from the virtual engine's mixer.
-    // Safe to call when no tone is active or when the tone has already
-    // self-terminated (MixingSampleProvider ignores unknown inputs).
+    
+    
+    
     private void StopVirtualTestTone()
     {
         if (_virtualTestToneProvider is null) return;
@@ -4590,7 +4590,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        StopVirtualTestTone(); // stop / replace any previous test tone
+        StopVirtualTestTone(); 
 
         var generator = new SignalGenerator(CachedSound.TargetFormat.SampleRate,
                                              CachedSound.TargetFormat.Channels)
@@ -4600,7 +4600,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             Gain      = 0.25f
         };
 
-        // 1.5 seconds of interleaved stereo samples at 48 kHz
+        
         int totalSamples = (int)(CachedSound.TargetFormat.SampleRate * 1.5 *
                                   CachedSound.TargetFormat.Channels);
         _virtualTestToneProvider = new OffsetSampleProvider(generator) { TakeSamples = totalSamples };
@@ -4609,12 +4609,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = "Test tone playing to Virtual Output...";
     }
 
-    // ── Window closing ────────────────────────────────────────────────────────
+    
 
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
-        // If CloseToTray is on and this isn't a deliberate exit (from the tray
-        // menu or ExitApp()), cancel the close and just hide to tray instead.
+        
+        
         if (!_isExiting && _settings.CloseToTray)
         {
             e.Cancel = true;
@@ -4622,15 +4622,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        // Flush any pending debounced deck save so no data is lost on close.
+        
         if (_deckSaveDebounceTimer?.IsEnabled == true)
         {
             _deckSaveDebounceTimer.Stop();
             TrySaveDecks();
         }
 
-        // Only persist bounds while Normal; maximized/minimized dimensions
-        // aren't meaningful as a restored size for next launch.
+        
+        
         if (WindowState == WindowState.Normal)
         {
             _settings.WindowLeft   = Left;
@@ -4639,7 +4639,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             _settings.WindowHeight = Height;
         }
 
-        // Persist Mini Mode position/topmost before SaveSettings writes to disk.
+        
         if (_miniWindow is not null)
         {
             _miniWindow.SavePositionTo(_settings);
@@ -4651,14 +4651,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _downloadCts?.Dispose();
         _downloadCts = null;
 
-        // Close Mini Mode before disposing audio engines.
+        
         _miniWindow?.ForceClose();
         _miniWindow = null;
 
-        // Dispose the IR service on a background thread — WasapiCapture.Dispose() calls
-        // captureThread.Join(), which would deadlock the STA thread if called here.
-        // The process exits after Window_Closing returns; the background thread or the
-        // OS will clean up the COM/WASAPI resources if Dispose doesn't finish in time.
+        
+        
+        
+        
         var irService = _instantReplay;
         _instantReplay = null;
         if (irService is not null)
@@ -4677,7 +4677,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _virtualEngine?.Dispose();
     }
 
-    // ── Diagnostics ────────────────────────────────────────────────────────────
+    
 
     private void OpenLogsFolder_Click(object sender, RoutedEventArgs e)
     {

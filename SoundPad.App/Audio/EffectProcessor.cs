@@ -4,17 +4,17 @@ using SoundPad.App.Models;
 
 namespace SoundPad.App.Audio;
 
-// Renders non-destructive audio effects (Reverse, Normalize, Speed) into a
-// new float[] that can be wrapped in CachedSound(float[]) for playback or export.
-// All processing happens off the audio thread. Processing order:
-//   extract segments → reverse → normalize → resample for speed.
-// Fade-in/Fade-out are NOT applied here — they remain streaming operations
-// in CachedSoundSampleProvider so they do not affect the cached result.
+
+
+
+
+
+
 public static class EffectProcessor
 {
-    // Returns a safe playback speed from a SoundItem.
-    // Treats 0, NaN, Infinity, and negatives as 1.0 (no change).
-    // Clamps all other values to [0.5, 2.0].
+    
+    
+    
     public static double GetSafePlaybackSpeed(SoundItem item)
     {
         double s = item.PlaybackSpeed;
@@ -23,21 +23,21 @@ public static class EffectProcessor
         return Math.Clamp(s, 0.5, 2.0);
     }
 
-    // Returns true when the item has at least one active effect.
+    
     public static bool HasEffects(SoundItem item)
         => item.ReverseAudio
         || item.NormalizeAudio
         || Math.Abs(GetSafePlaybackSpeed(item) - 1.0) > 0.001;
 
-    // Renders all effects into a new float[] ready for CachedSound(float[]).
-    //
-    // segments  — (S, E) sample-index pairs into rawSound.AudioData,
-    //             produced by GetSegments(). Accounts for trim and block cuts.
-    // reverse   — reverses the audio (stereo-safe: swaps frame pairs, not samples).
-    // normalize — scales to peak amplitude 1.0; silent audio is left unchanged.
-    // speed     — [0.5, 2.0]; resamples vinyl-style (pitch shifts with speed).
-    //
-    // Returns Array.Empty<float>() if there is no audio to render.
+    
+    
+    
+    
+    
+    
+    
+    
+    
     public static float[] Render(
         CachedSound rawSound,
         IReadOnlyList<(int S, int E)> segments,
@@ -45,7 +45,7 @@ public static class EffectProcessor
         bool normalize,
         double speed)
     {
-        // Step 1: extract segment audio into a flat contiguous buffer.
+        
         int totalSamples = 0;
         foreach (var (s, e) in segments)
             totalSamples += Math.Max(0, e - s);
@@ -63,15 +63,15 @@ public static class EffectProcessor
             writePos += len;
         }
 
-        // Step 2: reverse (stereo-safe — swap frame pairs, not individual samples).
+        
         if (reverse)
             ReverseFrames(flat, rawSound.Channels);
 
-        // Step 3: normalize (scale to peak = 1.0; leaves silent audio unchanged).
+        
         if (normalize)
             NormalizeInPlace(flat);
 
-        // Step 4: speed resample (vinyl-style; pitch shifts proportionally to speed).
+        
         double safeSpeed = Math.Clamp(speed, 0.5, 2.0);
         if (Math.Abs(safeSpeed - 1.0) > 0.001)
             flat = ResampleForSpeed(flat, rawSound.WaveFormat, safeSpeed);
@@ -79,9 +79,9 @@ public static class EffectProcessor
         return flat;
     }
 
-    // Reverses audio by swapping complete multi-channel frames.
-    // Stereo (channels=2): [L0 R0] swaps with [Ln-1 Rn-1], etc.
-    // Samples within a frame always stay together, preserving stereo channel pairing.
+    
+    
+    
     private static void ReverseFrames(float[] data, int channels)
     {
         if (channels <= 0) return;
@@ -97,9 +97,9 @@ public static class EffectProcessor
         }
     }
 
-    // Scales all samples so the peak amplitude becomes 1.0.
-    // Safe on silence: if peak < epsilon no scaling is applied (avoids div-by-zero).
-    // All output values are clamped to [-1.0, 1.0].
+    
+    
+    
     private static void NormalizeInPlace(float[] data)
     {
         float peak = 0f;
@@ -117,10 +117,10 @@ public static class EffectProcessor
             data[i] = Math.Clamp(data[i] * scale, -1.0f, 1.0f);
     }
 
-    // Treats the input as if recorded at (targetSampleRate × speed) Hz, then
-    // resamples back to targetSampleRate via WDL.
-    // Speed=2.0: declared at 96 kHz, resampled to 48 kHz → half duration, higher pitch.
-    // Speed=0.5: declared at 24 kHz, resampled to 48 kHz → double duration, lower pitch.
+    
+    
+    
+    
     private static float[] ResampleForSpeed(float[] data, WaveFormat fmt, double speed)
     {
         int targetRate = fmt.SampleRate;
@@ -145,8 +145,8 @@ public static class EffectProcessor
         return result.ToArray();
     }
 
-    // Wraps a float[] as a streaming ISampleProvider without copying data.
-    // Used by ResampleForSpeed to feed WdlResamplingSampleProvider.
+    
+    
     private sealed class ArraySampleProvider : ISampleProvider
     {
         private readonly float[] _data;

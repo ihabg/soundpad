@@ -3,7 +3,7 @@ using SoundPad.App.Models;
 
 namespace SoundPad.App.Services;
 
-// Outcome of a ReregisterAll pass.
+
 public class HotkeyRegistrationResult
 {
     public HashSet<Guid> FailedSoundIds            { get; } = new HashSet<Guid>();
@@ -12,29 +12,29 @@ public class HotkeyRegistrationResult
     public bool           InstantReplayToggleFailed { get; set; }
 }
 
-// Bridges the sound library's per-sound HotkeyBinding data, the Stop All hotkey,
-// and the two Instant Replay hotkeys to the Win32-level HotkeyManager.
-// All Instant Replay IDs sit below BaseId so they never overlap with sound IDs.
+
+
+
 public class HotkeyService
 {
-    private const int InstantReplayClipId   = 9097; // Save Clip
-    private const int InstantReplayToggleId = 9098; // Toggle ON/OFF
+    private const int InstantReplayClipId   = 9097; 
+    private const int InstantReplayToggleId = 9098; 
     private const int StopAllId             = 9099;
-    private const int BaseId                = 9100; // sound hotkeys start here
+    private const int BaseId                = 9100; 
 
     private readonly HotkeyManager _manager;
     private readonly Dictionary<int, Guid> _idToSoundId = new Dictionary<int, Guid>();
 
-    // Fired on the UI thread with the SoundItem.Id whose hotkey was pressed.
+    
     public event Action<Guid>? HotkeyTriggered;
 
-    // Fired on the UI thread when the Stop All hotkey is pressed.
+    
     public event Action? StopAllHotkeyTriggered;
 
-    // Fired on the UI thread when the Instant Replay Save Clip hotkey is pressed.
+    
     public event Action? InstantReplayClipTriggered;
 
-    // Fired on the UI thread when the Instant Replay Toggle hotkey is pressed.
+    
     public event Action? InstantReplayToggleTriggered;
 
     public HotkeyService(HotkeyManager manager)
@@ -53,10 +53,10 @@ public class HotkeyService
             HotkeyTriggered?.Invoke(soundId);
     }
 
-    // Unregisters every hotkey then re-registers Stop All, the two Instant Replay
-    // hotkeys, and every library sound that has a binding.  The IR hotkeys are
-    // registered here (not separately) so deck-switch calls to ReregisterAll never
-    // lose them.
+    
+    
+    
+    
     public HotkeyRegistrationResult ReregisterAll(
         IEnumerable<SoundItem> library,
         HotkeyBinding?         stopAllHotkey,

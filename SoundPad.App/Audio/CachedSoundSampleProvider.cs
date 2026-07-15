@@ -2,35 +2,35 @@ using NAudio.Wave;
 
 namespace SoundPad.App.Audio;
 
-// Streams a CachedSound's float array to the mixer.
-// Each instance has its own position so the same CachedSound can be played
-// multiple times simultaneously without interference.
-//
-// Two modes:
-//   Single-segment (original): one contiguous [startSample, endSample) window
-//     with optional fade-in / fade-out ramps.
-//   Multi-segment: a list of (S, E) pairs — used when the sound has cut regions.
-//     FadeIn/FadeOut apply to the overall joined output (first and last segment
-//     edges only), not to each internal segment boundary.
+
+
+
+
+
+
+
+
+
+
 public class CachedSoundSampleProvider : ISampleProvider
 {
     private readonly CachedSound _sound;
 
-    // ── Single-segment fields ─────────────────────────────────────────────────
+    
     private readonly int _startSample;
     private readonly int _endSample;
     private readonly int _fadeInSamples;
     private readonly int _fadeOutSamples;
 
-    // ── Multi-segment fields ──────────────────────────────────────────────────
+    
     private readonly IReadOnlyList<(int S, int E)>? _segments;
-    private int _segIdx;        // which segment we are currently reading
-    private int _segPos;        // position within current segment
-    private int _totalPlayed;   // samples emitted so far across all segments (for fade)
-    private int _totalLength;   // sum of all segment lengths (for fade-out offset)
+    private int _segIdx;        
+    private int _segPos;        
+    private int _totalPlayed;   
+    private int _totalLength;   
 
-    // ── Shared ───────────────────────────────────────────────────────────────
-    private int _position; // used only in single-segment mode
+    
+    private int _position; 
 
     public WaveFormat WaveFormat => _sound.WaveFormat;
 
@@ -38,13 +38,13 @@ public class CachedSoundSampleProvider : ISampleProvider
         ? _segIdx >= _segments.Count
         : _position >= _endSample;
 
-    // ── Single-segment constructor (original — unchanged behavior) ────────────
-    //
-    // startSample    — index into AudioData to begin playback (0 = play from start).
-    // endSample      — index into AudioData to stop at (-1 = play to end of file).
-    // fadeInSamples  — number of samples over which gain ramps from 0 → 1.
-    // fadeOutSamples — number of samples over which gain ramps from 1 → 0 at the end.
-    // All values are clamped to valid ranges in the constructor.
+    
+    
+    
+    
+    
+    
+    
     public CachedSoundSampleProvider(CachedSound sound,
         int startSample    = 0,
         int endSample      = -1,
@@ -63,12 +63,12 @@ public class CachedSoundSampleProvider : ISampleProvider
         _position        = _startSample;
     }
 
-    // ── Multi-segment constructor ─────────────────────────────────────────────
-    //
-    // segments       — ordered list of (S, E) sample-index pairs; must be
-    //                  non-overlapping and ascending. Empty list = silence.
-    // fadeInSamples  — ramps 0→1 over this many samples at the very start.
-    // fadeOutSamples — ramps 1→0 over this many samples at the very end.
+    
+    
+    
+    
+    
+    
     public CachedSoundSampleProvider(CachedSound sound,
         IReadOnlyList<(int S, int E)> segments,
         int fadeInSamples  = 0,
@@ -83,15 +83,15 @@ public class CachedSoundSampleProvider : ISampleProvider
         _fadeInSamples  = Math.Clamp(fadeInSamples,  0, _totalLength);
         _fadeOutSamples = Math.Clamp(fadeOutSamples, 0, _totalLength);
 
-        // Single-segment fields unused in this mode — zero them.
+        
         _startSample = 0;
         _endSample   = 0;
     }
 
-    // ── Read ─────────────────────────────────────────────────────────────────
+    
 
-    // NAudio calls this on the audio thread. Returning fewer samples than
-    // requested (including 0) signals the mixer that this source is finished.
+    
+    
     public int Read(float[] buffer, int offset, int count)
     {
         return _segments is not null
@@ -147,7 +147,7 @@ public class CachedSoundSampleProvider : ISampleProvider
 
             if (segAvailable <= 0)
             {
-                // Advance to next segment.
+                
                 _segIdx++;
                 if (_segIdx < _segments.Count)
                     _segPos = _segments[_segIdx].S;
@@ -157,7 +157,7 @@ public class CachedSoundSampleProvider : ISampleProvider
             int toRead = Math.Min(segAvailable, count - written);
             Array.Copy(_sound.AudioData, _segPos, buffer, offset + written, toRead);
 
-            // Apply fade gains over the overall output position.
+            
             if (_fadeInSamples > 0 || _fadeOutSamples > 0)
             {
                 for (int i = 0; i < toRead; i++)
@@ -183,7 +183,7 @@ public class CachedSoundSampleProvider : ISampleProvider
             _totalPlayed += toRead;
             written      += toRead;
 
-            // If we finished this segment, advance.
+            
             if (_segPos >= segE)
             {
                 _segIdx++;

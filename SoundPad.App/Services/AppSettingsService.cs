@@ -24,7 +24,7 @@ public static class AppSettingsService
         }
         catch (Exception ex)
         {
-            // Rename the broken file so we don't lose it, then start fresh.
+            
             var stamp  = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var backup = AppPaths.SettingsJsonPath + $".bak_{stamp}";
             try { File.Move(AppPaths.SettingsJsonPath, backup); } catch { }

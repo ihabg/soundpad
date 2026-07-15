@@ -4,11 +4,11 @@ using SoundPad.App.Models;
 
 namespace SoundPad.App.Dialogs;
 
-// Modal dialog that captures a single global hotkey combination for a sound.
-// Key handling is done by overriding OnPreviewKeyDown at the window level
-// (tunneling phase), so the capture works no matter which child control has
-// logical focus, and Handled=true suppresses any default key behavior
-// (e.g. Enter activating a focused button) while capturing.
+
+
+
+
+
 public partial class HotkeyCaptureDialog : Wpf.Ui.Controls.FluentWindow
 {
     public HotkeyBinding? ResultBinding { get; private set; }
@@ -49,7 +49,7 @@ public partial class HotkeyCaptureDialog : Wpf.Ui.Controls.FluentWindow
         }
 
         if (IsModifierKey(key))
-            return; // wait for a real key while modifiers are held
+            return; 
 
         if (modifiers == ModifierKeys.None)
         {

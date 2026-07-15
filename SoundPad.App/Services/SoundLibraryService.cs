@@ -25,7 +25,7 @@ public static class SoundLibraryService
         }
         catch (Exception ex)
         {
-            // Rename the broken file so we don't lose it, then start fresh.
+            
             var stamp  = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var backup = AppPaths.SoundsJsonPath + $".bak_{stamp}";
             try { File.Move(AppPaths.SoundsJsonPath, backup); } catch { }
@@ -40,8 +40,8 @@ public static class SoundLibraryService
         File.WriteAllText(AppPaths.SoundsJsonPath, JsonSerializer.Serialize(items, _json));
     }
 
-    // Copies sourcePath into AppData\SoundPad\Sounds (deduplicates by name)
-    // and returns the destination path.  Does nothing if source is already there.
+    
+    
     public static string ImportFile(string sourcePath)
     {
         Directory.CreateDirectory(AppPaths.SoundsDirectory);

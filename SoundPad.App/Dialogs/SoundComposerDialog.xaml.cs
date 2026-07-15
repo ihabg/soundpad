@@ -19,29 +19,29 @@ namespace SoundPad.App.Dialogs;
 
 public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
 {
-    // ── Result ────────────────────────────────────────────────────────────────
+    
     public SoundItem?   ResultItem  { get; private set; }
     public CachedSound? ResultSound { get; private set; }
 
-    // ── External references (read-only; never written) ────────────────────────
+    
     private readonly IReadOnlyDictionary<Guid, CachedSound> _cachedSounds;
     private readonly IReadOnlyList<SoundItem>               _deckSounds;
     private readonly AudioPlaybackEngine                    _engine;
 
-    // ── Timeline state ────────────────────────────────────────────────────────
+    
     private readonly List<MixTrack> _tracks = new();
 
-    // Index of the "active" track (selected in the label panel). -1 = none.
+    
     private int _selectedTrackIndex = -1;
 
-    // ── Tool state ────────────────────────────────────────────────────────────
+    
     private enum ComposerTool { Select, Cut, Ripple }
     private ComposerTool _activeTool = ComposerTool.Select;
 
-    // ── Selection ─────────────────────────────────────────────────────────────
+    
     private Guid _selectedClipId = Guid.Empty;
 
-    // ── Drag state (Select tool) ──────────────────────────────────────────────
+    
     private enum DragZone { Body, LeftEdge, RightEdge }
     private record ClipHitInfo(int TrackIndex, Guid ClipId, DragZone Zone);
 
@@ -60,34 +60,34 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
     private double   _dragOriginalTrimEnd;
     private double   _dragFullDuration;
 
-    // Pre-drag state snapshot for undo (captured at MouseDown, pushed at first move).
+    
     private List<MixTrack>? _preDragSnapshot;
     private bool            _dragUndoPushed;
     private List<(Guid ClipId, double OrigStart, double OrigEnd)>? _dragTrackSnapshot;
-    private int _dragMoverOrigSlotIdx;  // mover's index in the full sorted clip list at drag start
+    private int _dragMoverOrigSlotIdx;  
 
-    // Ripple group captured at drag start (Ripple mode only)
+    
     private List<Guid>?               _rippleGroup;
     private Dictionary<Guid, double>? _rippleOrigStarts;
 
-    // ── Clipboard ─────────────────────────────────────────────────────────────
+    
     private MixClip? _clipboard;
     private int      _clipboardSourceTrackIndex = -1;
 
-    // ── Playhead ──────────────────────────────────────────────────────────────
+    
     private double          _playheadSeconds;
     private bool            _isDraggingPlayhead;
     private DispatcherTimer? _previewTimer;
 
-    // ── Preview ───────────────────────────────────────────────────────────────
+    
     private PlaybackHandle?          _previewHandle;
     private CancellationTokenSource? _previewCts;
 
-    // ── Undo / Redo ───────────────────────────────────────────────────────────
+    
     private readonly Stack<List<MixTrack>> _undoStack = new();
     private readonly Stack<List<MixTrack>> _redoStack = new();
 
-    // ── Canvas element cache ──────────────────────────────────────────────────
+    
     private readonly Dictionary<Guid, Border> _clipBlocks        = new();
     private readonly Dictionary<Guid, double> _clipFullDurations = new();
     private readonly WaveformCache            _waveformCache;
@@ -96,7 +96,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
     private TextBlock? _snapGuideLabel;
     private TextBlock? _cutPreviewLabel;
 
-    // ── Layout variables ──────────────────────────────────────────────────────
+    
     private double _pixelsPerSecond = 100.0;
     private const double MinPixelsPerSecond = 20.0;
     private const double MaxPixelsPerSecond = 400.0;
@@ -108,7 +108,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
     private double       SnapThresholdSeconds => SnapPixelThreshold / _pixelsPerSecond;
     private const int    MaxTracks          = 8;
 
-    // ── Track color palette ───────────────────────────────────────────────────
+    
     private static readonly Color[] Palette =
     {
         Color.FromRgb( 59, 130, 246),
@@ -121,7 +121,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         Color.FromRgb(244,  63,  98),
     };
 
-    // ── Constructor ───────────────────────────────────────────────────────────
+    
     public SoundComposerDialog(
         Window                                 owner,
         SoundItem                              seedItem,
@@ -142,9 +142,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         Closed  += (_, _) => StopAll();
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // TRACK / CLIP MANAGEMENT
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void AddTrackWithClip(SoundItem item, double startOffset)
     {
@@ -180,8 +180,8 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             _selectedTrackIndex = _tracks.Count - 1;
     }
 
-    // Removes any track whose clip list is empty, keeping at least one track alive.
-    // Adjusts _selectedTrackIndex as tracks are removed.
+    
+    
     private void CleanEmptyTracks()
     {
         for (int i = _tracks.Count - 1; i >= 0; i--)
@@ -196,9 +196,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             _selectedTrackIndex = _tracks.Count - 1;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // UNDO / REDO
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void PushUndo()
     {
@@ -262,9 +262,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         _selectedTrackIndex = Math.Min(_selectedTrackIndex, _tracks.Count - 1);
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // DURATION HELPERS
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private double ComputeClipFullDuration(MixClip clip)
     {
@@ -315,9 +315,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
     private SoundItem? FindSoundItem(Guid id) =>
         _deckSounds.FirstOrDefault(s => s.Id == id);
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // TIMELINE DRAWING
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void RebuildTimeline()
     {
@@ -369,7 +369,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
 
     private void DrawRuler(double totalDur, double canvasW)
     {
-        // Choose tick density based on zoom
+        
         int step = _pixelsPerSecond >= 100 ? 1
                  : _pixelsPerSecond >= 40  ? 2
                  : _pixelsPerSecond >= 20  ? 5
@@ -561,11 +561,11 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             ? Color.FromArgb(230, (byte)Math.Min(255, color.R + 50), (byte)Math.Min(255, color.G + 50), (byte)Math.Min(255, color.B + 50))
             : Color.FromArgb(200, color.R, color.G, color.B);
 
-        // Wrap inner with optional waveform / fade overlays / handles + label.
-        // Render order (back → front): waveform → fades → inner (text + handles).
+        
+        
         var blockContent = new Grid();
 
-        // Layer 1: waveform preview
+        
         if (blockW >= 20)
         {
             _cachedSounds.TryGetValue(clip.SoundItemId, out var cachedSoundForWf);
@@ -578,7 +578,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             }
         }
 
-        // Layer 2: fade overlays
+        
         if (clip.FadeInSeconds > 0 && blockW >= 16)
         {
             double fadeW = Math.Min(clip.FadeInSeconds * _pixelsPerSecond, blockW / 2.0);
@@ -633,8 +633,8 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         _clipBlocks[clip.Id] = block;
     }
 
-    // Builds a semi-transparent waveform shape for the visible trimmed portion of a clip.
-    // Returns null if the clip is too narrow or if the audio data is unusable.
+    
+    
     private System.Windows.Shapes.Path? BuildWaveformPath(float[] peaks, MixClip clip, CachedSound? cachedSound, double blockW)
     {
         if (cachedSound is null || cachedSound.TotalFrames == 0 || cachedSound.SampleRate == 0) return null;
@@ -642,7 +642,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         double contentW = blockW - 2 * EdgeHandleWidth;
         if (contentW < 4) return null;
 
-        // Raw audio duration (seconds) for mapping trim positions to peak indices
+        
         double rawDur = cachedSound.TotalFrames / (double)cachedSound.SampleRate;
         if (rawDur <= 0) return null;
 
@@ -654,12 +654,12 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         int visiblePeaks = iPeakEnd - iPeakStart;
         if (visiblePeaks <= 0) return null;
 
-        // Cap bar count to avoid rendering more bars than pixels
+        
         int    numBars  = Math.Max(1, Math.Min((int)(contentW / 2.0), visiblePeaks));
         double barStep  = contentW / numBars;
         double peakStep = (double)visiblePeaks / numBars;
         double centerY  = TrackHeight / 2.0;
-        double maxAmp   = TrackHeight * 0.40;   // 80 % of half-height
+        double maxAmp   = TrackHeight * 0.40;   
 
         var geo = new StreamGeometry();
         using (var ctx = geo.Open())
@@ -676,7 +676,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
                     maxP = Math.Max(maxP, peaks[p]);
 
                 double x   = EdgeHandleWidth + (b + 0.5) * barStep;
-                double amp = Math.Max(0.5, maxP * maxAmp);   // at least 0.5 px visible
+                double amp = Math.Max(0.5, maxP * maxAmp);   
 
                 ctx.BeginFigure(new Point(x, centerY - amp), false, false);
                 ctx.LineTo(new Point(x, centerY + amp), true, false);
@@ -777,9 +777,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         block.Width = w;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // HIT TESTING
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private static ClipHitInfo? FindClipHit(DependencyObject? obj)
     {
@@ -810,9 +810,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         return (-1, null);
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // SNAP
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private SnapResult SnapPositionEx(double rawSeconds, Guid excludeClipId = default)
     {
@@ -837,9 +837,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
     private double SnapPosition(double rawSeconds, Guid excludeClipId = default)
         => SnapPositionEx(rawSeconds, excludeClipId).Seconds;
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // MOUSE — RULER (playhead drag)
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void Ruler_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -865,9 +865,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         RulerCanvas.ReleaseMouseCapture();
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // MOUSE — TIMELINE CANVAS
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void Timeline_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -912,10 +912,10 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         _dragOriginalTrimEnd    = clip.LocalTrimEndSeconds   ?? full;
         _dragFullDuration       = full;
 
-        // Capture pre-drag state for undo (pushed on first actual move)
+        
         _preDragSnapshot = DeepCopyTracks();
 
-        // Ripple mode: capture group = mover + all clips whose start >= mover's start
+        
         _rippleGroup      = null;
         _rippleOrigStarts = null;
         if (_activeTool == ComposerTool.Ripple && hit.Zone == DragZone.Body)
@@ -948,7 +948,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         var clip = FindClip(_dragTrackIndex, _dragClipId);
         if (clip is null) { _isDragging = false; return; }
 
-        // Push undo snapshot on first actual movement
+        
         if (!_dragUndoPushed && (Math.Abs(pos.X - _dragStartX) > 2.0 || Math.Abs(pos.Y - _dragStartY) > 2.0))
         {
             if (_preDragSnapshot != null)
@@ -967,12 +967,12 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             {
                 if (_activeTool == ComposerTool.Ripple && _rippleGroup != null && _rippleOrigStarts != null)
                 {
-                    // Ripple: compute total displacement from drag start, clamp, apply to entire group.
-                    // Vertical drag is intentionally ignored — ripple stays on the original track.
+                    
+                    
                     double totalDeltaX = (pos.X - _dragStartX) / _pixelsPerSecond;
                     var    track       = _tracks[_dragTrackIndex];
 
-                    // Left bound = rightmost end of any non-group clip (all are before the group by definition)
+                    
                     double leftBound = 0.0;
                     foreach (var rc in track.Clips)
                     {
@@ -996,13 +996,13 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
                 }
                 else
                 {
-                    // Select mode: free placement with no-overlap / slot reorder
+                    
                     double rawOffset = _dragOriginalOffset + deltaX;
                     var    snapBody  = SnapPositionEx(rawOffset, _dragClipId);
                     double proposed  = Math.Max(0.0, snapBody.Seconds);
                     if (snapBody.Target != SnapTarget.None) ShowSnapGuide(snapBody); else HideSnapGuide();
 
-                    // Vertical drag: move clip to another track
+                    
                     int targetTrack = Math.Clamp(
                         (int)(pos.Y / (TrackHeight + TrackGap)),
                         0, _tracks.Count - 1);
@@ -1049,7 +1049,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
 
             case DragZone.RightEdge:
             {
-                // Snap the right-edge timeline position
+                
                 double rawRightEdge    = _dragOriginalOffset + (_dragOriginalTrimEnd + deltaX - _dragOriginalTrimStart);
                 var    snapRight        = SnapPositionEx(rawRightEdge, _dragClipId);
                 double snappedRightEdge = snapRight.Seconds;
@@ -1108,18 +1108,18 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         e.Handled            = true;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // CUT TOOL
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void HandleCutClick(Point pos)
     {
-        // Hit test first so we can exclude this clip's own edges from snap.
-        // Snapping to its own start/end would produce a zero-length half and silently abort.
+        
+        
         var (trackIdx, clip) = HitTestClipAtPoint(pos.X, pos.Y);
         if (clip is null) return;
 
-        // Pixel-based playhead snap takes priority over time-based snap
+        
         double playheadX = _playheadSeconds * _pixelsPerSecond;
         double clickTime = (SnapCheckBox.IsChecked == true && Math.Abs(pos.X - playheadX) <= SnapPixelThreshold)
             ? _playheadSeconds
@@ -1146,7 +1146,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             LocalTrimEndSeconds   = cutInClip,
             Volume                = clip.Volume,
             FadeInSeconds         = clip.FadeInSeconds,
-            FadeOutSeconds        = 0,                      // left part ends at cut, no fade-out
+            FadeOutSeconds        = 0,                      
         };
         var clipB = new MixClip
         {
@@ -1155,7 +1155,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             LocalTrimStartSeconds = cutInClip,
             LocalTrimEndSeconds   = clip.LocalTrimEndSeconds,
             Volume                = clip.Volume,
-            FadeInSeconds         = 0,                      // right part starts at cut, no fade-in
+            FadeInSeconds         = 0,                      
             FadeOutSeconds        = clip.FadeOutSeconds,
         };
 
@@ -1180,7 +1180,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        // Pixel-based playhead snap takes priority over time-based snap
+        
         double playheadX = _playheadSeconds * _pixelsPerSecond;
         SnapResult cutSnap = (SnapCheckBox.IsChecked == true && Math.Abs(pos.X - playheadX) <= SnapPixelThreshold)
             ? new(_playheadSeconds, SnapTarget.Playhead)
@@ -1289,9 +1289,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         if (_snapGuideLabel != null) _snapGuideLabel.Visibility = Visibility.Collapsed;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // SPLIT AT PLAYHEAD
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void SplitSelectedClipAtPlayhead()
     {
@@ -1320,7 +1320,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             LocalTrimEndSeconds   = cutInClip,
             Volume                = clip.Volume,
             FadeInSeconds         = clip.FadeInSeconds,
-            FadeOutSeconds        = 0,                      // left part ends at split, no fade-out
+            FadeOutSeconds        = 0,                      
         };
         var clipB = new MixClip
         {
@@ -1329,7 +1329,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             LocalTrimStartSeconds = cutInClip,
             LocalTrimEndSeconds   = clip.LocalTrimEndSeconds,
             Volume                = clip.Volume,
-            FadeInSeconds         = 0,                      // right part starts at split, no fade-in
+            FadeInSeconds         = 0,                      
             FadeOutSeconds        = clip.FadeOutSeconds,
         };
 
@@ -1344,9 +1344,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = "Split at playhead.";
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // COPY / PASTE / DUPLICATE
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void CopyClip()
     {
@@ -1418,9 +1418,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = "Clip duplicated.";
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // DELETE LEFT / DELETE RIGHT
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void DeleteLeft()
     {
@@ -1467,9 +1467,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
     private void DeleteLeft_Click(object sender, RoutedEventArgs e)  => DeleteLeft();
     private void DeleteRight_Click(object sender, RoutedEventArgs e) => DeleteRight();
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // KEYBOARD
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -1516,9 +1516,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = "Clip removed.";
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // TOOL SWITCHING
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void SelectTool_Click(object sender, RoutedEventArgs e) =>
         SetTool(ComposerTool.Select);
@@ -1558,9 +1558,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
 
     private void TrimHandlesCheckBox_Click(object sender, RoutedEventArgs e) => RebuildTimeline();
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // ZOOM
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void ZoomIn_Click(object sender, RoutedEventArgs e)
     {
@@ -1589,9 +1589,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         RebuildTimeline();
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // CTRL + MOUSE WHEEL ZOOM
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void TimelineScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
@@ -1600,7 +1600,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
 
         if (ctrl)
         {
-            // Ctrl + wheel → horizontal scroll (60 px per notch; wheel-up = scroll left/earlier)
+            
             double maxOffset = Math.Max(0.0, TimelineScrollViewer.ScrollableWidth);
             double newOffset = Math.Clamp(
                 TimelineScrollViewer.HorizontalOffset - e.Delta * 0.5,
@@ -1610,7 +1610,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         }
         else if (alt)
         {
-            // Alt + wheel → zoom, keeping the timeline position under the cursor stable
+            
             var    canvasPos    = e.GetPosition(TimelineCanvas);
             double mouseSeconds = canvasPos.X / _pixelsPerSecond;
             double viewportX    = canvasPos.X - TimelineScrollViewer.HorizontalOffset;
@@ -1630,12 +1630,12 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // FREE-INSERT DRAG RESOLVER — NO-OVERLAP ORDERED LANE
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
-    // Captures original positions of all other clips on a track at drag start.
-    // The snapshot is used statically every frame so mutations never accumulate.
+    
+    
     private List<(Guid ClipId, double OrigStart, double OrigEnd)> BuildTrackSnapshot(
         Guid movingClipId, int trackIdx)
     {
@@ -1648,20 +1648,20 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             .ToList();
     }
 
-    // Places movingClip at proposedStart on targetTrackIdx using non-ripple duration-pack reorder.
-    //
-    // Per frame:
-    //   1. Restore all others to their snapshot (drag-start) positions — no cumulative drift.
-    //   2. If no overlap: free placement, no other clips moved.
-    //   3. If overlap but same logical slot (center hasn't crossed a neighbour):
-    //      clamp mover within slot bounds, no reorder.
-    //   4. If overlap and different slot: duration-pack reorder within the bounded affected
-    //      range [lo, hi] only. Clips outside [lo, hi] are NEVER moved.
-    //
-    // Duration-pack guarantee (why no gaps):
-    //   Clips in [lo..hi] are laid out sequentially using actual durations from a stable anchor
-    //   (anchorStart = original start of position lo). This fills gaps that would appear if we
-    //   instead assigned clips to old slot starts (which were sized for the original occupant).
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     private double ResolveFreeInsertStartTime(
         MixClip movingClip, int targetTrackIdx, double proposedStart)
     {
@@ -1672,7 +1672,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         var snap = _dragTrackSnapshot;
         int N = snap.Count;
 
-        // Step 1: Restore all others to snapshot positions (prevents drift from prior frames)
+        
         foreach (var entry in snap)
         {
             var c = _tracks[targetTrackIdx].Clips.FirstOrDefault(x => x.Id == entry.ClipId);
@@ -1686,8 +1686,8 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         double proposedEnd  = proposedStart + movingDur;
         double proposedCent = proposedStart + movingDur / 2.0;
 
-        // Step 2: Global insertion index — mover's position in the full N+1 sorted order,
-        // computed entirely from original (snapshot) clip centres.
+        
+        
         int insertIdx = 0;
         for (int i = 0; i < N; i++)
         {
@@ -1695,40 +1695,40 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             if (proposedCent > snapCent) insertIdx = i + 1;
         }
 
-        // Step 3: Check overlap with snapshot-positioned neighbours
+        
         bool overlapsLeft  = insertIdx > 0 && proposedStart < snap[insertIdx - 1].OrigEnd;
         bool overlapsRight = insertIdx < N && proposedEnd    > snap[insertIdx].OrigStart;
 
         if (!overlapsLeft && !overlapsRight)
-            return Math.Max(0.0, proposedStart); // free placement — no other clips moved
+            return Math.Max(0.0, proposedStart); 
 
         int M = _dragMoverOrigSlotIdx;
 
         if (insertIdx == M)
         {
-            // Same logical slot: clamp within bounds without reordering any clip
+            
             double lb = M > 0 ? snap[M - 1].OrigEnd : 0.0;
             double rb = M < N ? snap[M].OrigStart - movingDur : double.MaxValue;
             return Math.Clamp(Math.Max(0.0, proposedStart), lb, Math.Max(lb, rb));
         }
 
-        // Step 4: Duration-pack reorder within [lo, hi].
-        //
-        // Affected range: only positions [lo, hi] change; clips outside are untouched.
-        // anchor = original start of position lo in the full sorted order (stable across frames).
-        // Clips in [lo..hi] are placed sequentially using their actual durations, so no gap
-        // is created regardless of whether the incoming/outgoing clips differ in length.
+        
+        
+        
+        
+        
+        
         int lo = Math.Min(M, insertIdx);
         int hi = Math.Max(M, insertIdx);
 
-        // anchorStart: original start of the leftmost affected position.
-        //   lo == M → mover is leftmost → use mover's drag-start position.
-        //   lo <  M → a snap clip is leftmost → use that clip's original start.
+        
+        
+        
         double anchorStart = (lo == M) ? _dragOriginalOffset : snap[lo].OrigStart;
 
-        // Build the new clip order for positions [lo..hi]:
-        //   mover moved right → snap[M..insertIdx-1] first, then mover
-        //   mover moved left  → mover first, then snap[insertIdx..M-1]
+        
+        
+        
         var newOrder = new List<MixClip>(hi - lo + 1);
         if (insertIdx > M)
         {
@@ -1749,7 +1749,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             }
         }
 
-        // Lay clips out contiguously from anchorStart using each clip's actual duration.
+        
         double cursor     = anchorStart;
         double moverStart = anchorStart;
         foreach (var c in newOrder)
@@ -1765,9 +1765,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         return moverStart;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // CLIP CONTEXT MENU
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private ContextMenu BuildClipContextMenu(int trackIdx, MixClip clip)
     {
@@ -1810,15 +1810,15 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         _tracks[fromTrackIdx].Clips.Remove(clip);
         _tracks[toTrackIdx].Clips.Add(clip);
         CleanEmptyTracks();
-        // Re-locate: if the source track was removed it may have shifted toTrackIdx
+        
         var (destTrack, _) = FindClipInAllTracks(clipId);
         _selectedTrackIndex = destTrack >= 0 ? destTrack : Math.Max(0, _tracks.Count - 1);
         RebuildTimeline();
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // SELECTED CLIP INFO PANEL
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private bool TryGetSelectedClip(out int trackIndex, out MixClip clip)
     {
@@ -1850,7 +1850,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         PanelStartLabel.Text    = PanelFormatTime(clip.StartOffsetSeconds);
         PanelDurationLabel.Text = PanelFormatTime(effDur);
 
-        // Detach handler to avoid triggering label update mid-population
+        
         PanelVolumeSlider.ValueChanged -= PanelVolumeSlider_ValueChanged;
         PanelVolumeSlider.Value         = Math.Round(clip.Volume * 100.0, 0);
         PanelVolumeSlider.ValueChanged += PanelVolumeSlider_ValueChanged;
@@ -1950,9 +1950,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = "Clip audio: " + string.Join(", ", parts);
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // SCROLL SYNC
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void TimelineScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
@@ -1960,9 +1960,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             LabelScrollViewer.ScrollToVerticalOffset(TimelineScrollViewer.VerticalOffset);
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // SOUND PICKER
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void AddSound_Click(object sender, RoutedEventArgs e)
     {
@@ -2009,7 +2009,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         SoundPickerOverlay.Visibility = Visibility.Collapsed;
 
         PushUndo();
-        // Place at playhead position on the selected track
+        
         AddClipToTrack(_selectedTrackIndex, item, _playheadSeconds);
         RebuildTimeline();
         StatusText.Text = $"Added '{item.DisplayName}' to Track {_selectedTrackIndex + 1} at playhead.";
@@ -2031,9 +2031,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = $"New track added: {item.DisplayName}";
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // PREVIEW
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void Preview_Click(object sender, RoutedEventArgs e) => StartPreview();
 
@@ -2076,7 +2076,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
                     StartPreviewTimer(previewStart);
                 });
             }
-            catch (OperationCanceledException) { /* user stopped */ }
+            catch (OperationCanceledException) {  }
             catch (Exception ex)
             {
                 AppLogger.Error("SoundComposer", "Preview render failed", ex);
@@ -2128,7 +2128,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
                 _previewHandle = null;
             }
         }
-        catch { /* ignore stop errors */ }
+        catch {  }
 
         if (IsLoaded)
         {
@@ -2139,9 +2139,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // SAVE
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private bool _saving;
 
@@ -2233,9 +2233,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         });
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // CANCEL
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
@@ -2244,9 +2244,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         Close();
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // HELPERS
-    // ═════════════════════════════════════════════════════════════════════════
+    
+    
+    
 
     private bool HasClips() => _tracks.Any(t => t.Clips.Count > 0);
 

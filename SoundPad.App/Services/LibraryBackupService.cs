@@ -9,13 +9,13 @@ public static class LibraryBackupService
 {
     private static readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
 
-    // ── Export ────────────────────────────────────────────────────────────────
+    
 
-    // Writes decks.json (full deck structure) + sounds.json (flat, backward compat)
-    // + Sounds/ folder with all audio files.
+    
+    
     public static void Export(IReadOnlyList<Deck> decks, string zipPath)
     {
-        // Build sanitized deck copies: FilePath → filename only.
+        
         var exportDecks = decks.Select(deck => new Deck
         {
             Id               = deck.Id,
@@ -47,7 +47,7 @@ public static class LibraryBackupService
             }).ToList()
         }).ToList();
 
-        // Flat list of all sounds across all decks for backward compat.
+        
         var allSounds = exportDecks.SelectMany(d => d.Sounds).ToList();
 
         if (File.Exists(zipPath)) File.Delete(zipPath);
@@ -74,11 +74,11 @@ public static class LibraryBackupService
         }
     }
 
-    // ── Import ────────────────────────────────────────────────────────────────
+    
 
-    // Detects backup format from the ZIP contents:
-    //   decks.json present  → new format: merge decks into currentDecks
-    //   sounds.json only    → old format: add sounds into activeDeck
+    
+    
+    
     public static ImportResult Import(string zipPath,
                                       List<Deck> currentDecks,
                                       Deck activeDeck,
@@ -134,7 +134,7 @@ public static class LibraryBackupService
             }
             else
             {
-                // Merge any new categories.
+                
                 foreach (var cat in importedDeck.CustomCategories)
                 {
                     if (!target!.CustomCategories.Any(c =>
@@ -144,7 +144,7 @@ public static class LibraryBackupService
                 result.DecksMerged++;
             }
 
-            // Per-deck conflict sets so hotkeys between different decks don't interfere.
+            
             var takenHotkeys = BuildTakenHotkeys(target!.Sounds, stopAllHotkey);
             var existingIds  = new HashSet<Guid>(target.Sounds.Select(x => x.Id));
 
@@ -167,8 +167,8 @@ public static class LibraryBackupService
         }
 
         var takenHotkeys = BuildTakenHotkeys(activeDeck.Sounds, stopAllHotkey);
-        // Check cross-deck duplicates: a GUID that exists in any deck is skipped,
-        // even though the sound would be added to activeDeck only.
+        
+        
         var existingIds  = new HashSet<Guid>(currentDecks.SelectMany(d => d.Sounds).Select(x => x.Id));
 
         foreach (var item in imported)

@@ -14,8 +14,8 @@ public sealed class UpdateCheckResult
     public string?      ReleaseUrl         { get; init; }
     public string?      ReleaseName        { get; init; }
     public string?      ReleaseBody        { get; init; }
-    public string?      InstallerAssetUrl  { get; init; }  // browser_download_url of matched .exe
-    public string?      InstallerAssetName { get; init; }  // original filename of that asset
+    public string?      InstallerAssetUrl  { get; init; }  
+    public string?      InstallerAssetName { get; init; }  
 }
 
 public static class UpdateCheckService
@@ -47,7 +47,7 @@ public static class UpdateCheckService
             var name = root.TryGetProperty("name",     out var nameProp) ? nameProp.GetString() ?? "" : tag;
             var body = root.TryGetProperty("body",     out var bodyProp) ? bodyProp.GetString()        : null;
 
-            // Find the installer asset: first entry whose name matches SoundPad-Setup-*.exe.
+            
             string? assetUrl  = null;
             string? assetName = null;
             if (root.TryGetProperty("assets", out var assetsProp) &&
@@ -73,7 +73,7 @@ public static class UpdateCheckService
             if (!Version.TryParse(latestStr, out var latest) ||
                 !Version.TryParse(currentStr, out var current))
             {
-                // Unparseable tag — treat as up to date rather than showing a spurious banner.
+                
                 StartupLogger.Log($"Update check: could not parse versions (tag={tag}, current={currentVersion})");
                 return new UpdateCheckResult { Status = UpdateStatus.UpToDate, LatestTag = tag, ReleaseUrl = url };
             }

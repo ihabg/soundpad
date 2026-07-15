@@ -4,8 +4,8 @@ using NAudio.Wave.SampleProviders;
 
 namespace SoundPad.App.Audio;
 
-// Device entry for the Instant Replay capture-device ComboBox.
-// Id == null means "use the Windows default render endpoint".
+
+
 internal sealed record IrCaptureDevice(string? Id, string Name)
 {
     public override string ToString() => Name;
@@ -50,64 +50,64 @@ internal sealed record IrCaptureDevice(string? Id, string Name)
     }
 }
 
-// Keeps a rolling ring buffer of the last N minutes of system audio (WASAPI loopback)
-// and optionally a second ring buffer for microphone audio.
-// The WASAPI/WaveIn threads write; the UI thread reads diagnostics and drains clips.
+
+
+
 internal sealed class InstantReplayService : IDisposable
 {
-    // KSDATAFORMAT_SUBTYPE GUIDs — used to normalise WaveFormatExtensible.
+    
     private static readonly Guid SubTypeIeeeFloat = new("00000003-0000-0010-8000-00aa00389b71");
     private static readonly Guid SubTypePcm       = new("00000001-0000-0010-8000-00aa00389b71");
 
-    private static readonly WaveFormat TargetFormat = CachedSound.TargetFormat; // 48 kHz stereo float
+    private static readonly WaveFormat TargetFormat = CachedSound.TargetFormat; 
 
-    // ── Shared lock — guards BOTH the system ring and the mic ring ───────────
+    
     private readonly object _lock = new();
 
-    // ── System audio ring buffer ─────────────────────────────────────────────
+    
     private float[] _ring;
     private int     _writePos;
     private long    _totalWritten;
     private int     _minutes;
 
-    // ── Mic audio ring buffer (empty until StartMic is called) ───────────────
+    
     private float[] _micRing        = Array.Empty<float>();
     private int     _micWritePos;
     private long    _micTotalWritten;
 
-    // ── Signal metrics — volatile so UI thread reads without a lock ──────────
+    
     private volatile float _lastRms;
     private volatile float _lastPeak;
     private volatile int   _dataAvailableCount;
     private volatile int   _lastBytesRecorded;
     private volatile int   _lastNonZeroCount;
-    private          long  _totalBytesReceived; // display-only; best-effort accuracy
+    private          long  _totalBytesReceived; 
     private volatile float _lastMicRms;
 
-    // ── System capture objects ───────────────────────────────────────────────
+    
     private MMDevice?              _captureDevice;
     private WasapiLoopbackCapture? _capture;
 
-    // ── System working format (populated by SetupConversion) ─────────────────
+    
     private WaveFormat? _workingFormat;
     private bool        _needsResample;
     private bool        _needsMono2Stereo;
 
-    // ── System direct-conversion staging buffers (WASAPI callback thread) ────
+    
     private float[] _directBuf = new float[192_000];
     private float[] _expandBuf = new float[192_000];
 
-    // ── System resample chain — only allocated when device rate != 48 kHz ────
+    
     private BufferedWaveProvider? _convBuffer;
     private ISampleProvider?      _convChain;
     private readonly float[]      _readBuf = new float[96_000];
 
-    // ── Mic capture objects ──────────────────────────────────────────────────
+    
     private WaveInEvent? _micWaveIn;
     private float        _micVolume     = 1.0f;
-    private float[]      _micConvertBuf = new float[48_000]; // 500 ms at 48 kHz stereo (generous)
+    private float[]      _micConvertBuf = new float[48_000]; 
 
-    // ── Public surface ────────────────────────────────────────────────────────
+    
     public bool   IsRunning          { get; private set; }
     public bool   IsMicRunning       { get; private set; }
     public float  LastRms            => _lastRms;
@@ -141,7 +141,7 @@ internal sealed class InstantReplayService : IDisposable
     private static float[] AllocRing(int minutes) =>
         new float[minutes * 60 * TargetFormat.SampleRate * TargetFormat.Channels];
 
-    // ── System capture ───────────────────────────────────────────────────────
+    
 
     internal void Start(string? deviceId = null)
     {
@@ -361,7 +361,7 @@ internal sealed class InstantReplayService : IDisposable
         _lastNonZeroCount = nonZero;
     }
 
-    // Returns the chronological system audio ring as a contiguous float[], or null if empty.
+    
     internal float[]? GetRecentSamples()
     {
         lock (_lock)
@@ -378,17 +378,17 @@ internal sealed class InstantReplayService : IDisposable
         }
     }
 
-    // ── Mic capture ──────────────────────────────────────────────────────────
+    
 
-    // Opens the selected WaveIn device and begins recording into the mic ring.
-    // Uses 48 kHz mono 16-bit PCM (same format as MicPassthrough) for compatibility.
-    // Throws MmException if the device does not support the capture format.
+    
+    
+    
     internal void StartMic(int deviceNumber, float volume = 1.0f)
     {
         if (IsMicRunning) return;
         _micVolume = Math.Clamp(volume, 0f, 2f);
 
-        // Allocate the mic ring to the same duration as the system ring.
+        
         lock (_lock)
         {
             _micRing        = AllocRing(_minutes);
@@ -397,7 +397,7 @@ internal sealed class InstantReplayService : IDisposable
         }
         _lastMicRms = 0f;
 
-        var captureFormat = new WaveFormat(TargetFormat.SampleRate, 1); // 48 kHz mono 16-bit PCM
+        var captureFormat = new WaveFormat(TargetFormat.SampleRate, 1); 
 
         _micWaveIn = new WaveInEvent
         {
@@ -422,7 +422,7 @@ internal sealed class InstantReplayService : IDisposable
         }
     }
 
-    // Stops mic capture. Safe to call multiple times or before StartMic.
+    
     internal void StopMic()
     {
         IsMicRunning = false;
@@ -440,7 +440,7 @@ internal sealed class InstantReplayService : IDisposable
     {
         if (e.BytesRecorded == 0) return;
 
-        // Convert 16-bit PCM mono → float stereo with volume applied.
+        
         int monoCount   = e.BytesRecorded / 2;
         int stereoCount = monoCount * 2;
         EnsureMicConvertBuf(stereoCount);
@@ -480,7 +480,7 @@ internal sealed class InstantReplayService : IDisposable
         _lastMicRms = (float)Math.Sqrt(sumSq / sampleCount);
     }
 
-    // Returns the chronological mic ring as a contiguous float[], or null if empty.
+    
     internal float[]? GetRecentMicSamples()
     {
         lock (_lock)
@@ -497,7 +497,7 @@ internal sealed class InstantReplayService : IDisposable
         }
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    
 
     private void EnsureDirectBuf(int needed)
     {

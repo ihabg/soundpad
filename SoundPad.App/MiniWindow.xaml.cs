@@ -22,7 +22,7 @@ public partial class MiniWindow : Window
         _owner.ActiveDeckChanged    += OnActiveDeckChanged;
     }
 
-    // ── Public surface called by MainWindow ───────────────────────────────────
+    
 
     internal void ApplySettings(AppSettings settings)
     {
@@ -67,7 +67,7 @@ public partial class MiniWindow : Window
         RebuildPads();
     }
 
-    // ── Event handlers from MainWindow ────────────────────────────────────────
+    
 
     private void OnPlaybackStateChanged(Guid soundId, bool active)
     {
@@ -92,7 +92,7 @@ public partial class MiniWindow : Window
         RebuildPads();
     }
 
-    // ── Pad construction ──────────────────────────────────────────────────────
+    
 
     private void RebuildPads()
     {
@@ -109,7 +109,7 @@ public partial class MiniWindow : Window
             MiniPadPanel.Children.Add(card);
         }
 
-        // Sync active state for any sounds already playing when we rebuild.
+        
         var active = _owner.GetActivePlaybackIds();
         foreach (var id in active)
         {
@@ -122,7 +122,7 @@ public partial class MiniWindow : Window
     {
         var capturedItem = item;
 
-        // ── Active-state visuals ──────────────────────────────────────────────
+        
         var accentBrush  = new SolidColorBrush(MainWindow._fallbackAccent) { Opacity = 0.30 };
         var normalBg     = MainWindow.GetPadBackground(item.PadColor);
         var activeBg     = accentBrush;
@@ -176,7 +176,7 @@ public partial class MiniWindow : Window
         grid.Children.Add(playingDot);
         card.Child = grid;
 
-        // Register the active-state toggle callback.
+        
         _padControls[item.Id] = active =>
         {
             overlay.Visibility    = active ? Visibility.Visible : Visibility.Hidden;
@@ -194,7 +194,7 @@ public partial class MiniWindow : Window
         return card;
     }
 
-    // ── Header / window chrome ────────────────────────────────────────────────
+    
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -209,7 +209,7 @@ public partial class MiniWindow : Window
             : Wpf.Ui.Controls.ControlAppearance.Secondary;
     }
 
-    // ── Button handlers ───────────────────────────────────────────────────────
+    
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
@@ -226,20 +226,20 @@ public partial class MiniWindow : Window
 
     private void StopAll_Click(object sender, RoutedEventArgs e) => _owner.StopAllSounds();
 
-    // ── Closing guard ─────────────────────────────────────────────────────────
+    
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         if (!_isReallyClosing)
         {
-            // X button — hide instead of closing so the app keeps running.
+            
             e.Cancel = true;
             _owner.SaveMiniPositionFrom(this);
             Hide();
             return;
         }
 
-        // Real close triggered by MainWindow during app exit.
+        
         _owner.PlaybackStateChanged -= OnPlaybackStateChanged;
         _owner.ActiveDeckChanged    -= OnActiveDeckChanged;
         base.OnClosing(e);

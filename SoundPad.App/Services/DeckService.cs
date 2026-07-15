@@ -9,11 +9,11 @@ public static class DeckService
 {
     private static readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
 
-    // Loads decks from decks.json. If absent, migrates sounds.json into a General
-    // deck non-destructively (saves decks.json first, then renames sounds.json to a
-    // .bak file). Falls back to a fresh General deck if both files are missing.
-    // A corrupt or empty decks.json is renamed to a timestamped backup before
-    // falling through, so user data is never silently overwritten.
+    
+    
+    
+    
+    
     public static List<Deck> Load(AppSettings settings)
     {
         if (File.Exists(AppPaths.DecksJsonPath))
@@ -29,7 +29,7 @@ public static class DeckService
                     return decks;
                 }
 
-                // Valid JSON but empty array — treat as corrupt so we don't lose data.
+                
                 BackupAndRemove(AppPaths.DecksJsonPath, "decks.json was an empty list");
             }
             catch (Exception ex)
@@ -53,8 +53,8 @@ public static class DeckService
         return new List<Deck> { new Deck { Name = "General" } };
     }
 
-    // Renames a bad decks.json to a timestamped backup instead of deleting or
-    // silently overwriting it. Logs the result to the debug output.
+    
+    
     private static void BackupAndRemove(string path, string reason)
     {
         var stamp  = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
@@ -70,8 +70,8 @@ public static class DeckService
         }
     }
 
-    // Guards against corrupt/hand-edited JSON where null replaces a list field,
-    // since System.Text.Json ignores C# property initializers for explicit nulls.
+    
+    
     private static void SanitizeDecks(List<Deck> decks)
     {
         foreach (var d in decks)
@@ -95,7 +95,7 @@ public static class DeckService
 
         var decks = new List<Deck> { generalDeck };
 
-        // Save decks.json FIRST so existing data is safe before renaming sounds.json.
+        
         Save(decks);
 
         var timestamp  = DateTime.UtcNow.ToString("yyyyMMddHHmmss");

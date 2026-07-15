@@ -17,25 +17,25 @@ public partial class CategoryManagerDialog : Wpf.Ui.Controls.FluentWindow
     private static readonly HashSet<string> VirtualCategories =
         new(StringComparer.OrdinalIgnoreCase) { "All", "Favorites", "Recent" };
 
-    // Current list of real categories shown in the dialog.
+    
     private readonly List<CategoryEntry> _entries = new();
 
-    // current working name → original library name (handles chained renames).
+    
     private readonly Dictionary<string, string> _workingToOriginal =
         new(StringComparer.OrdinalIgnoreCase);
 
-    // original library name → final name (what MainWindow uses to remap sounds).
+    
     private readonly Dictionary<string, string> _originalToFinal =
         new(StringComparer.OrdinalIgnoreCase);
 
-    // Sound count per working name (so the list shows "3 sounds" etc).
+    
     private readonly Dictionary<string, int> _soundCounts =
         new(StringComparer.OrdinalIgnoreCase);
 
     private enum EditMode { None, Create, Rename, Delete }
     private EditMode _editMode = EditMode.None;
 
-    // --- Results ---
+    
     public List<string>               FinalCategories    { get; private set; } = new();
     public Dictionary<string, string> SoundCategoryRemap { get; private set; } = new();
 
@@ -97,7 +97,7 @@ public partial class CategoryManagerDialog : Wpf.Ui.Controls.FluentWindow
         CloseZone();
     }
 
-    // ── Zone helpers ──────────────────────────────────────────────────────────
+    
 
     private void CloseZone()
     {
@@ -117,7 +117,7 @@ public partial class CategoryManagerDialog : Wpf.Ui.Controls.FluentWindow
         EditErrorText.Visibility = Visibility.Visible;
     }
 
-    // ── Create ────────────────────────────────────────────────────────────────
+    
 
     private void Create_Click(object sender, RoutedEventArgs e)
     {
@@ -130,7 +130,7 @@ public partial class CategoryManagerDialog : Wpf.Ui.Controls.FluentWindow
             new Action(() => EditBox.Focus()));
     }
 
-    // ── Rename ────────────────────────────────────────────────────────────────
+    
 
     private void Rename_Click(object sender, RoutedEventArgs e)
     {
@@ -145,7 +145,7 @@ public partial class CategoryManagerDialog : Wpf.Ui.Controls.FluentWindow
             new Action(() => { EditBox.SelectAll(); EditBox.Focus(); }));
     }
 
-    // ── Delete ────────────────────────────────────────────────────────────────
+    
 
     private void Delete_Click(object sender, RoutedEventArgs e)
     {
@@ -177,7 +177,7 @@ public partial class CategoryManagerDialog : Wpf.Ui.Controls.FluentWindow
         EditZone.Visibility = Visibility.Visible;
     }
 
-    // ── Edit zone events ──────────────────────────────────────────────────────
+    
 
     private void EditBox_KeyDown(object sender, KeyEventArgs e)
     {
@@ -280,7 +280,7 @@ public partial class CategoryManagerDialog : Wpf.Ui.Controls.FluentWindow
         CloseZone();
     }
 
-    // ── Done ─────────────────────────────────────────────────────────────────
+    
 
     private void Done_Click(object sender, RoutedEventArgs e)
     {

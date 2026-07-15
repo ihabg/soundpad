@@ -10,39 +10,39 @@ public class SoundItem
     public float          Volume            { get; set; } = 1.0f;
     public HotkeyBinding? Hotkey            { get; set; }
 
-    // True once this item has gone through hotkey migration/assignment at least
-    // once (whether or not a hotkey ended up bound). Prevents re-seeding a
-    // default hotkey after the user deliberately clears it.
+    
+    
+    
     public bool            HotkeyInitialized { get; set; } = false;
 
     public bool            IsFavorite        { get; set; } = false;
     public DateTime?       LastPlayedAt      { get; set; }
 
-    // Non-destructive edit settings — applied at playback time only.
-    // The original audio file is never modified.
-    // All four fields are nullable so old sounds.json files that omit them
-    // deserialize to null, preserving v1.1.0 playback behaviour exactly.
+    
+    
+    
+    
     public double? TrimStartSeconds { get; set; }
     public double? TrimEndSeconds   { get; set; }
     public double? FadeInSeconds    { get; set; }
     public double? FadeOutSeconds   { get; set; }
 
-    // Optional pad color shown in Grid View — stored as "#RRGGBB" hex string, null = default card color.
-    // Nullable so old decks.json files without this field deserialize cleanly to null.
+    
+    
     public string? PadColor { get; set; }
 
-    // Non-destructive kept audio segments for block-based editing.
-    // null or empty = old behavior: single segment from TrimStartSeconds to TrimEndSeconds.
-    // Nullable so old decks.json files without this field deserialize cleanly to null.
+    
+    
+    
     public List<AudioSegment>? Segments { get; set; }
 
-    // User-defined tags for filtering. null or empty = untagged.
-    // Nullable so old decks.json files without this field deserialize cleanly to null.
+    
+    
     public List<string>? Tags { get; set; }
 
-    // Non-destructive audio effects — rendered off-thread and cached per-session.
-    // Non-nullable with defaults so old decks.json files that omit these fields
-    // deserialize cleanly to no-effect state (false, false, 1.0).
+    
+    
+    
     public bool   ReverseAudio  { get; set; } = false;
     public bool   NormalizeAudio { get; set; } = false;
     public double PlaybackSpeed  { get; set; } = 1.0;

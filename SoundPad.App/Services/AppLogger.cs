@@ -3,17 +3,17 @@ using System.Text;
 
 namespace SoundPad.App.Services;
 
-// Rolling daily log files in %AppData%\SoundPad\Logs\.
-// Each session writes a header with app version and OS.
-// Keeps the last 10 days of log files; older ones are deleted on Initialize.
-// Thread-safe via a single lock object.
+
+
+
+
 public static class AppLogger
 {
     private static readonly object _sync = new();
     private static string?         _currentLogPath;
     private static bool            _initialized;
 
-    // ── Initialization ─────────────────────────────────────────────────────────
+    
 
     public static void Initialize(string appVersion)
     {
@@ -43,10 +43,10 @@ public static class AppLogger
 
             _initialized = true;
         }
-        catch { /* cannot log if logging itself fails */ }
+        catch {  }
     }
 
-    // ── Public logging API ─────────────────────────────────────────────────────
+    
 
     public static void Info(string category, string message)
         => Write("INFO ", category, message, null);
@@ -57,9 +57,9 @@ public static class AppLogger
     public static void Error(string category, string message, Exception? ex = null)
         => Write("ERROR", category, message, ex);
 
-    // ── Diagnostic helpers ─────────────────────────────────────────────────────
+    
 
-    // Returns the last N lines from today's log file; empty array if unavailable.
+    
     public static string[] GetLastLines(int count)
     {
         if (_currentLogPath is null || !File.Exists(_currentLogPath))
@@ -75,7 +75,7 @@ public static class AppLogger
         catch { return Array.Empty<string>(); }
     }
 
-    // ── Internals ──────────────────────────────────────────────────────────────
+    
 
     private static void Write(string level, string category, string message, Exception? ex)
     {
@@ -92,8 +92,8 @@ public static class AppLogger
 
                 if (ex.StackTrace is not null)
                 {
-                    // Include up to 8 stack trace lines.
-                    // Strip full directory paths — keep only the file name for privacy.
+                    
+                    
                     var traceLines = ex.StackTrace
                         .Split('\n', StringSplitOptions.RemoveEmptyEntries);
                     foreach (var line in traceLines.Take(8))
@@ -119,9 +119,9 @@ public static class AppLogger
         catch { }
     }
 
-    // Removes the in C:\path\to\ prefix from stack trace lines, keeping only the file name.
-    // e.g.  "in C:\Users\Kebab\...\MainWindow.xaml.cs:line 123"
-    //    →  "in MainWindow.xaml.cs:line 123"
+    
+    
+    
     private static string StripPathFromTraceLine(string line)
     {
         const string inPrefix = " in ";
@@ -143,7 +143,7 @@ public static class AppLogger
             var cutoff = DateTime.Now.Date.AddDays(-10);
             foreach (var file in Directory.GetFiles(AppPaths.LogsDirectory, "soundpad-????-??-??.log"))
             {
-                var stem    = Path.GetFileNameWithoutExtension(file); // soundpad-YYYY-MM-DD
+                var stem    = Path.GetFileNameWithoutExtension(file); 
                 var dateStr = stem.Length > "soundpad-".Length ? stem["soundpad-".Length..] : "";
                 if (DateTime.TryParse(dateStr, out var fileDate) && fileDate.Date < cutoff)
                 {

@@ -13,8 +13,8 @@ public partial class App : Application
     {
         StartupLogger.Log("App.Application_Startup begin");
 
-        // Initialize rolling log ASAP so runtime errors land in a dated file.
-        // Failure is silent — StartupLogger still covers very early fatal failures.
+        
+        
         try
         {
             var version = System.Reflection.Assembly.GetExecutingAssembly()
@@ -23,7 +23,7 @@ public partial class App : Application
             AppLogger.Initialize(versionStr);
             AppLogger.Info("Startup", "AppLogger initialized");
         }
-        catch { /* cannot log this; StartupLogger is the fallback */ }
+        catch {  }
 
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {

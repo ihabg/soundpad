@@ -39,7 +39,7 @@ public partial class ClipSettingsDialog : Wpf.Ui.Controls.FluentWindow
         FadeOutBox.Text    = FormatFade(clip.FadeOutSeconds);
     }
 
-    // ── Volume ────────────────────────────────────────────────────────────────
+    
 
     private void VolumeSlider_ValueChanged(object sender,
         RoutedPropertyChangedEventArgs<double> e)
@@ -71,7 +71,7 @@ public partial class ClipSettingsDialog : Wpf.Ui.Controls.FluentWindow
     private void DbPlus1_Click(object sender, RoutedEventArgs e)  => ApplyDbChange(+1.0);
     private void DbPlus3_Click(object sender, RoutedEventArgs e)  => ApplyDbChange(+3.0);
 
-    // ── Fade In / Fade Out ────────────────────────────────────────────────────
+    
 
     private void FadeIn01_Click(object sender, RoutedEventArgs e)     => FadeInBox.Text  = FormatFade(0.1);
     private void FadeIn025_Click(object sender, RoutedEventArgs e)    => FadeInBox.Text  = FormatFade(0.25);
@@ -83,7 +83,7 @@ public partial class ClipSettingsDialog : Wpf.Ui.Controls.FluentWindow
     private void FadeOut05_Click(object sender, RoutedEventArgs e)    => FadeOutBox.Text = FormatFade(0.5);
     private void FadeOutClear_Click(object sender, RoutedEventArgs e) => FadeOutBox.Text = FormatFade(0.0);
 
-    // Parses a fade TextBox; clamps to [0, clipDuration / 2] so fades never overlap.
+    
     private double ParseFade(TextBox box)
     {
         if (!double.TryParse(box.Text.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out double v))
@@ -92,7 +92,7 @@ public partial class ClipSettingsDialog : Wpf.Ui.Controls.FluentWindow
         return Math.Clamp(v, 0.0, maxFade);
     }
 
-    // ── Apply / Cancel ────────────────────────────────────────────────────────
+    
 
     private void Apply_Click(object sender, RoutedEventArgs e)
     {
@@ -109,7 +109,7 @@ public partial class ClipSettingsDialog : Wpf.Ui.Controls.FluentWindow
         Close();
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    
 
     private static string FormatFade(double seconds) =>
         seconds.ToString("0.##", CultureInfo.InvariantCulture);

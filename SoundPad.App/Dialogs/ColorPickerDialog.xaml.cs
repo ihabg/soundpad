@@ -8,7 +8,7 @@ namespace SoundPad.App.Dialogs;
 
 public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
 {
-    // ── Presets ───────────────────────────────────────────────────────────────
+    
     private static readonly (string? Hex, string Label)[] Presets =
     {
         (null,      "Default"),
@@ -22,21 +22,21 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
         ("#546E7A", "Gray"),
     };
 
-    // ── Result ────────────────────────────────────────────────────────────────
-    // null  = Default (remove color)
-    // string = valid uppercase #RRGGBB
+    
+    
+    
     public string? ResultColor { get; private set; }
 
-    // ── State ─────────────────────────────────────────────────────────────────
+    
     private bool    _syncing;
-    private string? _selectedPreset;        // tracks which preset hex is highlighted
-    private bool    _customIsValid = false; // true when HEX/RGB inputs hold a valid color
-    private string? _customHex;             // last valid custom hex, or null
+    private string? _selectedPreset;        
+    private bool    _customIsValid = false; 
+    private string? _customHex;             
 
-    // Preset swatch buttons — kept to update the selection ring
+    
     private readonly Button[] _presetButtons;
 
-    // ── Constructor ───────────────────────────────────────────────────────────
+    
     public ColorPickerDialog(Window owner, string? currentColor)
     {
         InitializeComponent();
@@ -47,7 +47,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
         InitializeFrom(currentColor);
     }
 
-    // ── Build preset swatch buttons ───────────────────────────────────────────
+    
     private void BuildPresets()
     {
         var defaultCardBg   = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
@@ -79,7 +79,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
                 BorderThickness = new Thickness(hex is null ? 1 : 0),
             };
 
-            // "Default" gets a diagonal slash to indicate no color
+            
             if (hex is null)
             {
                 var slash = new System.Windows.Shapes.Line
@@ -100,7 +100,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
                 inner.Child = canvas;
             }
 
-            // Selection ring — outer border that becomes accent-colored when active
+            
             var ring = new Border
             {
                 Width           = 34,
@@ -138,12 +138,12 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    // ── Initialise from existing color ────────────────────────────────────────
+    
     private void InitializeFrom(string? currentColor)
     {
         if (currentColor is null)
         {
-            // No color — highlight Default
+            
             _selectedPreset  = null;
             _customIsValid   = false;
             ApplyButton.IsEnabled = true;
@@ -152,7 +152,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        // Check whether the current color matches a preset
+        
         var match = Array.FindIndex(Presets, p => p.Hex is not null &&
             string.Equals(p.Hex, currentColor, StringComparison.OrdinalIgnoreCase));
 
@@ -164,7 +164,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
         }
         else
         {
-            // Custom color — no preset highlighted
+            
             _selectedPreset = null;
             HighlightPreset(null, showRing: false);
             LoadHexIntoControls(currentColor);
@@ -173,8 +173,8 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
         ApplyButton.IsEnabled = true;
     }
 
-    // Writes a valid hex into all controls (HEX box, RGB sliders/boxes, swatch)
-    // without triggering sync loops.
+    
+    
     private void LoadHexIntoControls(string hex)
     {
         var color = ParseHexToColor(hex);
@@ -198,7 +198,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
         ErrorText.Visibility = Visibility.Collapsed;
     }
 
-    // ── Preset selection ──────────────────────────────────────────────────────
+    
     private void SelectPreset(int index)
     {
         var (hex, _) = Presets[index];
@@ -207,7 +207,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
 
         if (hex is null)
         {
-            // Default: clear custom inputs and show card default background
+            
             _syncing = true;
             HexBox.Text   = "";
             RedBox.Text   = "";
@@ -231,8 +231,8 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    // Updates the selection ring on each preset button.
-    // showRing=false is used when no preset is active (custom color entered).
+    
+    
     private void HighlightPreset(string? activeHex, bool showRing = true)
     {
         var accentBrush = (Brush)Application.Current.Resources["SystemAccentColorPrimaryBrush"];
@@ -249,7 +249,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    // ── Swatch helpers ────────────────────────────────────────────────────────
+    
     private void UpdateSwatchForColor(Color c)
     {
         PreviewSwatch.Background = new SolidColorBrush(c) { Opacity = 0.75 };
@@ -261,7 +261,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
             (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
     }
 
-    // ── HEX text changed ──────────────────────────────────────────────────────
+    
     private void HexBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (_syncing) return;
@@ -270,12 +270,12 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
 
         if (string.IsNullOrEmpty(raw))
         {
-            // User cleared the box — deselect presets, don't error
+            
             _customIsValid = false;
             _customHex     = null;
             HighlightPreset(null, showRing: false);
             ErrorText.Visibility  = Visibility.Collapsed;
-            ApplyButton.IsEnabled = _selectedPreset is null; // only Default stays valid
+            ApplyButton.IsEnabled = _selectedPreset is null; 
             UpdateSwatchForDefault();
             return;
         }
@@ -299,7 +299,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
             ErrorText.Visibility  = Visibility.Collapsed;
             ApplyButton.IsEnabled = true;
 
-            // Check whether it matches a preset; if so, highlight it
+            
             var match = Array.FindIndex(Presets, p => p.Hex is not null &&
                 string.Equals(p.Hex, _customHex, StringComparison.OrdinalIgnoreCase));
             _selectedPreset = match >= 0 ? Presets[match].Hex : null;
@@ -318,7 +318,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    // ── RGB slider changed ────────────────────────────────────────────────────
+    
     private void RgbSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (_syncing) return;
@@ -332,21 +332,21 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
         SyncFromRgb();
     }
 
-    // ── RGB text box changed ──────────────────────────────────────────────────
+    
     private void RgbBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (_syncing) return;
         SyncFromRgb();
     }
 
-    // Reads R/G/B text boxes; if all valid updates HEX + swatch.
+    
     private void SyncFromRgb()
     {
         if (!TryParseChannel(RedBox.Text,   out int r) ||
             !TryParseChannel(GreenBox.Text, out int g) ||
             !TryParseChannel(BlueBox.Text,  out int b))
         {
-            // Only show error if at least one box has content
+            
             bool anyContent = !string.IsNullOrEmpty(RedBox.Text)
                            || !string.IsNullOrEmpty(GreenBox.Text)
                            || !string.IsNullOrEmpty(BlueBox.Text);
@@ -366,7 +366,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        // All valid — update slider positions without triggering ValueChanged loop
+        
         _syncing = true;
         RedSlider.Value   = r;
         GreenSlider.Value = g;
@@ -392,7 +392,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
         UpdateSwatchForColor(color);
     }
 
-    // ── Parsing helpers ───────────────────────────────────────────────────────
+    
     private static Color? ParseHexToColor(string hex)
     {
         var stripped = hex.TrimStart('#');
@@ -414,13 +414,13 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
         return int.TryParse(text.Trim(), out value) && value >= 0 && value <= 255;
     }
 
-    // ── Apply / Cancel ────────────────────────────────────────────────────────
+    
     private void Apply_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedPreset is null && !_customIsValid)
         {
-            // Only reachable if Apply is somehow enabled with no valid color.
-            // Guard: treat as Default.
+            
+            
             ResultColor  = null;
             DialogResult = true;
             return;

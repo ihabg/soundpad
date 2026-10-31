@@ -272,17 +272,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         int total = _sound.TotalSamples;
         if (total == 0) { _peaks = Array.Empty<float>(); return; }
 
-        int bucketSize = Math.Max(1, total / WaveformBuckets);
-        _peaks = new float[WaveformBuckets];
-        for (int b = 0; b < WaveformBuckets; b++)
-        {
-            int start = b * bucketSize;
-            int end   = Math.Min(start + bucketSize, total);
-            float peak = 0f;
-            for (int i = start; i < end; i++)
-                peak = Math.Max(peak, Math.Abs(_sound.AudioData[i]));
-            _peaks[b] = peak;
-        }
+        _peaks = _sound.BuildPeaks(WaveformBuckets);
     }
 
     

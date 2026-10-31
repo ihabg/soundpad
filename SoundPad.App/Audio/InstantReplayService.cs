@@ -376,16 +376,17 @@ internal sealed class InstantReplayService : IDisposable
     }
 
     
-    internal float[]? GetRecentSamples()
+    internal float[]? GetRecentSamples(int maxSamples = int.MaxValue)
     {
         lock (_lock)
         {
             if (_preserveTimeline)
                 RecordingSamples.FillSilence(_ring, ref _writePos, ref _totalWritten, TimelineSamples);
             if (_totalWritten == 0) return null;
-            int available = (int)Math.Min(_totalWritten, (long)_ring.Length);
+            int available = (int)Math.Min(Math.Min(_totalWritten, (long)_ring.Length), Math.Max(0, maxSamples));
+            available -= available % TargetFormat.Channels;
             var result    = new float[available];
-            int startPos  = _totalWritten >= _ring.Length ? _writePos : 0;
+            int startPos  = (_writePos - available + _ring.Length) % _ring.Length;
             int firstPart = Math.Min(available, _ring.Length - startPos);
             Buffer.BlockCopy(_ring, startPos * 4, result, 0,             firstPart * 4);
             if (firstPart < available)
@@ -503,16 +504,17 @@ internal sealed class InstantReplayService : IDisposable
     }
 
     
-    internal float[]? GetRecentMicSamples()
+    internal float[]? GetRecentMicSamples(int maxSamples = int.MaxValue)
     {
         lock (_lock)
         {
             if (_preserveTimeline && _micRing.Length > 0)
                 RecordingSamples.FillSilence(_micRing, ref _micWritePos, ref _micTotalWritten, TimelineSamples);
             if (_micTotalWritten == 0 || _micRing.Length == 0) return null;
-            int available = (int)Math.Min(_micTotalWritten, (long)_micRing.Length);
+            int available = (int)Math.Min(Math.Min(_micTotalWritten, (long)_micRing.Length), Math.Max(0, maxSamples));
+            available -= available % TargetFormat.Channels;
             var result    = new float[available];
-            int startPos  = _micTotalWritten >= _micRing.Length ? _micWritePos : 0;
+            int startPos  = (_micWritePos - available + _micRing.Length) % _micRing.Length;
             int firstPart = Math.Min(available, _micRing.Length - startPos);
             Buffer.BlockCopy(_micRing, startPos * 4, result, 0,             firstPart * 4);
             if (firstPart < available)

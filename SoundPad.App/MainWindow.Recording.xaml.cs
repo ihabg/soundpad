@@ -178,10 +178,10 @@ public partial class MainWindow
         {
             // Snapshot before returning to the dispatcher, so pausing or changing
             // the capture source cannot change what this Save action represents.
-            var system = capture.GetRecentSamples();
-            var mic = includeMic ? capture.GetRecentMicSamples() : null;
-            var source = capture.CaptureDeviceName + (includeMic ? " + microphone" : "");
             int max = seconds > 0 ? seconds * CachedSound.TargetFormat.SampleRate * 2 : int.MaxValue;
+            var system = capture.GetRecentSamples(max);
+            var mic = includeMic ? capture.GetRecentMicSamples(max) : null;
+            var source = capture.CaptureDeviceName + (includeMic ? " + microphone" : "");
             var clip = await Task.Run(() => WriteRecording(RecordingSamples.MixRecent(system, mic, max), prefix, source));
             if (clip is null)
             {
@@ -520,7 +520,7 @@ public partial class MainWindow
             item.Hotkey = null;
             var rendered = await Task.Run(() => RenderRecording(CloneRecordingSound(item)));
             clip.DurationSeconds = rendered.Duration.TotalSeconds;
-            clip.Peaks = RecordingSamples.Peaks(rendered.AudioData);
+            clip.Peaks = rendered.BuildPeaks(100);
             _recordingPositions.Remove(item.Id);
             SaveRecordingHistory();
             RefreshRecordingCards();

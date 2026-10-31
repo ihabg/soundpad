@@ -1,5 +1,6 @@
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
+using System.Collections.Concurrent;
 
 namespace SoundPad.App.Audio;
 
@@ -25,7 +26,7 @@ public class AudioPlaybackEngine : IDisposable
     
     
     
-    private readonly List<ISampleProvider> _active = new List<ISampleProvider>();
+    private readonly ConcurrentDictionary<ISampleProvider, byte> _active = new();
 
     
     
@@ -45,6 +46,7 @@ public class AudioPlaybackEngine : IDisposable
         {
             ReadFully = true
         };
+        _mixer.MixerInputEnded += (sender, e) => _active.TryRemove(e.SampleProvider, out _);
 
         
         _outputDevice = new WaveOutEvent
@@ -62,7 +64,7 @@ public class AudioPlaybackEngine : IDisposable
     public PlaybackHandle Play(CachedSound sound)
     {
         var source = new CachedSoundSampleProvider(sound);
-        _active.Add(source);
+        _active.TryAdd(source, 0);
         _mixer.AddMixerInput(source);
         return new PlaybackHandle(source, source);
     }
@@ -76,7 +78,7 @@ public class AudioPlaybackEngine : IDisposable
         ISampleProvider top = source;
         if (volume < 0.999f)
             top = new VolumeSampleProvider(source) { Volume = Math.Clamp(volume, 0f, 1f) };
-        _active.Add(top);
+        _active.TryAdd(top, 0);
         _mixer.AddMixerInput(top);
         return new PlaybackHandle(top, source);
     }
@@ -93,7 +95,7 @@ public class AudioPlaybackEngine : IDisposable
         ISampleProvider top = source;
         if (volume < 0.999f)
             top = new VolumeSampleProvider(source) { Volume = Math.Clamp(volume, 0f, 1f) };
-        _active.Add(top);
+        _active.TryAdd(top, 0);
         _mixer.AddMixerInput(top);
         return new PlaybackHandle(top, source);
     }
@@ -108,7 +110,7 @@ public class AudioPlaybackEngine : IDisposable
         ISampleProvider top = source;
         if (volume < 0.999f)
             top = new VolumeSampleProvider(source) { Volume = Math.Clamp(volume, 0f, 1f) };
-        _active.Add(top);
+        _active.TryAdd(top, 0);
         _mixer.AddMixerInput(top);
         return new PlaybackHandle(top, source);
     }
@@ -117,7 +119,7 @@ public class AudioPlaybackEngine : IDisposable
     
     public void StopAll()
     {
-        foreach (var provider in _active)
+        foreach (var provider in _active.Keys)
             _mixer.RemoveMixerInput(provider);
 
         _active.Clear();
@@ -128,7 +130,7 @@ public class AudioPlaybackEngine : IDisposable
     
     public void StopOne(ISampleProvider topProvider)
     {
-        if (_active.Remove(topProvider))
+        if (_active.TryRemove(topProvider, out _))
             _mixer.RemoveMixerInput(topProvider);
     }
 
@@ -150,6 +152,7 @@ public class AudioPlaybackEngine : IDisposable
     public void Dispose()
     {
         _outputDevice.Stop();
+        StopAll();
         _outputDevice.Dispose();
     }
 }

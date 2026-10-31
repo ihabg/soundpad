@@ -1,3 +1,12 @@
+# SoundPad v1.18.1 — Release validation
+
+- 44 automated audio and workspace checks, including lossless cache reads, concurrency, fades/effects, waveforms, and bounded replay snapshots.
+- Full-app preview measured with the existing 36-sound library and Instant Replay enabled; see MEMORY_OPTIMIZATION.md.
+- Packaging checks cover the self-contained Release build, Inno Setup installer, portable ZIP contents, SHA256 hashes, and public release downloads.
+- Clean-machine installation and extended game/Discord routing were not repeated.
+
+---
+
 # SoundPad v1.18.0 — Release validation
 
 - Comic theme reviewed in the soundboard, recording workspace, editor, and deck/category/color/shortcut dialogs.

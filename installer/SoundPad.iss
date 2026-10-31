@@ -9,7 +9,7 @@
 
 #define AppName      "SoundPad"
 #ifndef AppVersion
-#define AppVersion   "1.18.0"
+#define AppVersion   "1.18.1"
 #endif
 #define AppPublisher "Kebab"
 #define AppExeName   "SoundPad.App.exe"

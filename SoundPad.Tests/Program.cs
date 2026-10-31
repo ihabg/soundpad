@@ -5,6 +5,11 @@ using SoundPad.App.Models;
 using SoundPad.App.Services;
 
 int checks = 0;
+if (args.Contains("--profile-library") || args.Contains("--legacy-profile-library"))
+{
+    MemoryChecks.ProfileLibrary(args.Contains("--legacy-profile-library"));
+    return;
+}
 void Check(bool condition, string description)
 {
     if (!condition) throw new Exception(description);
@@ -20,6 +25,7 @@ Equal(RecordingSamples.MixRecent([.1f, .2f, .3f, .4f], [.5f, .6f]), [.1f, .2f, .
 Equal(RecordingSamples.MixRecent(null, [.1f, .2f, .3f, .4f]), [.1f, .2f, .3f, .4f], "Microphone-only audio is retained when system audio is silent");
 Check(RecordingSamples.MixRecent([1, 1, 1, 1], null, 3).Length == 2, "Clip cuts preserve complete stereo frames");
 Equal(RecordingSamples.Peaks([-.2f, .8f, -.9f, .1f], 2), [.8f, .9f], "Waveform peaks reflect the captured samples");
+MemoryChecks.Run(Check);
 var manager = new FakeHotkeyManager();
 var hotkeys = new HotkeyService(manager);
 HotkeyBinding Binding(uint key) => new() { Modifiers = 6, Key = key, DisplayText = $"Ctrl+Alt+{key}" };
@@ -114,7 +120,7 @@ try
     }
     var renderMethod = typeof(SoundPad.App.MainWindow).GetMethod("RenderRecording", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
     var preview = (CachedSound)renderMethod.Invoke(null, [new SoundItem { FilePath = audio }])!;
-    Check(preview.TotalSamples == 96000 && preview.AudioData.Any(s => Math.Abs(s) > .1f), "Recording preview rendering preserves duration and audible samples");
+    Check(preview.TotalSamples == 96000 && preview.BuildPeaks(100).Any(s => s > .1f), "Recording preview rendering preserves duration and audible samples");
     var source = new SoundItem { DisplayName = "Editor source", FilePath = audio };
     var mixTrack = new MixTrack
     {

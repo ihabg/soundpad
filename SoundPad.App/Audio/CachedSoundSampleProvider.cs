@@ -107,7 +107,7 @@ public class CachedSoundSampleProvider : ISampleProvider
         if (toRead <= 0)
             return 0;
 
-        Array.Copy(_sound.AudioData, _position, buffer, offset, toRead);
+        _sound.CopySamples(_position, buffer, offset, toRead);
 
         if (_fadeInSamples > 0 || _fadeOutSamples > 0)
         {
@@ -155,7 +155,7 @@ public class CachedSoundSampleProvider : ISampleProvider
             }
 
             int toRead = Math.Min(segAvailable, count - written);
-            Array.Copy(_sound.AudioData, _segPos, buffer, offset + written, toRead);
+            _sound.CopySamples(_segPos, buffer, offset + written, toRead);
 
             
             if (_fadeInSamples > 0 || _fadeOutSamples > 0)

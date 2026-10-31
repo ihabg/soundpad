@@ -43,13 +43,12 @@ internal sealed class WaveformCache
 
         
         
-        float[] audioData = cachedSound.AudioData;
-        int     channels  = cachedSound.Channels;
+        // Keep the source alive while computing bounded waveform blocks.
 
         _ = Task.Run(() =>
         {
             float[]? result = null;
-            try   { result = BuildPeaks(audioData, channels, PeakCount); }
+            try   { result = cachedSound.BuildPeaks(PeakCount); }
             catch {  }
 
             Application.Current?.Dispatcher.BeginInvoke(() =>
@@ -64,35 +63,4 @@ internal sealed class WaveformCache
     }
 
     
-    private static float[] BuildPeaks(float[] audioData, int channels, int numPeaks)
-    {
-        int ch     = Math.Max(1, channels);
-        int frames = audioData.Length / ch;
-        if (frames <= 0) return Array.Empty<float>();
-
-        var    peaks  = new float[numPeaks];
-        double stride = (double)frames / numPeaks;
-
-        for (int p = 0; p < numPeaks; p++)
-        {
-            int fStart = (int)(p       * stride);
-            int fEnd   = (int)((p + 1) * stride);
-            if (fEnd > frames) fEnd = frames;
-
-            float peak = 0f;
-            for (int f = fStart; f < fEnd; f++)
-            {
-                int baseIdx = f * ch;
-                for (int c = 0; c < ch; c++)
-                {
-                    int i = baseIdx + c;
-                    if ((uint)i < (uint)audioData.Length)
-                        peak = Math.Max(peak, MathF.Abs(audioData[i]));
-                }
-            }
-            peaks[p] = peak;
-        }
-
-        return peaks;
-    }
 }

@@ -59,7 +59,7 @@ public static class EffectProcessor
         {
             int len = Math.Max(0, e - s);
             if (len == 0) continue;
-            Array.Copy(rawSound.AudioData, s, flat, writePos, len);
+            rawSound.CopySamples(s, flat, writePos, len);
             writePos += len;
         }
 

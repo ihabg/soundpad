@@ -19,6 +19,7 @@ public partial class HotkeyCaptureDialog : Wpf.Ui.Controls.FluentWindow
         InitializeComponent();
         Owner = owner;
         DialogTitleBar.Title = $"Set Hotkey — {soundName}";
+        InstructionText.Text = $"Choose a shortcut for {soundName}.";
 
         if (currentBinding is not null)
             CapturedText.Text = currentBinding.DisplayText;

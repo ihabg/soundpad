@@ -3,15 +3,17 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Clip Audio Settings"
-        Width="420" Height="490"
+        Width="520" Height="540"
         WindowStartupLocation="CenterOwner"
-        FontFamily="Segoe UI"
+        FontFamily="Trebuchet MS, Segoe UI"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
         ExtendsContentIntoTitleBar="True"
-        WindowBackdropType="Mica"
+        WindowBackdropType="None"
         WindowCornerPreference="Round"
         ResizeMode="NoResize">
 
-    <Grid>
+    <Grid Background="{StaticResource ComicContours}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -26,7 +28,8 @@
             </ui:TitleBar.Icon>
         </ui:TitleBar>
 
-        <Grid Grid.Row="1" Margin="20,14,20,18">
+        <Border Grid.Row="1" Margin="20,14,20,18" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{StaticResource ComicInkBrush}" BorderThickness="2" CornerRadius="8" Padding="16">
+        <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>   <!-- 0: Source -->
                 <RowDefinition Height="Auto"/>   <!-- 1: Track -->
@@ -120,10 +123,10 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <TextBlock x:Name="DbLabel"
                                VerticalAlignment="Center" FontWeight="SemiBold" MinWidth="72"/>
-                    <ui:Button Content="-3 dB" Click="DbMinus3_Click" Width="52" Margin="0,0,3,0"/>
-                    <ui:Button Content="-1 dB" Click="DbMinus1_Click" Width="52" Margin="0,0,3,0"/>
-                    <ui:Button Content="+1 dB" Click="DbPlus1_Click"  Width="52" Margin="0,0,3,0"/>
-                    <ui:Button Content="+3 dB" Click="DbPlus3_Click"  Width="52"/>
+                    <ui:Button Padding="4,6" FontSize="11" Content="-3 dB" Click="DbMinus3_Click" Width="52" Margin="0,0,3,0"/>
+                    <ui:Button Padding="4,6" FontSize="11" Content="-1 dB" Click="DbMinus1_Click" Width="52" Margin="0,0,3,0"/>
+                    <ui:Button Padding="4,6" FontSize="11" Content="+1 dB" Click="DbPlus1_Click"  Width="52" Margin="0,0,3,0"/>
+                    <ui:Button Padding="4,6" FontSize="11" Content="+3 dB" Click="DbPlus3_Click"  Width="52"/>
                 </StackPanel>
             </Grid>
 
@@ -143,10 +146,10 @@
                     <TextBox x:Name="FadeInBox"
                              Width="58" VerticalAlignment="Center" Margin="0,0,8,0"
                              Text="0"/>
-                    <ui:Button Content="0.1s"  Click="FadeIn01_Click"   Width="40" Margin="0,0,3,0"/>
-                    <ui:Button Content="0.25s" Click="FadeIn025_Click"  Width="46" Margin="0,0,3,0"/>
-                    <ui:Button Content="0.5s"  Click="FadeIn05_Click"   Width="40" Margin="0,0,3,0"/>
-                    <ui:Button Content="0"     Click="FadeInClear_Click" Width="30"/>
+                    <ui:Button Padding="4,6" FontSize="11" Content="0.1s"  Click="FadeIn01_Click"   Width="40" Margin="0,0,3,0"/>
+                    <ui:Button Padding="4,6" FontSize="11" Content="0.25s" Click="FadeIn025_Click"  Width="46" Margin="0,0,3,0"/>
+                    <ui:Button Padding="4,6" FontSize="11" Content="0.5s"  Click="FadeIn05_Click"   Width="40" Margin="0,0,3,0"/>
+                    <ui:Button Padding="4,6" FontSize="11" Content="0"     Click="FadeInClear_Click" Width="30"/>
                 </StackPanel>
             </Grid>
 
@@ -161,10 +164,10 @@
                     <TextBox x:Name="FadeOutBox"
                              Width="58" VerticalAlignment="Center" Margin="0,0,8,0"
                              Text="0"/>
-                    <ui:Button Content="0.1s"  Click="FadeOut01_Click"   Width="40" Margin="0,0,3,0"/>
-                    <ui:Button Content="0.25s" Click="FadeOut025_Click"  Width="46" Margin="0,0,3,0"/>
-                    <ui:Button Content="0.5s"  Click="FadeOut05_Click"   Width="40" Margin="0,0,3,0"/>
-                    <ui:Button Content="0"     Click="FadeOutClear_Click" Width="30"/>
+                    <ui:Button Padding="4,6" FontSize="11" Content="0.1s"  Click="FadeOut01_Click"   Width="40" Margin="0,0,3,0"/>
+                    <ui:Button Padding="4,6" FontSize="11" Content="0.25s" Click="FadeOut025_Click"  Width="46" Margin="0,0,3,0"/>
+                    <ui:Button Padding="4,6" FontSize="11" Content="0.5s"  Click="FadeOut05_Click"   Width="40" Margin="0,0,3,0"/>
+                    <ui:Button Padding="4,6" FontSize="11" Content="0"     Click="FadeOutClear_Click" Width="30"/>
                 </StackPanel>
             </Grid>
 
@@ -172,14 +175,15 @@
             <StackPanel Grid.Row="11" Orientation="Horizontal"
                         HorizontalAlignment="Right"
                         Margin="0,10,0,0">
-                <ui:Button Content="Cancel"
+                <ui:Button Padding="4,6" FontSize="11" Content="Cancel"
                            Click="Cancel_Click"
                            Margin="0,0,8,0"/>
                 <ui:Button x:Name="ApplyButton"
                            Content="Apply"
-                           Appearance="Primary"
+                           Background="{StaticResource ComicCyanBrush}" Foreground="Black" Appearance="Primary"
                            Click="Apply_Click"/>
             </StackPanel>
         </Grid>
+        </Border>
     </Grid>
 </ui:FluentWindow>

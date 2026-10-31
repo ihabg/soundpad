@@ -73,10 +73,10 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
             {
                 Width           = 28,
                 Height          = 28,
-                CornerRadius    = new CornerRadius(14),
+                CornerRadius    = new CornerRadius(6),
                 Background      = fill,
-                BorderBrush     = hex is null ? cardBorder : Brushes.Transparent,
-                BorderThickness = new Thickness(hex is null ? 1 : 0),
+                BorderBrush     = cardBorder,
+                BorderThickness = new Thickness(2),
             };
 
             
@@ -103,17 +103,17 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
             
             var ring = new Border
             {
-                Width           = 34,
-                Height          = 34,
-                CornerRadius    = new CornerRadius(17),
-                BorderThickness = new Thickness(2),
+                Width           = 40,
+                Height          = 40,
+                CornerRadius    = new CornerRadius(8),
+                BorderThickness = new Thickness(3),
                 BorderBrush     = Brushes.Transparent,
                 Margin          = new Thickness(4, 0, 4, 8),
                 Child           = new Border
                 {
                     Width        = 28,
                     Height       = 28,
-                    CornerRadius = new CornerRadius(14),
+                    CornerRadius = new CornerRadius(6),
                     Child        = inner,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment   = VerticalAlignment.Center,
@@ -131,6 +131,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
                 Cursor              = Cursors.Hand,
                 HorizontalAlignment = HorizontalAlignment.Left,
             };
+            System.Windows.Automation.AutomationProperties.SetName(btn, label);
             btn.Click += (_, _) => SelectPreset(captured);
 
             _presetButtons[i] = btn;
@@ -235,7 +236,7 @@ public partial class ColorPickerDialog : Wpf.Ui.Controls.FluentWindow
     
     private void HighlightPreset(string? activeHex, bool showRing = true)
     {
-        var accentBrush = (Brush)Application.Current.Resources["SystemAccentColorPrimaryBrush"];
+        var accentBrush = (Brush)Application.Current.Resources["ComicCyanBrush"];
 
         for (int i = 0; i < Presets.Length; i++)
         {

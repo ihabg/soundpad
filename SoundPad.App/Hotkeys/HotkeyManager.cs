@@ -18,7 +18,7 @@ namespace SoundPad.App.Hotkeys;
 
 
 
-public class HotkeyManager : IDisposable
+public class HotkeyManager : IHotkeyManager, IDisposable
 {
     
     [DllImport("user32.dll")]

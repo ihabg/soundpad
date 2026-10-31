@@ -10,6 +10,7 @@ public class HotkeyRegistrationResult
     public bool           StopAllFailed            { get; set; }
     public bool           InstantReplayClipFailed   { get; set; }
     public bool           InstantReplayToggleFailed { get; set; }
+    public bool           SoundboardLockFailed      { get; set; }
 }
 
 
@@ -17,12 +18,14 @@ public class HotkeyRegistrationResult
 
 public class HotkeyService
 {
+    private const int SoundboardLockId = 9096;
     private const int InstantReplayClipId   = 9097; 
     private const int InstantReplayToggleId = 9098; 
     private const int StopAllId             = 9099;
     private const int BaseId                = 9100; 
 
-    private readonly HotkeyManager _manager;
+    private readonly IHotkeyManager _manager;
+    private bool _locked;
     private readonly Dictionary<int, Guid> _idToSoundId = new Dictionary<int, Guid>();
 
     
@@ -36,8 +39,9 @@ public class HotkeyService
 
     
     public event Action? InstantReplayToggleTriggered;
+    public event Action? SoundboardLockTriggered;
 
-    public HotkeyService(HotkeyManager manager)
+    public HotkeyService(IHotkeyManager manager)
     {
         _manager = manager;
         _manager.HotkeyPressed += OnHotkeyPressed;
@@ -45,6 +49,9 @@ public class HotkeyService
 
     private void OnHotkeyPressed(int id)
     {
+        if (id == SoundboardLockId) { SoundboardLockTriggered?.Invoke(); return; }
+        // Ignore already-queued hotkey messages after registrations are released.
+        if (_locked) return;
         if (id == StopAllId)             { StopAllHotkeyTriggered?.Invoke();         return; }
         if (id == InstantReplayClipId)   { InstantReplayClipTriggered?.Invoke();     return; }
         if (id == InstantReplayToggleId) { InstantReplayToggleTriggered?.Invoke();   return; }
@@ -61,11 +68,24 @@ public class HotkeyService
         IEnumerable<SoundItem> library,
         HotkeyBinding?         stopAllHotkey,
         HotkeyBinding?         instantReplayClipHotkey   = null,
-        HotkeyBinding?         instantReplayToggleHotkey = null)
+        HotkeyBinding?         instantReplayToggleHotkey = null,
+        HotkeyBinding?         soundboardLockHotkey = null,
+        bool                   locked = false)
     {
+        _locked = locked;
         UnregisterAll();
 
         var result = new HotkeyRegistrationResult();
+
+        if (soundboardLockHotkey is not null)
+        {
+            // Prevent a held toggle key from repeatedly locking and unlocking.
+            bool ok = _manager.Register(SoundboardLockId, soundboardLockHotkey.Modifiers | 0x4000, soundboardLockHotkey.Key);
+            result.SoundboardLockFailed = !ok;
+        }
+        // Do not merely mute callbacks: unregister the combinations so Windows
+        // delivers them to the foreground game. Only the unlock shortcut stays.
+        if (_locked) return result;
 
         if (stopAllHotkey is not null)
         {

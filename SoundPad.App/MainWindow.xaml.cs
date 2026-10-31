@@ -153,6 +153,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         RestoreWindowBounds();
+        RefreshSoundboardLockUI();
         StartupLogger.Log("Constructor end");
     }
 
@@ -835,6 +836,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             _hotkeyService.StopAllHotkeyTriggered      += OnStopAllHotkeyTriggered;
             _hotkeyService.InstantReplayClipTriggered  += SaveInstantReplayClip;
             _hotkeyService.InstantReplayToggleTriggered += ToggleInstantReplay;
+            _hotkeyService.SoundboardLockTriggered += ToggleSoundboardLock;
             StartupLogger.Log("HotkeyService ready");
         }
         catch (Exception ex)
@@ -910,6 +912,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 }
 
                 RestoreInstantReplaySettings();
+                InitializeRecordingWorkspace();
+                EnsureSoundEditor();
 
                 if (_settings.MiniOpenOnStartup)
                     OpenMiniMode();
@@ -947,6 +951,16 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void RestoreSelectedTab()
     {
+        if (_settings.NavigationVersion < 1)
+        {
+            if (_settings.SelectedTabIndex == 1) _settings.SelectedTabIndex = 2;
+            _settings.NavigationVersion = 1;
+        }
+        if (_settings.NavigationVersion < 2)
+        {
+            if (_settings.SelectedTabIndex == 2) _settings.SelectedTabIndex = 3;
+            _settings.NavigationVersion = 2;
+        }
         if (_settings.SelectedTabIndex >= 0 && _settings.SelectedTabIndex < MainTabControl.Items.Count)
             MainTabControl.SelectedIndex = _settings.SelectedTabIndex;
     }
@@ -956,6 +970,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (MainTabControl.SelectedIndex < 0)
             return;
 
+        if (e.Source != MainTabControl || !IsLoaded) return;
+        if (SoundEditorTab.IsSelected) EnsureSoundEditor();
+        else _soundEditor?.StopPlayback();
+        if (SoundEditorTab.IsSelected) StopRecordingPreview();
         _settings.SelectedTabIndex = MainTabControl.SelectedIndex;
         SaveSettings();
     }
@@ -1039,16 +1057,20 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             _library,
             _settings.StopAllHotkey,
             _settings.InstantReplayClipHotkey,
-            _settings.InstantReplayToggleHotkey);
+            _settings.InstantReplayToggleHotkey,
+            _settings.SoundboardLockHotkey,
+            _settings.SoundboardLocked);
 
-        int total  = soundCount
-                   + (_settings.StopAllHotkey             is not null ? 1 : 0)
-                   + (_settings.InstantReplayClipHotkey   is not null ? 1 : 0)
-                   + (_settings.InstantReplayToggleHotkey is not null ? 1 : 0);
+        int total = (_settings.SoundboardLockHotkey is not null ? 1 : 0)
+            + (_settings.SoundboardLocked ? 0 : soundCount
+                + (_settings.StopAllHotkey is not null ? 1 : 0)
+                + (_settings.InstantReplayClipHotkey is not null ? 1 : 0)
+                + (_settings.InstantReplayToggleHotkey is not null ? 1 : 0));
         int failed = result.FailedSoundIds.Count
-                   + (result.StopAllFailed             ? 1 : 0)
-                   + (result.InstantReplayClipFailed   ? 1 : 0)
-                   + (result.InstantReplayToggleFailed ? 1 : 0);
+            + (result.StopAllFailed ? 1 : 0)
+            + (result.InstantReplayClipFailed ? 1 : 0)
+            + (result.InstantReplayToggleFailed ? 1 : 0)
+            + (result.SoundboardLockFailed ? 1 : 0);
         Debug.WriteLine($"[Hotkeys:{context}] Registered {total - failed}/{total}, {failed} failed.");
 
         foreach (var failId in result.FailedSoundIds)
@@ -1066,6 +1088,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (failed > 0)
         {
             var problems = new List<string>();
+            if (result.SoundboardLockFailed) problems.Add("Soundboard lock shortcut");
             if (result.FailedSoundIds.Count > 0)
                 problems.Add($"{result.FailedSoundIds.Count} sound hotkey(s)");
             if (result.StopAllFailed)
@@ -1874,8 +1897,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (!CanReorder(out var blocked)) { StatusText.Text = blocked; return; }
 
-        DragDrop.DoDragDrop(SoundsPanel, new DataObject(InternalReorderFormat, dragId.ToString()), DragDropEffects.Move);
-        RemoveDropIndicator();
+        try
+        {
+            DragDrop.DoDragDrop(SoundsPanel, new DataObject(InternalReorderFormat, dragId.ToString()), DragDropEffects.Move);
+        }
+        finally
+        {
+            StopDragAutoScroll();
+            RemoveDropIndicator();
+        }
     }
 
     private void GridPanel_PreviewMouseMove(object sender, MouseEventArgs e)
@@ -1894,8 +1924,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (!CanReorder(out var blocked)) { StatusText.Text = blocked; return; }
 
-        DragDrop.DoDragDrop(GridPanel, new DataObject(InternalReorderFormat, dragId.ToString()), DragDropEffects.Move);
-        RemoveDropIndicator();
+        try
+        {
+            DragDrop.DoDragDrop(GridPanel, new DataObject(InternalReorderFormat, dragId.ToString()), DragDropEffects.Move);
+        }
+        finally
+        {
+            StopDragAutoScroll();
+            RemoveDropIndicator();
+        }
     }
 
     
@@ -1972,11 +2009,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     }
 
     private void UpdateDropIndicator(DragEventArgs e, Panel panel)
+        => UpdateDropIndicator(e.GetPosition(panel), panel);
+
+    private void UpdateDropIndicator(Point mousePos, Panel panel)
     {
         bool isGrid  = panel is WrapPanel;
         EnsureDropIndicator(isGrid);
 
-        var mousePos = e.GetPosition(panel);
         int newIndex = isGrid ? GetGridDropIndex(mousePos) : GetListDropIndex(mousePos);
 
         if (_dropIndicatorIndex == newIndex) return; 
@@ -2265,6 +2304,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (InstantReplaySignalText is not null)
                 InstantReplaySignalText.Text = "";
         }
+        UpdateRecordingControls();
     }
 
     
@@ -2279,42 +2319,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (InstantReplaySignalText is null) return;
 
-        float meterPeak     = _instantReplay.DeviceMasterPeak;  
-        bool  hasSignal     = _instantReplay.IsReceivingAudio;
-        int   callbackCount = _instantReplay.DataAvailableCount;
-        float capturePeak   = _instantReplay.LastPeak;
-
-        if (hasSignal)
-        {
-            float dbfs = capturePeak > 0f
-                ? 20f * (float)Math.Log10(capturePeak)
-                : -96f;
-            InstantReplaySignalText.Text =
-                $"Capturing audio  ·  Peak: {dbfs:F1} dBFS  ·  {_instantReplay.CaptureDeviceName}";
-            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)); 
-        }
-        else if (callbackCount == 0)
-        {
-            InstantReplaySignalText.Text =
-                $"Waiting for audio data from: {_instantReplay.CaptureDeviceName}\n" +
-                $"Format: {_instantReplay.CaptureFormatDesc}";
-            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x00)); 
-        }
-        else if (meterPeak > 0.01f)
-        {
-            InstantReplaySignalText.Text =
-                $"Device meter: {meterPeak * 100:F0}% — audio detected but capture is silent\n" +
-                $"Format: {_instantReplay.CaptureFormatDesc}  ·  Callbacks: {callbackCount}  ·  Last: {_instantReplay.LastBytesRecorded} B";
-            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36)); 
-        }
-        else
-        {
-            InstantReplaySignalText.Text =
-                $"No audio on: {_instantReplay.CaptureDeviceName}\n" +
-                $"Meter: {meterPeak * 100:F0}%  ·  Callbacks: {callbackCount}  ·  Last: {_instantReplay.LastBytesRecorded} B\n" +
-                $"Select the output device that is currently playing audio.";
-            InstantReplaySignalText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x00)); 
-        }
+        bool hasSignal = _instantReplay.IsReceivingAudio;
+        InstantReplaySignalText.Text = hasSignal
+            ? "Audio is coming through. Ready to capture your moment."
+            : "Waiting for audio. Play something on your selected capture source.";
+        InstantReplaySignalText.Foreground = (Brush)FindResource(hasSignal ? "ComicCyanBrush" : "TextFillColorSecondaryBrush");
 
         
         if (InstantReplayMicSignalText is not null)
@@ -2457,18 +2466,21 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         string? newId = device.Id;
         if (_settings.InstantReplayCaptureDeviceId == newId) return;
         _settings.InstantReplayCaptureDeviceId = newId;
+        UpdateRecordingControls();
         SaveSettings();
     }
 
     private void InstantReplayIncludeMicCheckBox_Checked(object sender, RoutedEventArgs e)
     {
         _settings.InstantReplayIncludeMicrophone = true;
+        UpdateRecordingControls();
         SaveSettings();
     }
 
     private void InstantReplayIncludeMicCheckBox_Unchecked(object sender, RoutedEventArgs e)
     {
         _settings.InstantReplayIncludeMicrophone = false;
+        UpdateRecordingControls();
         SaveSettings();
     }
 
@@ -2487,104 +2499,17 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     
     
-    private void SaveInstantReplayClip()
+    private async void SaveInstantReplayClip()
     {
-        if (_instantReplay is null || !_instantReplay.IsRunning)
+        var service = _instantReplay;
+        if (service is null || !service.IsRunning)
         {
-            StatusText.Text = "Instant Replay is not running — enable it in Settings first.";
+            StatusText.Text = "Enable Instant Replay in Recording first.";
             return;
         }
-
-        var sysSamples = _instantReplay.GetRecentSamples();
-        if (sysSamples is null || sysSamples.Length == 0)
-        {
-            StatusText.Text = "No audio captured yet — wait a moment after enabling Instant Replay.";
-            return;
-        }
-
-        
-        float[]? micSamples = null;
-        if (_settings.InstantReplayIncludeMicrophone && _instantReplay.IsMicRunning)
-            micSamples = _instantReplay.GetRecentMicSamples();
-
-        
-        
-        float[] samples;
-        string? mixNote = null;
-        if (micSamples is { Length: > 0 })
-        {
-            int mixLen = Math.Max(sysSamples.Length, micSamples.Length);
-            samples = new float[mixLen];
-            for (int i = 0; i < mixLen; i++)
-            {
-                float s = i < sysSamples.Length ? sysSamples[i] : 0f;
-                float m = i < micSamples.Length ? micSamples[i] : 0f;
-                float v = s + m;
-                samples[i] = v > 1f ? 1f : v < -1f ? -1f : v;
-            }
-        }
-        else
-        {
-            samples = sysSamples;
-            if (_settings.InstantReplayIncludeMicrophone && _instantReplay.IsMicRunning)
-                mixNote = "Microphone had no signal; saved system audio only.";
-        }
-
-        var timestamp = DateTime.Now;
-        var name      = $"Clip {timestamp:yyyy-MM-dd HH-mm-ss}";
-        var fileName  = name + ".wav";
-        var dir       = AppPaths.SoundsDirectory;
-        Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, fileName);
-
-        try
-        {
-            using var writer = new WaveFileWriter(path, CachedSound.TargetFormat);
-            writer.WriteSamples(samples, 0, samples.Length);
-        }
-        catch (Exception ex)
-        {
-            StatusText.Text = $"Save Clip failed: {ex.Message}";
-            return;
-        }
-
-        CachedSound cached;
-        try
-        {
-            cached = new CachedSound(path);
-        }
-        catch (Exception ex)
-        {
-            StatusText.Text = $"Clip saved but could not preload audio: {ex.Message}";
-            return;
-        }
-
-        var item = new SoundItem
-        {
-            DisplayName = name,
-            FilePath    = path,
-            Category    = "Clips",
-            Volume      = 1.0f,
-            CreatedAt   = timestamp
-        };
-
-        _cachedSounds[item.Id] = cached;
-        _library.Add(item);
-        TrySaveDecks();
-        RefreshCategoryFilter();
-        FilterSoundsPanel();
-        ActiveDeckChanged?.Invoke(_activeDeck); 
-
-        string saveNote =
-            !_instantReplay.IsReceivingAudio ? " (WARNING: no system audio signal — check Capture device)" :
-            mixNote is not null              ? $" ({mixNote})" :
-                                               "";
-        StatusText.Text = $"Clip saved: {item.DisplayName}{saveNote}";
-
-        EditSound(item); 
+        int seconds = int.TryParse((ReplayClipLengthCombo.SelectedItem as ComboBoxItem)?.Tag as string, out var value) ? value : 30;
+        await SaveCapturedRecordingAsync(service, "Replay", seconds, service.IsMicRunning);
     }
-
-    
 
     private void SetInstantReplayClipHotkey_Click(object sender, RoutedEventArgs e)
     {
@@ -2814,12 +2739,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             Width           = cardW,
             Height          = cardH,
-            Margin          = new Thickness(4),
+            Margin          = new Thickness(6, 6, 8, 8),
             CornerRadius    = new CornerRadius(8),
+            Effect          = (System.Windows.Media.Effects.Effect)Application.Current.Resources["ComicShadow"],
             Padding         = new Thickness(10),
             Background      = GetPadBackground(item.PadColor),
             BorderBrush     = (Brush)Application.Current.Resources["CardBorderBrush"],
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(3),
             Cursor          = Cursors.Hand,
             Child           = layout
         };
@@ -2939,35 +2865,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StatusText.Text = $"Updated color for {item.DisplayName}";
     }
 
-    private void OpenSoundComposer(SoundItem item)
-    {
-        if (!_cachedSounds.ContainsKey(item.Id))
-        {
-            StatusText.Text = "Cannot open Composer: sound file is not loaded.";
-            return;
-        }
-        if (_monitorEngine is not AudioPlaybackEngine engine)
-        {
-            StatusText.Text = "Cannot open Composer: no playback device configured.";
-            return;
-        }
 
-        var deckSounds = _library
-            .Where(s => _cachedSounds.ContainsKey(s.Id))
-            .ToList();
-
-        var dlg = new Dialogs.SoundComposerDialog(this, item, _cachedSounds, deckSounds, engine);
-        if (dlg.ShowDialog() != true) return;
-        if (dlg.ResultItem is null || dlg.ResultSound is null) return;
-
-        _cachedSounds[dlg.ResultItem.Id] = dlg.ResultSound;
-        _library.Add(dlg.ResultItem);
-        TrySaveDecks();
-        RefreshCategoryFilter();
-        FilterSoundsPanel();
-        ActiveDeckChanged?.Invoke(_activeDeck);
-        StatusText.Text = $"Mix saved: {dlg.ResultItem.DisplayName}";
-    }
 
     
 
@@ -3152,6 +3050,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (_settings.StopAllHotkey is not null)
             takenHotkeys.Add((_settings.StopAllHotkey.Modifiers, _settings.StopAllHotkey.Key));
 
+        if (_settings.SoundboardLockHotkey is { } lockBinding)
+            takenHotkeys.Add((lockBinding.Modifiers, lockBinding.Key));
+
         var dlg = new EditSoundDialog(this, item, sound, categories, takenHotkeys, _monitorEngine);
         if (dlg.ShowDialog() != true) return;
 
@@ -3249,6 +3150,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (usedElsewhere)
             return "Audio file kept — also used by another sound.";
+        if (_soundEditor?.UsesSourceFile(fullPath) == true)
+            return "Audio file kept — used by your editor draft.";
 
         if (!File.Exists(fullPath))
             return "Audio file was already missing.";
@@ -3361,6 +3264,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     
     private string? FindHotkeyOwner(HotkeyBinding binding, Guid? excludeSoundId)
     {
+        if (_settings.SoundboardLockHotkey is { } lockBinding && lockBinding.Key == binding.Key
+            && (lockBinding.Modifiers & 0xF) == (binding.Modifiers & 0xF))
+            return "Soundboard lock";
+
         var sound = _library.FirstOrDefault(x => (excludeSoundId is null || x.Id != excludeSoundId)
                         && x.Hotkey is not null
                         && x.Hotkey.Modifiers == binding.Modifiers && x.Hotkey.Key == binding.Key);
@@ -3389,6 +3296,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     
     private string? FindHotkeyOwnerForIR(HotkeyBinding binding, bool excludeClip, bool excludeToggle)
     {
+        if (_settings.SoundboardLockHotkey is { } lockBinding && lockBinding.Key == binding.Key
+            && (lockBinding.Modifiers & 0xF) == (binding.Modifiers & 0xF))
+            return "Soundboard lock";
+
         var sound = _library.FirstOrDefault(x => x.Hotkey is not null
                         && x.Hotkey.Modifiers == binding.Modifiers && x.Hotkey.Key == binding.Key);
         if (sound is not null) return sound.DisplayName;
@@ -3627,7 +3538,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    internal static readonly Color _fallbackAccent = Color.FromRgb(0, 120, 215);
+    internal static readonly Color _fallbackAccent = Color.FromRgb(255, 212, 90);
 
     private void UpdateRowState(Guid soundId, bool active)
     {
@@ -3658,6 +3569,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void ClearAllActivePlaybacks()
     {
+        _soundEditor?.StopPlayback();
+        StopRecordingPreview();
         _monitorEngine?.StopAll();
         _virtualEngine?.StopAll();
 
@@ -4362,6 +4275,58 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return files?.Any(f => _audioExtensions.Contains(Path.GetExtension(f))) is true;
     }
 
+    private DispatcherTimer? _dragScrollTimer;
+    private Point _dragScrollPosition;
+
+    private void UpdateDragAutoScroll(DragEventArgs e)
+    {
+        // Keep the pointer in viewport coordinates while the content moves beneath it.
+        _dragScrollPosition = e.GetPosition(SoundsScroller);
+        if (GetDragScrollStep() == 0)
+        {
+            StopDragAutoScroll();
+            return;
+        }
+        if (_dragScrollTimer is null)
+        {
+            _dragScrollTimer = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromMilliseconds(30)
+            };
+            _dragScrollTimer.Tick += (_, _) =>
+            {
+                double step = GetDragScrollStep();
+                if (step == 0)
+                {
+                    StopDragAutoScroll();
+                    return;
+                }
+                SoundsScroller.ScrollToVerticalOffset(SoundsScroller.VerticalOffset + step);
+                SoundsScroller.UpdateLayout();
+                Panel panel = _settings.LibraryView == "Grid" ? GridPanel : SoundsPanel;
+                UpdateDropIndicator(SoundsScroller.TranslatePoint(_dragScrollPosition, panel), panel);
+            };
+        }
+        _dragScrollTimer.Start();
+    }
+
+    private double GetDragScrollStep()
+    {
+        double height = SoundsScroller.ActualHeight;
+        var pos = _dragScrollPosition;
+        if (height <= 0 || pos.X < 0 || pos.X > SoundsScroller.ActualWidth || pos.Y < 0 || pos.Y > height)
+            return 0;
+
+        double edge = Math.Min(64, height / 3);
+        if (pos.Y < edge && SoundsScroller.VerticalOffset > 0)
+            return -4 - 20 * (1 - pos.Y / edge);
+        if (pos.Y > height - edge && SoundsScroller.VerticalOffset < SoundsScroller.ScrollableHeight)
+            return 4 + 20 * (1 - (height - pos.Y) / edge);
+        return 0;
+    }
+
+    private void StopDragAutoScroll() => _dragScrollTimer?.Stop();
+
     private void SoundsArea_DragEnter(object sender, DragEventArgs e)
     {
         if (IsInternalReorder(e.Data))
@@ -4369,6 +4334,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             e.Effects = DragDropEffects.Move;
             Panel panel = _settings.LibraryView == "Grid" ? GridPanel : SoundsPanel;
             UpdateDropIndicator(e, panel);
+            UpdateDragAutoScroll(e);
         }
         else if (HasAudioFiles(e.Data))
         {
@@ -4389,6 +4355,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             e.Effects = DragDropEffects.Move;
             Panel panel = _settings.LibraryView == "Grid" ? GridPanel : SoundsPanel;
             UpdateDropIndicator(e, panel);
+            UpdateDragAutoScroll(e);
         }
         else
         {
@@ -4404,6 +4371,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             pos.X > SoundsAreaBorder.ActualWidth ||
             pos.Y > SoundsAreaBorder.ActualHeight)
         {
+            StopDragAutoScroll();
             SoundsAreaBorder.BorderBrush = (Brush)Application.Current.Resources["CardBorderBrush"];
             RemoveDropIndicator();
         }
@@ -4411,6 +4379,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SoundsArea_Drop(object sender, DragEventArgs e)
     {
+        StopDragAutoScroll();
         SoundsAreaBorder.BorderBrush = (Brush)Application.Current.Resources["CardBorderBrush"];
         RemoveDropIndicator();
 
@@ -4622,6 +4591,30 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
+        if (_soundEditor?.IsSaving == true)
+        {
+            e.Cancel = true;
+            _closeAfterEditorSave = true;
+            StatusText.Text = "Finishing your editor action before closing…";
+            return;
+        }
+
+        if (_savingRecording || _manualFinalizing)
+        {
+            e.Cancel = true;
+            _closeAfterRecordingSave = true;
+            StatusText.Text = "Finishing your recording before closing…";
+            return;
+        }
+
+        if (_manualCapture is not null)
+        {
+            e.Cancel = true;
+            _closeAfterRecordingSave = true;
+            _ = FinishManualRecordingAsync();
+            return;
+        }
+
         
         if (_deckSaveDebounceTimer?.IsEnabled == true)
         {
@@ -4652,6 +4645,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _downloadCts = null;
 
         
+        _soundEditor?.Dispose();
+        ShutdownRecordingWorkspace();
         _miniWindow?.ForceClose();
         _miniWindow = null;
 

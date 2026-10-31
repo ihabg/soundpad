@@ -1,6 +1,7 @@
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
+using System.Diagnostics;
 
 namespace SoundPad.App.Audio;
 
@@ -132,8 +133,12 @@ internal sealed class InstantReplayService : IDisposable
         }
     }
 
-    internal InstantReplayService(int minutes)
+    private readonly bool _preserveTimeline;
+    private readonly Stopwatch _captureClock = new();
+
+    internal InstantReplayService(int minutes, bool preserveTimeline = false)
     {
+        _preserveTimeline = preserveTimeline;
         _minutes = Math.Clamp(minutes, 1, 5);
         _ring    = AllocRing(_minutes);
     }
@@ -151,6 +156,7 @@ internal sealed class InstantReplayService : IDisposable
             _capture = OpenCapture(deviceId);
             SetupConversion(_capture.WaveFormat);
             _capture.DataAvailable += OnDataAvailable;
+            _captureClock.Restart();
             _capture.StartRecording();
             IsRunning = true;
         }
@@ -330,6 +336,14 @@ internal sealed class InstantReplayService : IDisposable
     {
         lock (_lock)
         {
+            if (_preserveTimeline)
+            {
+                long expectedStart = TimelineSamples - sampleCount;
+                // Loopback callbacks can pause during silence. Preserve those
+                // gaps in manual recordings without treating normal jitter as a gap.
+                if (expectedStart - _totalWritten > TargetFormat.SampleRate / 5)
+                    RecordingSamples.FillSilence(_ring, ref _writePos, ref _totalWritten, expectedStart);
+            }
             int toEnd = _ring.Length - _writePos;
             if (sampleCount <= toEnd)
             {
@@ -366,6 +380,8 @@ internal sealed class InstantReplayService : IDisposable
     {
         lock (_lock)
         {
+            if (_preserveTimeline)
+                RecordingSamples.FillSilence(_ring, ref _writePos, ref _totalWritten, TimelineSamples);
             if (_totalWritten == 0) return null;
             int available = (int)Math.Min(_totalWritten, (long)_ring.Length);
             var result    = new float[available];
@@ -459,6 +475,12 @@ internal sealed class InstantReplayService : IDisposable
         lock (_lock)
         {
             if (_micRing.Length == 0) return;
+            if (_preserveTimeline)
+            {
+                long expectedStart = TimelineSamples - sampleCount;
+                if (expectedStart - _micTotalWritten > TargetFormat.SampleRate / 5)
+                    RecordingSamples.FillSilence(_micRing, ref _micWritePos, ref _micTotalWritten, expectedStart);
+            }
             int toEnd = _micRing.Length - _micWritePos;
             if (sampleCount <= toEnd)
             {
@@ -485,6 +507,8 @@ internal sealed class InstantReplayService : IDisposable
     {
         lock (_lock)
         {
+            if (_preserveTimeline && _micRing.Length > 0)
+                RecordingSamples.FillSilence(_micRing, ref _micWritePos, ref _micTotalWritten, TimelineSamples);
             if (_micTotalWritten == 0 || _micRing.Length == 0) return null;
             int available = (int)Math.Min(_micTotalWritten, (long)_micRing.Length);
             var result    = new float[available];
@@ -531,9 +555,12 @@ internal sealed class InstantReplayService : IDisposable
         StopMic();
     }
 
+    private long TimelineSamples => (long)(_captureClock.Elapsed.TotalSeconds * TargetFormat.SampleRate) * TargetFormat.Channels;
+
     public void Dispose()
     {
         IsRunning = false;
         Cleanup();
+        _captureClock.Stop();
     }
 }

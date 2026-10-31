@@ -14,19 +14,22 @@ using NAudio.Wave;
 using SoundPad.App.Audio;
 using SoundPad.App.Models;
 using SoundPad.App.Services;
+using SoundPad.App.Dialogs;
 
-namespace SoundPad.App.Dialogs;
+namespace SoundPad.App.Controls;
 
-public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
+public partial class SoundEditorWorkspace : UserControl, IDisposable
 {
     
-    public SoundItem?   ResultItem  { get; private set; }
-    public CachedSound? ResultSound { get; private set; }
+    public Func<Action<SoundItem, CachedSound>>? CaptureSaveTarget { get; set; }
+    public event Action? SaveFinished;
+    public bool IsSaving => _saving || _exporting || _importing;
 
     
-    private readonly IReadOnlyDictionary<Guid, CachedSound> _cachedSounds;
-    private readonly IReadOnlyList<SoundItem>               _deckSounds;
-    private readonly AudioPlaybackEngine                    _engine;
+    private readonly Dictionary<Guid, CachedSound> _cachedSounds = new();
+    private readonly List<SoundItem> _deckSounds = new();
+    private readonly Func<AudioPlaybackEngine?> _engineProvider;
+    private AudioPlaybackEngine? _previewEngine;
 
     
     private readonly List<MixTrack> _tracks = new();
@@ -100,7 +103,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
     private double _pixelsPerSecond = 100.0;
     private const double MinPixelsPerSecond = 20.0;
     private const double MaxPixelsPerSecond = 400.0;
-    private const double TrackHeight        = 50.0;
+    private const double TrackHeight        = 72.0;
     private const double TrackGap           = 4.0;
     private const double EdgeHandleWidth    = 8.0;
     private const double MinClipDuration    = 0.05;
@@ -111,40 +114,31 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
     
     private static readonly Color[] Palette =
     {
-        Color.FromRgb( 59, 130, 246),
-        Color.FromRgb(249, 115,  22),
-        Color.FromRgb( 34, 197,  94),
-        Color.FromRgb(236,  72, 153),
-        Color.FromRgb(168,  85, 247),
+        Color.FromRgb(105, 228, 222),
+        Color.FromRgb(255, 212, 90),
+        Color.FromRgb(154, 222, 163),
+        Color.FromRgb(245, 153, 190),
+        Color.FromRgb(185, 162, 245),
         Color.FromRgb(234, 179,   8),
         Color.FromRgb(  6, 182, 212),
         Color.FromRgb(244,  63,  98),
     };
 
     
-    public SoundComposerDialog(
-        Window                                 owner,
-        SoundItem                              seedItem,
+    public SoundEditorWorkspace(
         IReadOnlyDictionary<Guid, CachedSound> cachedSounds,
-        IReadOnlyList<SoundItem>               deckSounds,
-        AudioPlaybackEngine                    engine)
+        IReadOnlyList<SoundItem> deckSounds,
+        Func<AudioPlaybackEngine?> engineProvider)
     {
-        _cachedSounds  = cachedSounds;
-        _deckSounds    = deckSounds;
-        _engine        = engine;
-        Owner          = owner;
-        _waveformCache = new WaveformCache(() => { if (!_isDragging) RebuildTimeline(); });
-
+        _engineProvider = engineProvider;
+        _waveformCache = new WaveformCache(() => { if (!_isDragging && !_disposed) RebuildTimeline(); });
         InitializeComponent();
-        AddTrackWithClip(seedItem, 0.0);
-
-        Loaded  += (_, _) => { RebuildTimeline(); SetToolVisual(); };
-        Closed  += (_, _) => StopAll();
+        UpdateSources(cachedSounds, deckSounds);
+        InitializeDraft();
+        Loaded += (_, _) => { RebuildTimeline(); SetToolVisual(); Focus(); };
+        Unloaded += (_, _) => { StopAll(); FlushDraft(); };
+        MixNameBox.TextChanged += (_, _) => ScheduleDraft();
     }
-
-    
-    
-    
 
     private void AddTrackWithClip(SoundItem item, double startOffset)
     {
@@ -365,6 +359,9 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
 
         DrawPlayhead();
         RefreshSelectedClipPanel();
+        EditorEmptyText.Visibility = HasClips() ? Visibility.Collapsed : Visibility.Visible;
+        UpdateTransportTime();
+        ScheduleDraft();
     }
 
     private void DrawRuler(double totalDur, double canvasW)
@@ -385,7 +382,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             var tick = new Line
             {
                 X1 = x, Y1 = major ? 4 : 14, X2 = x, Y2 = 26,
-                Stroke          = new SolidColorBrush(Color.FromArgb(110, 128, 128, 128)),
+                Stroke          = new SolidColorBrush(Color.FromArgb(160, 176, 190, 218)),
                 StrokeThickness = major ? 1.5 : 0.8
             };
             RulerCanvas.Children.Add(tick);
@@ -395,7 +392,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
                 {
                     Text       = FormatTime(t),
                     FontSize   = 10,
-                    Foreground = new SolidColorBrush(Color.FromArgb(160, 128, 128, 128))
+                    Foreground = new SolidColorBrush(Color.FromArgb(220, 176, 190, 218))
                 };
                 Canvas.SetLeft(lbl, x + 2);
                 Canvas.SetTop(lbl,  4);
@@ -443,6 +440,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         {
             if (idx < _tracks.Count)
                 _tracks[idx].Volume = (float)volSlider.Value;
+            ScheduleDraft();
         };
 
         var removeBtn = new Button
@@ -531,7 +529,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         {
             Text                = clipLabel,
             FontSize            = 11,
-            Foreground          = Brushes.White,
+            Foreground          = Brushes.Black,
             VerticalAlignment   = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextTrimming        = TextTrimming.CharacterEllipsis,
@@ -615,6 +613,8 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             Height       = TrackHeight,
             CornerRadius = new CornerRadius(4),
             Background   = new SolidColorBrush(fillColor),
+            BorderBrush = (Brush)FindResource("ComicInkBrush"),
+            BorderThickness = new Thickness(2),
             ClipToBounds = true,
             Cursor       = _activeTool == ComposerTool.Cut ? Cursors.Cross : Cursors.SizeAll,
             Tag          = new ClipHitInfo(trackIndex, clip.Id, DragZone.Body),
@@ -624,7 +624,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         if (selected)
         {
             block.BorderThickness = new Thickness(2);
-            block.BorderBrush     = Brushes.White;
+            block.BorderBrush     = (Brush)FindResource("ComicYellowBrush");
         }
 
         Canvas.SetLeft(block, blockX);
@@ -687,7 +687,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         return new System.Windows.Shapes.Path
         {
             Data             = geo,
-            Stroke           = new SolidColorBrush(Color.FromArgb(75, 255, 255, 255)),
+            Stroke           = new SolidColorBrush(Color.FromArgb(145, 9, 13, 24)),
             StrokeThickness  = 1.0,
             IsHitTestVisible = false
         };
@@ -710,7 +710,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         var tl = new Line
         {
             X1 = x, Y1 = 0, X2 = x, Y2 = TimelineCanvas.Height,
-            Stroke           = new SolidColorBrush(Color.FromRgb(255, 80, 80)),
+            Stroke           = new SolidColorBrush(Color.FromRgb(255, 212, 90)),
             StrokeThickness  = 1.5,
             Tag              = "playhead",
             IsHitTestVisible = false
@@ -721,7 +721,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         var rl = new Line
         {
             X1 = x, Y1 = 0, X2 = x, Y2 = 26,
-            Stroke           = new SolidColorBrush(Color.FromRgb(255, 80, 80)),
+            Stroke           = new SolidColorBrush(Color.FromRgb(255, 212, 90)),
             StrokeThickness  = 1.5,
             Tag              = "playhead",
             IsHitTestVisible = false
@@ -732,7 +732,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         var tri = new Polygon
         {
             Points = new PointCollection { new(x - 5, 0), new(x + 5, 0), new(x, 10) },
-            Fill   = new SolidColorBrush(Color.FromRgb(255, 80, 80)),
+            Fill   = new SolidColorBrush(Color.FromRgb(255, 212, 90)),
             Tag    = "playhead",
             IsHitTestVisible = false
         };
@@ -742,6 +742,8 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
 
     private void MovePlayheadVisual()
     {
+        UpdateTransportTime();
+        if (_previewTimer is null) ScheduleDraft();
         double x = _playheadSeconds * _pixelsPerSecond;
 
         foreach (var l in TimelineCanvas.Children.OfType<Line>().Where(l => l.Tag is "playhead"))
@@ -1476,7 +1478,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         bool ctrl  = (e.KeyboardDevice.Modifiers & ModifierKeys.Control) != 0;
         bool shift = (e.KeyboardDevice.Modifiers & ModifierKeys.Shift)   != 0;
 
-        if (FocusManager.GetFocusedElement(this) is System.Windows.Controls.TextBox) return;
+        if (Keyboard.FocusedElement is System.Windows.Controls.TextBox or ComboBox) return;
 
         switch (e.Key)
         {
@@ -1489,6 +1491,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             case Key.C when ctrl:           CopyClip();                    e.Handled = true; break;
             case Key.V when ctrl:           PasteClip();                   e.Handled = true; break;
             case Key.D when ctrl:           DuplicateClip();               e.Handled = true; break;
+            case Key.S when ctrl: Save_Click(this, e); e.Handled = true; break;
             case Key.S when !ctrl:          SplitSelectedClipAtPlayhead(); e.Handled = true; break;
             case Key.Space:
                 if (StopButton.IsEnabled) StopAll();
@@ -1930,7 +1933,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         double oldFadeIn  = clip.FadeInSeconds;
         double oldFadeOut = clip.FadeOutSeconds;
 
-        var dlg = new ClipSettingsDialog(this, clip, sourceName, trackIdx + 1, duration);
+        var dlg = new ClipSettingsDialog(Window.GetWindow(this), clip, sourceName, trackIdx + 1, duration);
         if (dlg.ShowDialog() != true) return;
 
         bool changed = Math.Abs(dlg.ResultVolume  - oldVolume)  > 0.001f
@@ -2037,57 +2040,44 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
 
     private void Preview_Click(object sender, RoutedEventArgs e) => StartPreview();
 
-    private void StartPreview()
+    private async void StartPreview()
     {
         StopAll();
-        if (!HasClips()) { StatusText.Text = "No clips to preview."; return; }
-
+        if (!HasClips()) { StatusText.Text = "Add a sound to preview your mix."; return; }
+        var engine = _engineProvider();
+        if (engine is null) { StatusText.Text = "Choose a monitor output in Settings to preview audio."; return; }
+        if (!AllSourcesAvailable()) return;
         PreviewButton.IsEnabled = false;
-        StopButton.IsEnabled    = true;
-        StatusText.Text         = "Rendering preview…";
-
-        var    tracksCopy   = DeepCopyTracks();
-        var    itemsById    = BuildSoundItemMap();
+        StopButton.IsEnabled = true;
+        StatusText.Text = "Preparing preview…";
+        var tracksCopy = DeepCopyTracks();
+        var itemsById = BuildSoundItemMap();
+        var sounds = _cachedSounds.ToDictionary();
         double previewStart = _playheadSeconds;
-        _previewCts         = new CancellationTokenSource();
-        var token           = _previewCts.Token;
-
-        Task.Run(() =>
+        _previewCts = new CancellationTokenSource();
+        var token = _previewCts.Token;
+        try
         {
-            try
-            {
-                token.ThrowIfCancellationRequested();
-                float[] mix = MixRenderer.Render(tracksCopy, itemsById, _cachedSounds);
-                token.ThrowIfCancellationRequested();
-                if (mix.Length == 0) throw new InvalidOperationException("Rendered mix is empty.");
-
-                int sr          = CachedSound.TargetFormat.SampleRate * CachedSound.TargetFormat.Channels;
-                int startSample = Math.Clamp((int)(previewStart * sr), 0, Math.Max(0, mix.Length - 1));
-                var cached      = new CachedSound(mix);
-
-                Dispatcher.Invoke(() =>
-                {
-                    if (token.IsCancellationRequested) return;
-                    _playheadSeconds = previewStart;
-                    _previewHandle   = startSample > 0
-                        ? _engine.Play(cached, 1.0f, startSample, -1, 0, 0)
-                        : _engine.Play(cached, 1.0f);
-                    StatusText.Text = "Previewing…";
-                    StartPreviewTimer(previewStart);
-                });
-            }
-            catch (OperationCanceledException) {  }
-            catch (Exception ex)
-            {
-                AppLogger.Error("SoundComposer", "Preview render failed", ex);
-                Dispatcher.Invoke(() =>
-                {
-                    StatusText.Text         = $"Preview failed: {ex.Message}";
-                    PreviewButton.IsEnabled = true;
-                    StopButton.IsEnabled    = false;
-                });
-            }
-        }, token);
+            var mix = await Task.Run(() => MixRenderer.Render(tracksCopy, itemsById, sounds), token);
+            if (token.IsCancellationRequested || _disposed) return;
+            if (mix.Length == 0) throw new InvalidOperationException("This mix has no audio.");
+            int sr = CachedSound.TargetFormat.SampleRate * CachedSound.TargetFormat.Channels;
+            int start = Math.Clamp((int)(previewStart * CachedSound.TargetFormat.SampleRate) * 2, 0, mix.Length);
+            if (start >= mix.Length) { start = 0; previewStart = 0; }
+            _previewEngine = engine;
+            _previewHandle = engine.Play(new CachedSound(mix), 1f, start, mix.Length, 0, 0);
+            _playheadSeconds = previewStart;
+            StatusText.Text = "Previewing on your monitor output.";
+            StartPreviewTimer(previewStart);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (token.IsCancellationRequested || _disposed) return;
+            AppLogger.Error("SoundEditor", "Preview failed", ex);
+            StopAll();
+            StatusText.Text = $"Preview failed: {ex.Message}";
+        }
     }
 
     private void StartPreviewTimer(double previewStartSeconds)
@@ -2106,6 +2096,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
             double elapsed = Environment.TickCount64 / 1000.0 - startWall;
             _playheadSeconds = previewStartSeconds + elapsed;
             MovePlayheadVisual();
+            UpdateTransportTime();
         };
         _previewTimer.Start();
     }
@@ -2115,6 +2106,7 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
     private void StopAll()
     {
         _previewCts?.Cancel();
+        _previewCts?.Dispose();
         _previewCts = null;
 
         _previewTimer?.Stop();
@@ -2124,17 +2116,17 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
         {
             if (_previewHandle is not null)
             {
-                _engine.StopOne(_previewHandle.TopProvider);
+                _previewEngine?.StopOne(_previewHandle.TopProvider);
                 _previewHandle = null;
             }
         }
         catch {  }
 
-        if (IsLoaded)
+        if (PreviewButton is not null)
         {
             PreviewButton.IsEnabled = true;
             StopButton.IsEnabled    = false;
-            if (StatusText.Text is "Previewing…" or "Rendering preview…")
+            if (StatusText.Text is "Previewing…" or "Rendering preview…" or "Previewing on your monitor output." or "Preparing preview…")
                 StatusText.Text = "Stopped.";
         }
     }
@@ -2145,108 +2137,69 @@ public partial class SoundComposerDialog : Wpf.Ui.Controls.FluentWindow
 
     private bool _saving;
 
-    private void Save_Click(object sender, RoutedEventArgs e)
+    private async void Save_Click(object sender, RoutedEventArgs e)
     {
-        if (_saving) return;
+        if (IsSaving) return;
         if (!HasClips()) { StatusText.Text = "Add at least one clip before saving."; return; }
-
         string mixName = MixNameBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(mixName))
-        {
-            StatusText.Text = "Enter a name for the mix.";
-            MixNameBox.Focus();
-            return;
-        }
-
+        if (string.IsNullOrWhiteSpace(mixName)) { StatusText.Text = "Give your mix a name first."; MixNameBox.Focus(); return; }
+        if (!AllSourcesAvailable()) return;
+        var target = CaptureSaveTarget?.Invoke();
+        if (target is null) { StatusText.Text = "No destination soundboard is available."; return; }
         StopAll();
-        _saving              = true;
+        _saving = true;
         SaveButton.IsEnabled = false;
-        StatusText.Text      = "Rendering mix…";
-
-        var tracksCopy = DeepCopyTracks();
-        var itemsById  = BuildSoundItemMap();
-        var timestamp  = DateTime.UtcNow;
-        var nameLocal  = mixName;
-
-        Task.Run(() =>
+        StatusText.Text = "Rendering your mix…";
+        var tracks = DeepCopyTracks();
+        var items = BuildSoundItemMap();
+        var sounds = _cachedSounds.ToDictionary();
+        string? outputPath = null;
+        try
         {
-            try
+            var result = await Task.Run(() =>
             {
-                float[] mix = MixRenderer.Render(tracksCopy, itemsById, _cachedSounds);
-                if (mix.Length == 0) throw new InvalidOperationException("Rendered mix is empty.");
-
-                string dir  = AppPaths.SoundsDirectory;
-                Directory.CreateDirectory(dir);
-
-                char[] bad      = System.IO.Path.GetInvalidFileNameChars();
-                string safeName = new string(nameLocal.Where(c => !bad.Contains(c)).ToArray());
-                if (string.IsNullOrWhiteSpace(safeName)) safeName = "Mix";
-
-                string fileName = $"{safeName} {timestamp:yyyy-MM-dd HH-mm-ss}.wav";
-                string path     = System.IO.Path.Combine(dir, fileName);
-
-                int suffix = 1;
-                while (File.Exists(path))
-                {
-                    fileName = $"{safeName} {timestamp:yyyy-MM-dd HH-mm-ss} ({suffix++}).wav";
-                    path     = System.IO.Path.Combine(dir, fileName);
-                }
-
-                using (var writer = new WaveFileWriter(path, CachedSound.TargetFormat))
-                    writer.WriteSamples(mix, 0, mix.Length);
-
-                CachedSound cached;
-                try { cached = new CachedSound(path); }
-                catch (Exception ex)
-                {
-                    File.Delete(path);
-                    throw new InvalidOperationException($"WAV written but could not reload: {ex.Message}", ex);
-                }
-
-                var result = new SoundItem
-                {
-                    DisplayName = nameLocal,
-                    FilePath    = path,
-                    Category    = "General",
-                    Volume      = 1.0f,
-                    CreatedAt   = timestamp
-                };
-
-                Dispatcher.Invoke(() =>
-                {
-                    ResultItem   = result;
-                    ResultSound  = cached;
-                    DialogResult = true;
-                    Close();
-                });
-            }
-            catch (Exception ex)
-            {
-                AppLogger.Error("SoundComposer", "Save failed", ex);
-                Dispatcher.Invoke(() =>
-                {
-                    StatusText.Text      = $"Save failed: {ex.Message}";
-                    SaveButton.IsEnabled = true;
-                    _saving              = false;
-                });
-            }
-        });
+                var mix = MixRenderer.Render(tracks, items, sounds);
+                if (mix.Length == 0) throw new InvalidOperationException("This mix has no audio.");
+                Directory.CreateDirectory(AppPaths.SoundsDirectory);
+                var item = new SoundItem { DisplayName = mixName, Category = "Mixes", HotkeyInitialized = true, CreatedAt = DateTime.UtcNow };
+                item.FilePath = System.IO.Path.Combine(AppPaths.SoundsDirectory, item.Id + ".wav");
+                outputPath = item.FilePath;
+                using (var writer = new WaveFileWriter(item.FilePath, CachedSound.TargetFormat)) writer.WriteSamples(mix, 0, mix.Length);
+                return (Item: item, Sound: new CachedSound(mix));
+            });
+            if (_disposed) return;
+            target(result.Item, result.Sound);
+            outputPath = null;
+            StatusText.Text = $"Saved {mixName} to your soundboard. Your editable mix stays open.";
+            FlushDraft();
+        }
+        catch (Exception ex)
+        {
+            if (outputPath is not null && File.Exists(outputPath)) File.Delete(outputPath);
+            StatusText.Text = $"Could not save mix: {ex.Message}";
+            AppLogger.Error("SoundEditor", "Save failed", ex);
+        }
+        finally
+        {
+            _saving = false;
+            SaveButton.IsEnabled = true;
+            SaveFinished?.Invoke();
+        }
     }
-
-    
-    
-    
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
+        if (IsSaving) return;
         StopAll();
-        DialogResult = false;
-        Close();
+        PushUndo();
+        _tracks.Clear();
+        _selectedClipId = Guid.Empty;
+        _selectedTrackIndex = -1;
+        _playheadSeconds = 0;
+        MixNameBox.Text = "Untitled Mix";
+        RebuildTimeline();
+        StatusText.Text = "New mix ready. Undo restores your previous tracks.";
     }
-
-    
-    
-    
 
     private bool HasClips() => _tracks.Any(t => t.Clips.Count > 0);
 

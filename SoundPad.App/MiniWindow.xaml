@@ -9,7 +9,7 @@
         ResizeMode="CanResize"
         AllowsTransparency="False"
         ShowInTaskbar="False"
-        FontFamily="Segoe UI"
+        FontFamily="Trebuchet MS, Segoe UI"
         Background="{DynamicResource ApplicationBackgroundBrush}">
 
     <WindowChrome.WindowChrome>
@@ -20,7 +20,7 @@
     </WindowChrome.WindowChrome>
 
     <Border BorderBrush="{DynamicResource CardBorderBrush}"
-            BorderThickness="1"
+            BorderThickness="3"
             CornerRadius="8"
             ClipToBounds="True">
         <Grid>

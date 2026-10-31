@@ -1,12 +1,15 @@
 # SoundPad
 
-A Windows soundboard app with a clean Fluent UI design.  
+A Windows soundboard app with a dark comic-inspired interface, bold ink outlines, and yellow/cyan accents.
 Play sounds to any output device, route them through Discord via VB-CABLE, and assign global hotkeys so your hands never leave the keyboard.
 
 ---
 
 ## Features
 
+- **Soundboard shortcut lock** — click the lock beside the sound count to release all SoundPad global hotkeys to your game. The icon changes between open/cyan and closed/yellow, with a LOCKED label. Set a toggle shortcut by right-clicking the lock or going to Settings → Global Shortcuts → Soundboard lock. While locked, only this toggle shortcut remains registered; sound, Stop All, and replay shortcuts are released. Mouse controls and any already-playing audio continue normally. The state and shortcut persist across restarts and deck changes.
+
+- **Recording workspace** — a dedicated Recording tab for Instant Replay, manual capture, and recent clips. Save the last 15, 30, or 60 seconds (or the full replay buffer); record new clips up to 5 minutes, with automatic saving at the limit or on app exit. Capture the selected system output with an optional microphone. View live levels and saved waveforms, preview locally on the monitor output, trim non-destructively in the sound editor, then add a copy to your active deck. Recording history persists in `%AppData%\SoundPad\Recordings`; unadded recordings stay separate from decks and are not included in library ZIP backups.
 - **Sound library** — add any MP3/WAV/OGG/FLAC/AAC file, give it a display name, category, and tags; set per-sound volume; search by name, category, or tag; filter by tag; sort by Manual order, Name A–Z, Name Z–A, Newest, Oldest, Category, or Favorites first; Manual order enables drag-and-drop reorder
 - **Profiles / Decks** — organize sounds into named decks; create, rename, duplicate, and delete decks; the active deck persists across restarts; sounds, categories, and hotkeys are all per-deck; switching decks stops active sound effects but does not interrupt mic passthrough; the Stop All hotkey remains global
 - **Grid / Pad View** — toggle between List and Grid view using the toolbar buttons; List View shows the full editing table and is best for managing sounds; Grid View shows large clickable pads (name, category, hotkey, and favorite star) optimized for quick soundboard use during Discord sessions or gaming; active pads highlight and show a ▶ indicator; hotkey presses highlight the correct pad; Stop All clears all pad highlights; search and category filters work in Grid View; deck switching refreshes the grid; right-click any pad for the same actions as List View; selected view persists across restarts; drag pads or rows to reorder sounds within the active deck — order persists after restart and affects both views; Grid View pad size is configurable (Small / Medium / Large); Compact Grid Mode hides category badges and favorite stars for a denser layout
@@ -38,7 +41,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.17.0.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.18.0.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -291,77 +294,32 @@ MainWindow remains the single owner of all playback and audio state. Mini Mode i
 
 ---
 
-## Instant Replay Audio Clipper
+## Recording and Instant Replay
 
-The **Instant Replay** feature records a rolling buffer of your system audio — so when a perfect moment happens, you can save the last N minutes as a clip with a single button or hotkey.
+Open the **Recording** tab to capture, preview, and prepare new soundboard clips.
 
-Instant Replay is **OFF by default**. No audio is captured unless you explicitly enable it.
+### Instant Replay
 
-### Enabling Instant Replay
+1. Expand **Capture settings** and choose the output device playing your audio. Optionally enable **Include microphone** and select a microphone.
+2. Choose a rolling buffer from **1 to 5 minutes**, then enable **Buffer system audio**.
+3. Select **Last 15 seconds**, **Last 30 seconds**, **Last 60 seconds**, or **Entire buffer** and click **Save replay clip**. If the buffer is still filling, only the available audio is saved.
+4. Find the clip in **Recent recordings**. It is saved locally, separately from your decks.
 
-1. Open the **Settings** tab → find the **Instant Replay** card.
-2. Toggle **Instant Replay** ON.
-3. The status bar confirms the capture device and audio format, or shows a signal warning if no audio is detected.
+Pause the buffer to change devices, buffer length, or microphone settings. Global save/toggle hotkeys remain available under **Recording shortcuts**.
 
-### Capture device
+### Manual recording
 
-- The **Capture Device** drop-down selects which system render endpoint to record (e.g. headset, speakers, or a specific audio interface).
-- Leaving it on the default captures from the Windows default playback device.
-- The selected device persists across restarts.
-- The **Signal** indicator shows one of three states:
-  - **Capturing audio** — ring buffer is filling normally
-  - **No signal (waiting for audio)** — device is open but no audio data has arrived yet
-  - **No signal (device meter active but capture silent)** — audio is playing on the device but the capture is reading silence; try selecting a different Capture Device
+Click **Start recording**, then **Stop and save**. Manual capture uses the same capture source and optional microphone. It runs independently of the replay buffer, preserves silent gaps, and saves automatically at **5 minutes**. Exiting the app finishes and saves an active manual recording before closing. Closing to the tray keeps it running.
 
-### Buffer length
+### Recent recordings
 
-Choose from **1 to 5 minutes** of rolling history. The ring buffer holds this many minutes of audio at all times; older audio is overwritten continuously as new audio arrives.
+- **Play / Pause** previews only through the monitor output, without sending the clip to the virtual output. A filled waveform, moving playhead, and elapsed/total timer show progress. Tap or drag the waveform to seek; pausing preserves your position. **Stop All** also stops previews.
+- **Trim** opens the existing sound editor. Rename, cut, fade, or apply effects without modifying the original recording.
+- **Add to soundboard** copies the recording and its edits into the active deck. Deleting that deck sound does not delete the original recording.
+- **Delete** removes a recent recording and its saved audio after confirmation. Copies already added to decks are kept.
+- Audio and history are stored in `%AppData%\SoundPad\Recordings`. Unadded recordings are not included in library ZIP backups; add them to a deck first.
 
-All Instant Replay settings (capture device, buffer length, microphone) are locked while Instant Replay is ON and unlock when you turn it OFF.
-
-### Saving a clip
-
-Click **Save Clip** in the Settings card, or press the **Save Clip hotkey** (assignable in Settings). SoundPad:
-
-1. Snapshots the last N minutes from the ring buffer
-2. Writes a WAV file to `%AppData%\SoundPad\Sounds\`
-3. Adds the clip to the active deck as `Clip YYYY-MM-DD HH-MM-SS`
-4. Opens the **Sound Editor** immediately so you can rename, trim, fade, or assign a hotkey
-
-Clips are saved as **WAV** for reliability and instant playback. MP3 export is planned for a later version.
-
-Once in the library, clips behave exactly like any other sound — they can be played, colored, hotkeyed, duplicated, trimmed, faded, and included in backups. Mini Mode refreshes automatically when a clip is saved.
-
-### Optional microphone capture
-
-To include your voice in clips:
-
-1. Tick **Include microphone** in the Instant Replay card.
-2. Select your microphone from the **Microphone** drop-down.
-3. Adjust **Mic Volume** (0–200 %).
-4. Save a clip — SoundPad mixes system audio and mic audio sample-by-sample into a single WAV.
-
-Microphone capture is **OFF by default** (privacy default). No microphone is ever recorded unless **Include microphone** is enabled AND Instant Replay is ON. Enabling mic capture does not affect the existing **Mic Passthrough** feature — both can be active simultaneously.
-
-If the mic produces no signal at save time, the clip is saved with system audio only and the status bar explains why.
-
-### Hotkeys
-
-Two hotkeys can be assigned in the **Settings** tab:
-
-| Hotkey | Action |
-|---|---|
-| **Save Clip** | Instantly snapshot the ring buffer and save a clip |
-| **Toggle Instant Replay** | Turn Instant Replay ON or OFF without opening Settings |
-
-Both hotkeys fire globally (even when the app is minimised or hidden in the tray), survive deck switches, and persist across restarts.
-
-### Privacy
-
-- No audio is captured while Instant Replay is OFF.
-- No microphone is recorded unless Include microphone is enabled.
-- No audio is routed anywhere — Instant Replay only writes to a local WAV file on Save Clip.
-- Old `settings.json` files without Instant Replay fields load correctly — all fields default to OFF.
+Instant Replay and microphone capture default to OFF. Microphone audio is captured only when **Include microphone** is enabled and either the replay buffer or manual recording is running. Recordings remain local.
 
 ---
 
@@ -660,9 +618,11 @@ Speed change uses a resampling approach: playing at 2× speed also raises pitch 
 
 ---
 
-## Sound Composer
+## Sound Editor workspace
 
-Click the **Sound Composer** button in the toolbar to open the multi-track audio composer. Build a new mix from sounds already in your SoundPad library and save it as a new WAV item in the active deck.
+Open the **Sound Editor** tab, or right-click a sound and choose **Create Mix…** to open the tab with that sound on a track. The comic-themed workspace keeps its timeline, track controls, selected-clip inspector, transport, and save actions together. Add sources from your library or use **Import audio** to copy external audio into the project. **Save to soundboard** renders a new WAV sound into the deck selected when Save was clicked; the editable mix stays open. **Export WAV** saves an external audio file.
+
+The editor supports up to 8 tracks and automatically saves its local draft (including source references, clip positions, cuts, fades, volumes, zoom, and playhead) to `%AppData%\SoundPad\Editor\draft.json`. Switching tabs or decks preserves your workspace. This draft is separate from library ZIP backups. **New mix** starts a fresh timeline; Undo can restore its previous tracks. Global Stop All also stops the editor preview.
 
 ### Tracks and clips
 
@@ -688,7 +648,7 @@ Press **C**, then click inside any clip to split it at that position. The left h
 
 ### Clip settings
 
-Select any clip and use the **Selected Clip** panel on the right side of the composer:
+Select any clip and use the **Clip Settings** panel on the right side of the editor:
 
 - **Volume** — 0–200 % slider with live label
 - **Fade In / Fade Out** — seconds, applied at render time

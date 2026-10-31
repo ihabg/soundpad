@@ -1,3 +1,17 @@
+# SoundPad v1.18.0 — Release validation
+
+- Comic theme reviewed in the soundboard, recording workspace, editor, and deck/category/color/shortcut dialogs.
+- Recording preview Play/Pause, waveform progress, and seek checked in the running app.
+- Create Mix redirect and editor draft restoration checked in the running app.
+- Shortcut lock checked in the UI and through real Windows hotkey registration tests.
+- Automated validation: 37 audio, recording, editor, persistence, and hotkey checks.
+- Release build, self-contained publish, Inno Setup compilation, artifact hashes, and published-app smoke check are verified during packaging.
+- Full game/Discord routing and an interactive installation on a separate clean machine have not been repeated for this release.
+
+The historical regression checklist below remains available for deeper verification.
+
+---
+
 # SoundPad v1.17.0 — Release Checklist
 
 Work through every item before publishing the GitHub Release.  

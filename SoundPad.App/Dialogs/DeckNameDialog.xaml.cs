@@ -20,6 +20,8 @@ public partial class DeckNameDialog : Wpf.Ui.Controls.FluentWindow
             ? "Enter a name for the new deck:"
             : "Enter a new name for this deck:";
 
+        HeroTitleText.Text = string.IsNullOrEmpty(initialName) ? "NEW DECK" : "RENAME DECK";
+        OkButton.Content = string.IsNullOrEmpty(initialName) ? "Create deck" : "Save name";
         NameBox.Text = initialName;
         Loaded += (_, _) => { NameBox.Focus(); NameBox.SelectAll(); };
     }

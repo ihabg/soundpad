@@ -56,9 +56,9 @@ public partial class App : Application
         StartupLogger.Log("Applying theme");
         try
         {
-            ApplicationThemeManager.Apply(ApplicationTheme.Dark, WindowBackdropType.Mica, false);
+            ApplicationThemeManager.Apply(ApplicationTheme.Dark, WindowBackdropType.None, false);
             ApplicationAccentColorManager.Apply(
-                (Color)ColorConverter.ConvertFromString("#3B82F6"),
+                (Color)ColorConverter.ConvertFromString("#FFD45A"),
                 ApplicationTheme.Dark);
             StartupLogger.Log("Theme applied");
         }

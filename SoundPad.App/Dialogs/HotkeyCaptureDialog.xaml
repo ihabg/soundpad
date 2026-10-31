@@ -3,17 +3,19 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Set Hotkey"
-        Width="420" Height="300"
-        MinWidth="420" MinHeight="300"
-        MaxWidth="420" MaxHeight="300"
+        Width="480" Height="390"
+        MinWidth="480" MinHeight="390"
+        MaxWidth="480" MaxHeight="390"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        FontFamily="Segoe UI"
+        FontFamily="Trebuchet MS, Segoe UI"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
         ExtendsContentIntoTitleBar="True"
-        WindowBackdropType="Mica"
+        WindowBackdropType="None"
         WindowCornerPreference="Round">
 
-    <Grid>
+    <Grid Background="{StaticResource ComicContours}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -26,6 +28,9 @@
                      ShowMaximize="False"/>
 
         <StackPanel Grid.Row="1" Margin="24,18,24,20">
+            <Border Background="{StaticResource ComicYellowBrush}" BorderBrush="{StaticResource ComicInkBrush}" BorderThickness="2" CornerRadius="6" Padding="12,10" Margin="0,0,0,16" Effect="{StaticResource ComicShadow}">
+                <TextBlock Text="SET YOUR SHORTCUT" FontFamily="Impact" FontSize="25" Foreground="#090D18"/>
+            </Border>
 
             <TextBlock x:Name="InstructionText"
                        Text="Press a key combination for this sound."
@@ -34,9 +39,9 @@
                        TextWrapping="Wrap"
                        Margin="0,0,0,16"/>
 
-            <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                    BorderThickness="1"
+            <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{StaticResource ComicInkBrush}"
+                    BorderThickness="2"
                     CornerRadius="8"
                     Height="64"
                     Margin="0,0,0,10">
@@ -75,7 +80,7 @@
                 <ui:Button x:Name="SaveButton"
                            Grid.Column="2"
                            Content="Save"
-                           Appearance="Primary"
+                           Background="{StaticResource ComicCyanBrush}" Foreground="Black" Appearance="Primary"
                            Width="90"
                            IsEnabled="False"
                            Click="Save_Click"/>

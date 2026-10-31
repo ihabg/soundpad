@@ -1,0 +1,48 @@
+<ui:FluentWindow x:Class="SoundPad.App.Dialogs.ConfirmDeleteRecordingDialog"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="Delete recording" Width="490" SizeToContent="Height"
+                 MinHeight="320" MaxHeight="600" ResizeMode="NoResize"
+                 WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+                 FontFamily="Trebuchet MS, Segoe UI"
+                 Background="{DynamicResource ApplicationBackgroundBrush}"
+                 ExtendsContentIntoTitleBar="True" WindowBackdropType="None"
+                 WindowCornerPreference="Round">
+    <Border BorderBrush="{StaticResource ComicInkBrush}" BorderThickness="3" CornerRadius="8">
+        <Grid Background="{StaticResource ComicContours}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <ui:TitleBar Title="Delete recording" ShowMinimize="False" ShowMaximize="False"/>
+            <StackPanel Grid.Row="1" Margin="22,10,22,22">
+                <Border Background="{StaticResource ComicYellowBrush}" BorderBrush="{StaticResource ComicInkBrush}"
+                        BorderThickness="2" CornerRadius="6" Padding="14,10" Margin="0,0,0,18"
+                        Effect="{StaticResource ComicShadow}">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Delete24" Foreground="Black" FontSize="24" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="DELETE THIS CLIP?" FontFamily="Impact" FontSize="27" Foreground="Black"/>
+                    </StackPanel>
+                </Border>
+                <TextBlock x:Name="ClipNameText" FontSize="16" FontWeight="Bold" TextWrapping="Wrap"
+                           MaxHeight="90" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <TextBlock Text="This removes the recording and its saved audio file." TextWrapping="Wrap"
+                           FontSize="13" Margin="0,8,0,14" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{StaticResource ComicInkBrush}"
+                        BorderThickness="2" CornerRadius="6" Padding="12,9" Margin="0,0,0,20">
+                    <TextBlock Text="Copies already added to your soundboard will stay there." TextWrapping="Wrap"
+                               Foreground="{StaticResource ComicCyanBrush}" FontSize="12"/>
+                </Border>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <ui:Button x:Name="CancelButton" Content="Keep clip" Width="120" Margin="0,0,10,0"
+                               Background="{StaticResource ComicCyanBrush}" Foreground="Black"
+                               IsCancel="True" IsDefault="True" Click="Cancel_Click"/>
+                    <ui:Button Content="Delete clip" Width="130" Appearance="Danger" Click="Delete_Click">
+                        <ui:Button.Icon><ui:SymbolIcon Symbol="Delete20"/></ui:Button.Icon>
+                    </ui:Button>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Border>
+</ui:FluentWindow>

@@ -1,0 +1,51 @@
+<UserControl x:Class="SoundPad.App.Controls.RecordingTimeline"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <Grid Height="48">
+            <Grid x:Name="WaveformArea" Margin="6,0" SizeChanged="Waveform_SizeChanged" IsHitTestVisible="False" ClipToBounds="True">
+                <Path x:Name="UnplayedWaveform" Stroke="#52617D" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                <Path x:Name="PlayedWaveform" Stroke="{StaticResource ComicCyanBrush}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+            </Grid>
+            <Slider x:Name="SeekSlider" Minimum="0" Maximum="1" IsMoveToPointEnabled="True"
+                    SmallChange="1" LargeChange="5" Cursor="Hand" VerticalAlignment="Stretch"
+                    AutomationProperties.Name="Recording playback position"
+                    ValueChanged="Seek_ValueChanged" PreviewMouseLeftButtonDown="Seek_MouseDown"
+                    PreviewMouseLeftButtonUp="Seek_MouseUp" LostMouseCapture="Seek_LostMouseCapture">
+                <Slider.Template>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid Background="Transparent">
+                            <Track x:Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                                   Value="{TemplateBinding Value}" Orientation="Horizontal">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
+                                        <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width="12" Height="48">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Grid Background="Transparent">
+                                                    <Border Width="2" Height="36" Background="{StaticResource ComicYellowBrush}" CornerRadius="1"/>
+                                                    <Ellipse Width="12" Height="12" Fill="#FFF6DE" Stroke="#090D18" StrokeThickness="2"/>
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
+                                        <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Slider.Template>
+            </Slider>
+        </Grid>
+        <TextBlock x:Name="TimeText" Text="00:00 / 00:00" FontSize="11" HorizontalAlignment="Right"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,2,0,8"/>
+    </StackPanel>
+</UserControl>

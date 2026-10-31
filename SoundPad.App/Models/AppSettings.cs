@@ -7,6 +7,8 @@ namespace SoundPad.App.Models;
 public class AppSettings
 {
     public HotkeyBinding? StopAllHotkey { get; set; }
+    public HotkeyBinding? SoundboardLockHotkey { get; set; }
+    public bool SoundboardLocked { get; set; }
 
     public string? MonitorDeviceName   { get; set; }
     public int?    MonitorDeviceNumber { get; set; }
@@ -26,6 +28,7 @@ public class AppSettings
     public string AudioPerformancePreset { get; set; } = "Balanced";
 
     public int SelectedTabIndex { get; set; } = 0;
+    public int NavigationVersion { get; set; }
 
     public bool InterruptPreviousSounds { get; set; } = false;
 

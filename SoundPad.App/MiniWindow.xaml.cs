@@ -166,7 +166,7 @@ public partial class MiniWindow : Window
             CornerRadius = new CornerRadius(6),
             Background   = normalBg,
             BorderBrush  = (Brush)FindResource("CardBorderBrush"),
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(3),
             Cursor       = Cursors.Hand
         };
 

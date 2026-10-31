@@ -53,7 +53,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
     
     private const int WaveformBuckets = 360;
-    private static readonly Brush            WaveformBrush  = new SolidColorBrush(Color.FromRgb(100, 149, 237));
+    private static readonly Brush            WaveformBrush  = new SolidColorBrush(Color.FromRgb(105, 228, 222));
     private static readonly DoubleCollection PlayheadDash   = new DoubleCollection { 4, 3 };
     private static readonly double[]         NiceIntervals  = { 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0 };
     private float[]  _peaks    = Array.Empty<float>();
@@ -665,7 +665,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             if (bw <= 0) continue;
 
             AddRect(canvas, bx1, bw, h,
-                new SolidColorBrush(Color.FromArgb(18, 100, 149, 237)));
+                new SolidColorBrush(Color.FromArgb(18, 105, 228, 222)));
 
             if (_peaks.Length > 0 && _duration > 0)
             {
@@ -694,11 +694,11 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             {
                 bool isDragging = _drag == DragTarget.Block && bi == _reorderDragBlockIdx;
                 AddRect(canvas, bx1, bw, h,
-                    new SolidColorBrush(Color.FromArgb((byte)(isDragging ? 20 : 40), 100, 149, 237)));
+                    new SolidColorBrush(Color.FromArgb((byte)(isDragging ? 20 : 40), 105, 228, 222)));
                 var bdr = new Rectangle
                 {
                     Width = bw, Height = h, Fill = Brushes.Transparent,
-                    Stroke = new SolidColorBrush(Color.FromArgb(210, 100, 149, 237)),
+                    Stroke = new SolidColorBrush(Color.FromArgb(210, 105, 228, 222)),
                     StrokeThickness = 1.5,
                     IsHitTestVisible = false
                 };
@@ -814,7 +814,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         canvas.Children.Add(new Line
         {
             X1 = phX, Y1 = 0, X2 = phX, Y2 = h,
-            Stroke = Brushes.White, StrokeThickness = 1.5,
+            Stroke = new SolidColorBrush(Color.FromRgb(255, 212, 90)), StrokeThickness = 2,
             StrokeDashArray = PlayheadDash,
             IsHitTestVisible = false
         });
@@ -827,7 +827,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
                 new Point(phX + 6, h),
                 new Point(phX,     h - 10)
             },
-            Fill             = Brushes.White,
+            Fill             = new SolidColorBrush(Color.FromRgb(255, 212, 90)),
             IsHitTestVisible = false
         });
 

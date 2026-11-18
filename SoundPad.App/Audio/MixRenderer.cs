@@ -47,9 +47,7 @@ public static class MixRenderer
                 try
                 {
                     rendered = EffectProcessor.Render(
-                        sound, segments,
-                        item.ReverseAudio, item.NormalizeAudio,
-                        item.PlaybackSpeed);
+                        sound, segments, AudioEffectCatalog.Resolve(item, clip.Effects));
                 }
                 catch (Exception ex)
                 {

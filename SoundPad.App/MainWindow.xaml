@@ -926,7 +926,7 @@
                                                  Checked="InterruptSoundsSwitch_Checked"
                                                  Unchecked="InterruptSoundsSwitch_Unchecked"/>
 
-                                <TextBlock Text="When on, playing a sound stops any currently playing sounds first. Mic passthrough is unaffected."
+                                <TextBlock Text="On: new sounds stop previous sounds. Off: sounds overlap, including repeated presses. Mic passthrough is unaffected."
                                            FontSize="11"
                                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                            TextWrapping="Wrap"

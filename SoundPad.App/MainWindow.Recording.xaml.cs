@@ -472,7 +472,7 @@ public partial class MainWindow
     private static CachedSound RenderRecording(SoundItem item)
     {
         var raw = new CachedSound(item.FilePath);
-        var rendered = EffectProcessor.Render(raw, GetSegments(raw, item), item.ReverseAudio, item.NormalizeAudio, EffectProcessor.GetSafePlaybackSpeed(item));
+        var rendered = EffectProcessor.Render(raw, GetSegments(raw, item), AudioEffectCatalog.FromItem(item));
         var sound = new CachedSound(rendered);
         var (_, _, fadeIn, fadeOut) = GetTrimFadeParams(raw, item);
         // Bake fades and perceptual volume so preview matches the deck playback.
@@ -516,6 +516,7 @@ public partial class MainWindow
             item.Volume = dlg.ResultVolume; item.TrimStartSeconds = dlg.ResultTrimStart; item.TrimEndSeconds = dlg.ResultTrimEnd;
             item.FadeInSeconds = dlg.ResultFadeIn; item.FadeOutSeconds = dlg.ResultFadeOut; item.Segments = dlg.ResultSegments;
             item.ReverseAudio = dlg.ResultReverseAudio; item.NormalizeAudio = dlg.ResultNormalizeAudio; item.PlaybackSpeed = dlg.ResultPlaybackSpeed;
+            item.Effects = dlg.ResultEffects;
             // A recent recording has no global hotkey until it belongs to a deck.
             item.Hotkey = null;
             var rendered = await Task.Run(() => RenderRecording(CloneRecordingSound(item)));

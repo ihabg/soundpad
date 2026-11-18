@@ -17,6 +17,7 @@ public partial class SoundEditorWorkspace
     private bool _disposed;
     private bool _exporting;
     private bool _importing;
+    private readonly string _draftPath;
 
     public void UpdateSources(IReadOnlyDictionary<Guid, CachedSound> sounds, IReadOnlyList<SoundItem> items)
     {
@@ -61,7 +62,7 @@ public partial class SoundEditorWorkspace
         _restoringDraft = true;
         try
         {
-            var draft = SoundEditorProjectService.Load();
+            var draft = SoundEditorProjectService.Load(_draftPath);
             if (draft is null) return;
             foreach (var item in draft.Sources)
             {
@@ -80,9 +81,9 @@ public partial class SoundEditorWorkspace
         }
         catch (Exception ex)
         {
-            if (File.Exists(SoundEditorProjectService.DraftPath))
+            if (File.Exists(_draftPath))
             {
-                try { File.Copy(SoundEditorProjectService.DraftPath, SoundEditorProjectService.DraftPath + $".bak-{DateTime.UtcNow:yyyyMMddHHmmssfff}"); }
+                try { File.Copy(_draftPath, _draftPath + $".bak-{DateTime.UtcNow:yyyyMMddHHmmssfff}"); }
                 catch (Exception backupError) { AppLogger.Error("SoundEditor", "Draft backup failed", backupError); }
             }
             StatusText.Text = "Could not restore the previous draft. A backup was kept.";
@@ -109,7 +110,7 @@ public partial class SoundEditorWorkspace
                 Name = MixNameBox.Text,
                 Tracks = DeepCopyTracks(), Sources = BuildSoundItemMap().Values.ToList(),
                 Zoom = _pixelsPerSecond, PlayheadSeconds = _playheadSeconds
-            });
+            }, _draftPath);
         }
         catch (Exception ex)
         {

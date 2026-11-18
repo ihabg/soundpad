@@ -43,7 +43,8 @@ public static class LibraryBackupService
                 Segments          = s.Segments?.ToList(),
                 ReverseAudio      = s.ReverseAudio,
                 NormalizeAudio    = s.NormalizeAudio,
-                PlaybackSpeed     = s.PlaybackSpeed
+                PlaybackSpeed     = s.PlaybackSpeed,
+                Effects = s.Effects is null ? null : new(s.Effects)
             }).ToList()
         }).ToList();
 

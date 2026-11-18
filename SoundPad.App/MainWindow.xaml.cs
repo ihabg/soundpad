@@ -47,6 +47,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     
     private AppSettings _settings;
+    private readonly Action? _saveSettingsOverride;
+    private readonly Action? _saveDecksOverride;
 
     
     private HotkeyManager?        _hotkeys;
@@ -86,7 +88,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             (VirtualHandle is null || VirtualHandle.IsFinished);
     }
 
-    private readonly Dictionary<Guid, ActivePlayback> _activePlaybacks = new();
+    private readonly Dictionary<Guid, List<ActivePlayback>> _activePlaybacks = new();
+    internal bool InterruptPreviousSounds => InterruptSoundsSwitch?.IsChecked ?? _settings.InterruptPreviousSounds;
     private readonly Dictionary<Guid, RowControls>    _rowControls     = new();
     private DispatcherTimer?                           _playbackMonitor;
 
@@ -157,6 +160,16 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StartupLogger.Log("Constructor end");
     }
 
+    // Allows playback integration checks to use isolated settings/storage and a
+    // silent output, without changing the user's library or opening devices.
+    internal MainWindow(AppSettings settings, Action saveSettings, Action saveDecks)
+    {
+        _settings = settings;
+        _saveSettingsOverride = saveSettings;
+        _saveDecksOverride = saveDecks;
+        InitializeComponent();
+    }
+
     private void RestoreWindowBounds()
     {
         if (_settings.WindowWidth is > 0 && _settings.WindowHeight is > 0)
@@ -187,6 +200,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SaveSettings()
     {
+        if (_saveSettingsOverride is not null) { _saveSettingsOverride(); return; }
         try
         {
             AppSettingsService.Save(_settings);
@@ -200,6 +214,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void TrySaveDecks()
     {
+        if (_saveDecksOverride is not null) { _saveDecksOverride(); return; }
         try
         {
             DeckService.Save(_decks);
@@ -365,14 +380,19 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void InterruptSoundsSwitch_Checked(object sender, RoutedEventArgs e)
     {
-        _settings.InterruptPreviousSounds = true;
-        SaveSettings();
+        SyncInterruptSoundsSetting();
     }
 
     private void InterruptSoundsSwitch_Unchecked(object sender, RoutedEventArgs e)
     {
-        _settings.InterruptPreviousSounds = false;
+        SyncInterruptSoundsSetting();
+    }
+
+    private void SyncInterruptSoundsSetting()
+    {
+        _settings.InterruptPreviousSounds = InterruptSoundsSwitch.IsChecked == true;
         SaveSettings();
+        foreach (var id in _activePlaybacks.Keys) UpdateRowState(id, active: true);
     }
 
     private void AutoUpdateSwitch_Checked(object sender, RoutedEventArgs e)
@@ -1531,7 +1551,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         };
         playStopBtn.Click += (_, _) =>
         {
-            if (_activePlaybacks.ContainsKey(capturedItem.Id))
+            if (InterruptPreviousSounds && _activePlaybacks.ContainsKey(capturedItem.Id))
                 StopSoundById(capturedItem.Id);
             else
                 PlayLibraryItem(capturedItem);
@@ -1758,7 +1778,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             {
                 row.Background = Brushes.Transparent;
             }
-            playStopBtn.Icon = new UiSymbolIcon { Symbol = active ? SymbolRegular.Stop20 : SymbolRegular.Play20 };
+            playStopBtn.Icon = new UiSymbolIcon { Symbol = active && InterruptPreviousSounds ? SymbolRegular.Stop20 : SymbolRegular.Play20 };
         };
         _rowControls[item.Id] = new RowControls(setActive);
 
@@ -2782,7 +2802,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (_pendingPlayId != capturedItem.Id) return;
             _pendingPlayId = Guid.Empty;
             _dragReady     = false;
-            if (_activePlaybacks.ContainsKey(capturedItem.Id))
+            if (InterruptPreviousSounds && _activePlaybacks.ContainsKey(capturedItem.Id))
                 StopSoundById(capturedItem.Id);
             else
                 PlayLibraryItem(capturedItem);
@@ -2910,9 +2930,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var (_, _, fadeInS, fadeOutS) = GetTrimFadeParams(sound, item);
         float  gain       = ConvertUiVolumeToGain(item.Volume);
         bool   hasEffects = EffectProcessor.HasEffects(item);
-        bool   rev        = item.ReverseAudio;
-        bool   norm       = item.NormalizeAudio;
-        double speed      = EffectProcessor.GetSafePlaybackSpeed(item);
+        var effects = AudioEffectCatalog.FromItem(item);
         _processedSounds.TryGetValue(item.Id, out var cachedProcessed);
 
         _exportInProgress.Add(item.Id);
@@ -2929,7 +2947,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 if (hasEffects)
                 {
                     var proc = cachedProcessed
-                        ?? new CachedSound(EffectProcessor.Render(sound, segments, rev, norm, speed));
+                        ?? new CachedSound(EffectProcessor.Render(sound, segments, effects));
                     soundToExport = proc;
                     exportSegs    = new List<(int S, int E)> { (0, proc.TotalSamples) };
                     if (cachedProcessed is null)
@@ -3068,6 +3086,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         item.ReverseAudio     = dlg.ResultReverseAudio;
         item.NormalizeAudio   = dlg.ResultNormalizeAudio;
         item.PlaybackSpeed    = dlg.ResultPlaybackSpeed;
+        item.Effects = dlg.ResultEffects;
         _processedSounds.Remove(item.Id);
 
         if (dlg.WasHotkeyChanged)
@@ -3204,6 +3223,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             ReverseAudio     = source.ReverseAudio,
             NormalizeAudio   = source.NormalizeAudio,
             PlaybackSpeed    = source.PlaybackSpeed,
+            Effects = source.Effects is null ? null : new(source.Effects),
             CreatedAt        = DateTime.UtcNow
             
         };
@@ -3520,8 +3540,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void PlaybackMonitor_Tick(object? sender, EventArgs e)
     {
+        foreach (var playbacks in _activePlaybacks.Values)
+            playbacks.RemoveAll(playback => playback.IsFinished);
         var finished = _activePlaybacks
-            .Where(kv => kv.Value.IsFinished)
+            .Where(kv => kv.Value.Count == 0)
             .Select(kv => kv.Key)
             .ToList();
 
@@ -3549,13 +3571,16 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     internal void StopSoundById(Guid soundId)
     {
-        if (!_activePlaybacks.TryGetValue(soundId, out var playback))
+        if (!_activePlaybacks.TryGetValue(soundId, out var playbacks))
             return;
 
-        if (playback.MonitorHandle is not null)
-            _monitorEngine?.StopOne(playback.MonitorHandle.TopProvider);
-        if (playback.VirtualHandle is not null)
-            _virtualEngine?.StopOne(playback.VirtualHandle.TopProvider);
+        foreach (var playback in playbacks)
+        {
+            if (playback.MonitorHandle is not null)
+                _monitorEngine?.StopOne(playback.MonitorHandle.TopProvider);
+            if (playback.VirtualHandle is not null)
+                _virtualEngine?.StopOne(playback.VirtualHandle.TopProvider);
+        }
 
         _activePlaybacks.Remove(soundId);
         UpdateRowState(soundId, active: false);
@@ -3597,8 +3622,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (CategoryFilter?.SelectedItem as string == "Recent")
             FilterSoundsPanel();
 
-        if (_settings.InterruptPreviousSounds)
+        if (InterruptPreviousSounds)
+        {
+            _effectRenderEpoch++;
             ClearAllActivePlaybacks();
+        }
 
         if (EffectProcessor.HasEffects(item))
             _ = PlayLibraryItemWithEffectsAsync(item, sound);
@@ -3612,14 +3640,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             StatusText.Text = $"Rendering effects for {item.DisplayName}…";
             var    segments    = GetSegments(rawSound, item);
-            bool   rev         = item.ReverseAudio;
-            bool   norm        = item.NormalizeAudio;
-            double speed       = EffectProcessor.GetSafePlaybackSpeed(item);
+            var effects = AudioEffectCatalog.FromItem(item);
             int    renderEpoch = _effectRenderEpoch;
             try
             {
                 var rendered = await Task.Run(() => EffectProcessor.Render(
-                    rawSound, segments, rev, norm, speed));
+                    rawSound, segments, effects));
 
                 
                 if (renderEpoch != _effectRenderEpoch) return;
@@ -3704,22 +3730,16 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                     : _virtualEngine?.Play(soundToPlay, volume);
 
             
-            if (_activePlaybacks.TryGetValue(soundId, out var previous))
-            {
-                if (previous.MonitorHandle is not null)
-                    _monitorEngine?.StopOne(previous.MonitorHandle.TopProvider);
-                if (previous.VirtualHandle is not null)
-                    _virtualEngine?.StopOne(previous.VirtualHandle.TopProvider);
-            }
-
             if (monitorHandle is not null || virtualHandle is not null)
             {
-                _activePlaybacks[soundId] = new ActivePlayback
+                if (!_activePlaybacks.TryGetValue(soundId, out var playbacks))
+                    _activePlaybacks[soundId] = playbacks = [];
+                playbacks.Add(new ActivePlayback
                 {
                     SoundId       = soundId,
                     MonitorHandle = monitorHandle,
                     VirtualHandle = virtualHandle,
-                };
+                });
                 UpdateRowState(soundId, active: true);
                 EnsurePlaybackMonitor();
             }

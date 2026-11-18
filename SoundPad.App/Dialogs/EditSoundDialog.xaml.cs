@@ -50,6 +50,10 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
     public bool                ResultReverseAudio  { get; private set; }
     public bool                ResultNormalizeAudio { get; private set; }
     public double              ResultPlaybackSpeed  { get; private set; } = 1.0;
+    public Dictionary<string, double> ResultEffects { get; private set; } = new();
+    private Slider SpeedSlider => (Slider)EffectsPanel.GetEditor("speed");
+    private CheckBox ReverseCheckBox => (CheckBox)EffectsPanel.GetEditor("reverse");
+    private CheckBox NormalizeCheckBox => (CheckBox)EffectsPanel.GetEditor("normalize");
 
     
     private const int WaveformBuckets = 360;
@@ -106,6 +110,9 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
     private DateTime         _playStartTime;
     private double           _playStartVisualSec; 
     private double           _playheadVisualSec;  
+    private int _previewGeneration;
+    private double PlaybackSpeed => _duration > 0
+        ? _duration / Math.Max(.0001, AudioEffectCatalog.BodyDuration(_duration, EffectsPanel.Values)) : 1;
 
     
 
@@ -166,7 +173,8 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         NormalizeCheckBox.IsChecked = item.NormalizeAudio;
         double safeSpeed = EffectProcessor.GetSafePlaybackSpeed(item);
         SpeedSlider.Value   = safeSpeed;
-        SpeedValueText.Text = $"{safeSpeed:F2}×";
+        EffectsPanel.SetValues(AudioEffectCatalog.FromItem(item));
+        EffectsPanel.Changed += EffectsPanel_Changed;
 
         
         int pct = (int)Math.Round(item.Volume * 100);
@@ -206,7 +214,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         RefreshHotkeyDisplay();
 
         
-        DurationText.Text       = $"Duration: {_duration:F2}s";
+        UpdateDurationLabel();
         PreviewButton.IsEnabled = previewEngine is not null;
 
         Closing += (_, _) => StopPreview();
@@ -226,7 +234,12 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         for (int i = 0; i < _segments.Count; i++)
         {
             var seg = _segments[i];
-            double dur = Math.Max(0, seg.EndSeconds - seg.StartSeconds);
+            double dur = Math.Max(0, seg.EndSeconds - seg.StartSeconds) / PlaybackSpeed;
+            if (i == _segments.Count - 1)
+            {
+                double sourceDuration = _segments.Sum(s => Math.Max(0, s.EndSeconds - s.StartSeconds));
+                dur += AudioEffectCatalog.Duration(sourceDuration, EffectsPanel.Values) - AudioEffectCatalog.BodyDuration(sourceDuration, EffectsPanel.Values);
+            }
             result.Add(new VisualBlock
             {
                 SegmentIndex = i,
@@ -241,7 +254,13 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
     }
 
     private double ComputeEditedDuration()
-        => _segments.Sum(s => Math.Max(0, s.EndSeconds - s.StartSeconds));
+        => AudioEffectCatalog.Duration(_segments.Sum(s => Math.Max(0, s.EndSeconds - s.StartSeconds)), EffectsPanel.Values);
+
+    private void UpdateDurationLabel()
+    {
+        if (DurationText is not null)
+            DurationText.Text = $"Duration: {ComputeEditedDuration():F2}s  (source: {_duration:F2}s)";
+    }
 
     private static int FindBlockByVisualTime(List<VisualBlock> blocks, double vSec)
     {
@@ -391,7 +410,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         
         if (_drag == DragTarget.BlockLeft || _drag == DragTarget.BlockRight)
         {
-            double timeDelta = (x - _dragAnchorX) / w * _dragStartEditedDuration;
+            double timeDelta = (x - _dragAnchorX) / w * _dragStartEditedDuration * PlaybackSpeed;
             int    idx       = _trimBlockIdx;
 
             if (_drag == DragTarget.BlockLeft)
@@ -532,7 +551,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
         var    block  = blocks[bidx];
         double offset = vSec - block.VisualStart;
-        double srcSec = block.SourceStart + offset;
+        double srcSec = block.SourceStart + offset * PlaybackSpeed;
 
         if (srcSec <= block.SourceStart + 0.01 || srcSec >= block.SourceEnd - 0.01) return;
 
@@ -603,7 +622,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             if (_selectedSegmentIndex < blocks.Count)
             {
                 var blk = blocks[_selectedSegmentIndex];
-                double dur = blk.SourceEnd - blk.SourceStart;
+                double dur = (blk.SourceEnd - blk.SourceStart) / PlaybackSpeed;
                 BlockInfoText.Text =
                     $"Block {_selectedSegmentIndex + 1} of {_segments.Count}" +
                     $"  ·  Source {blk.SourceStart:F2}s – {blk.SourceEnd:F2}s" +
@@ -638,12 +657,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         double editedDur = blocks.Count > 0 ? blocks[^1].VisualEnd : 0;
         if (editedDur <= 0) return;
 
-        if (DurationText is not null)
-        {
-            DurationText.Text = _segments.Count <= 1
-                ? $"Duration: {_duration:F2}s"
-                : $"Edited: {editedDur:F2}s  (original: {_duration:F2}s)";
-        }
+        UpdateDurationLabel();
 
         
         for (int bi = 0; bi < blocks.Count; bi++)
@@ -667,7 +681,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
                 for (int b = pStart; b <= pEnd; b++)
                 {
                     double srcTime     = b / (double)(_peaks.Length - 1) * _duration;
-                    double offsetInBlk = srcTime - blk.SourceStart;
+                    double offsetInBlk = (srcTime - blk.SourceStart) / PlaybackSpeed;
                     double vSec        = blk.VisualStart + offsetInBlk;
                     double px          = VisualToX(vSec, w, editedDur);
                     double amp         = _peaks[b] * maxAmp;
@@ -1183,7 +1197,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             if (startVisualSec > blk.VisualStart)
             {
                 
-                double srcOffset = startVisualSec - blk.VisualStart;
+                double srcOffset = (startVisualSec - blk.VisualStart) * PlaybackSpeed;
                 s = Math.Clamp(s + (int)(srcOffset * sr), s, e);
             }
 
@@ -1271,20 +1285,19 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
         StopPreview();
 
-        double currentSpeed  = SpeedSlider?.Value ?? 1.0;
-        bool   dialogEffects = ReverseCheckBox?.IsChecked  == true
-                            || NormalizeCheckBox?.IsChecked == true
-                            || Math.Abs(currentSpeed - 1.0) > 0.001;
+        _playheadVisualSec = 0;
+        WaveformScrollViewer.ScrollToHorizontalOffset(0);
+        RedrawCanvas();
+
+        bool dialogEffects = AudioEffectCatalog.HasEffects(EffectsPanel.Values);
 
         if (dialogEffects)
         {
-            await PreviewWithEffectsAsync(currentSpeed);
+            await PreviewWithEffectsAsync();
             return;
         }
 
-        double editedDur      = ComputeEditedDuration();
-        double startVisualSec = (_playheadVisualSec > 0 && _playheadVisualSec < editedDur)
-            ? _playheadVisualSec : 0;
+        const double startVisualSec = 0;
 
         float uiVol  = (float)(VolumeSlider.Value / 100.0);
         float gain   = uiVol * uiVol;
@@ -1314,26 +1327,28 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         PreviewStatusText.Text = "Playing…";
     }
 
-    private async Task PreviewWithEffectsAsync(double currentSpeed)
+    private async Task PreviewWithEffectsAsync()
     {
         if (_previewEngine is null) return;
 
+        int generation = _previewGeneration;
+        const double startVisualSec = 0;
         PreviewButton.IsEnabled = false;
         PreviewStatusText.Text  = "Rendering effects…";
 
-        bool   rev   = ReverseCheckBox?.IsChecked  == true;
-        bool   norm  = NormalizeCheckBox?.IsChecked == true;
-        double speed = Math.Clamp(currentSpeed, 0.5, 2.0);
+        var effects = EffectsPanel.Values;
         var    segs  = ComputeEditorSegments(0);
 
         float[] rendered;
         try
         {
             rendered = await Task.Run(() =>
-                EffectProcessor.Render(_sound, segs, rev, norm, speed));
+                EffectProcessor.Render(_sound, segs, effects));
+            if (generation != _previewGeneration) return;
         }
         catch
         {
+            if (generation != _previewGeneration) return;
             PreviewStatusText.Text  = "Effect render failed.";
             PreviewButton.IsEnabled = true;
             return;
@@ -1350,14 +1365,15 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         float uiVol  = (float)(VolumeSlider.Value / 100.0);
         float gain   = uiVol * uiVol;
         int   sr     = previewSound.SampleRate * previewSound.Channels;
-        int   fadeInS  = _vFadeIn  > 0 ? (int)(_vFadeIn  * sr) : 0;
+        int   fadeInS  = _vFadeIn  > 0 && startVisualSec <= 0 ? (int)(_vFadeIn  * sr) : 0;
         int   fadeOutS = _vFadeOut > 0 ? (int)(_vFadeOut * sr) : 0;
-        var   fullSegs = new List<(int S, int E)> { (0, previewSound.TotalSamples) };
+        int startSample = Math.Clamp((int)(startVisualSec * previewSound.SampleRate) * previewSound.Channels, 0, previewSound.TotalSamples);
+        var   fullSegs = new List<(int S, int E)> { (startSample, previewSound.TotalSamples) };
 
         _previewHandle      = _previewEngine.Play(previewSound, gain, fullSegs, fadeInS, fadeOutS);
-        _playStartVisualSec = 0;
+        _playStartVisualSec = startVisualSec;
         _playStartTime      = DateTime.Now;
-        _playheadVisualSec  = 0;
+        _playheadVisualSec  = startVisualSec;
 
         _playTimer       = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(40) };
         _playTimer.Tick += (_, _) => TickPlayhead();
@@ -1396,6 +1412,7 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
 
     private void StopPreview()
     {
+        _previewGeneration++;
         _playTimer?.Stop();
         _playTimer = null;
 
@@ -1405,7 +1422,11 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
             _previewHandle = null;
         }
 
-        if (PreviewButton     is not null) PreviewButton.Content  = "Play Preview";
+        if (PreviewButton is not null)
+        {
+            PreviewButton.Content = "Play Preview";
+            PreviewButton.IsEnabled = _previewEngine is not null;
+        }
         if (PreviewStatusText is not null) PreviewStatusText.Text = "";
     }
 
@@ -1526,23 +1547,27 @@ public partial class EditSoundDialog : Wpf.Ui.Controls.FluentWindow
         ResultReverseAudio   = ReverseCheckBox.IsChecked  == true;
         ResultNormalizeAudio = NormalizeCheckBox.IsChecked == true;
         ResultPlaybackSpeed  = Math.Clamp(SpeedSlider.Value, 0.5, 2.0);
+        ResultEffects = EffectsPanel.Values;
 
         DialogResult = true;
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
-    private void SpeedSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    private void EffectsPanel_Changed(object? sender, Controls.EffectValueChangedEventArgs e)
     {
-        if (SpeedValueText is not null)
-            SpeedValueText.Text = $"{e.NewValue:F2}×";
-    }
-
-    private void ResetEffects_Click(object sender, RoutedEventArgs e)
-    {
-        ReverseCheckBox.IsChecked   = false;
-        NormalizeCheckBox.IsChecked = false;
-        SpeedSlider.Value           = 1.0;
+        if (_sound is null || WaveformCanvas is null) return;
+        StopPreview();
+        var previous = EffectsPanel.Values;
+        previous[e.Id] = e.OldValue;
+        double oldDuration = AudioEffectCatalog.BodyDuration(1, previous);
+        double newDuration = AudioEffectCatalog.BodyDuration(1, EffectsPanel.Values);
+        _playheadVisualSec *= newDuration / Math.Max(.0001, oldDuration);
+        _playheadVisualSec = Math.Clamp(_playheadVisualSec, 0, ComputeEditedDuration());
+        _cutHoverVisualSec = null;
+        UpdateDurationLabel();
+        UpdateSelectionUI();
+        RedrawCanvas();
     }
 
     

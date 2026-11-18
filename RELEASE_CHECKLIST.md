@@ -1,3 +1,12 @@
+# SoundPad v1.18.3 — Release validation
+
+- 102 automated audio and workspace checks cover editor speed/timeline fixes, overlapping playback, shared effect controls, creative DSP, stereo separation, tails, persistence, and Undo/Redo.
+- Updated preview exercised locally, including the shared Sound Editor inspector.
+- Packaging verification covers self-contained Release output, Inno Setup compilation, portable ZIP contents, SHA256 hashes, and public GitHub downloads.
+- Clean-machine installation and extended game/Discord routing were not repeated.
+
+---
+
 # SoundPad v1.18.1 — Release validation
 
 - 44 automated audio and workspace checks, including lossless cache reads, concurrency, fades/effects, waveforms, and bounded replay snapshots.

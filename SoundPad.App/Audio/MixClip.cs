@@ -20,4 +20,5 @@ public sealed class MixClip
     public float   Volume               { get; set; } = 1.0f;
     public double  FadeInSeconds        { get; set; } = 0.0;
     public double  FadeOutSeconds       { get; set; } = 0.0;
+    public Dictionary<string, double>? Effects { get; set; }
 }

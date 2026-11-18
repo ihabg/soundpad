@@ -17,17 +17,12 @@ public static class EffectProcessor
     
     public static double GetSafePlaybackSpeed(SoundItem item)
     {
-        double s = item.PlaybackSpeed;
-        if (double.IsNaN(s) || double.IsInfinity(s) || s <= 0)
-            return 1.0;
-        return Math.Clamp(s, 0.5, 2.0);
+        return AudioEffectCatalog.Speed(AudioEffectCatalog.FromItem(item));
     }
 
     
     public static bool HasEffects(SoundItem item)
-        => item.ReverseAudio
-        || item.NormalizeAudio
-        || Math.Abs(GetSafePlaybackSpeed(item) - 1.0) > 0.001;
+        => AudioEffectCatalog.HasEffects(AudioEffectCatalog.FromItem(item));
 
     
     
@@ -44,6 +39,13 @@ public static class EffectProcessor
         bool reverse,
         bool normalize,
         double speed)
+        => Render(rawSound, segments, new Dictionary<string, double>
+        {
+            ["reverse"] = reverse ? 1 : 0, ["normalize"] = normalize ? 1 : 0, ["speed"] = speed
+        });
+
+    public static float[] Render(CachedSound rawSound, IReadOnlyList<(int S, int E)> segments,
+        IReadOnlyDictionary<string, double> effects)
     {
         
         int totalSamples = 0;
@@ -64,17 +66,12 @@ public static class EffectProcessor
         }
 
         
-        if (reverse)
-            ReverseFrames(flat, rawSound.Channels);
-
-        
-        if (normalize)
-            NormalizeInPlace(flat);
-
-        
-        double safeSpeed = Math.Clamp(speed, 0.5, 2.0);
-        if (Math.Abs(safeSpeed - 1.0) > 0.001)
-            flat = ResampleForSpeed(flat, rawSound.WaveFormat, safeSpeed);
+        foreach (var effect in AudioEffectCatalog.Definitions)
+        {
+            double value = effect.Sanitize(effects.GetValueOrDefault(effect.Id, effect.DefaultValue));
+            if (Math.Abs(value - effect.DefaultValue) > .001)
+                flat = effect.Process(flat, rawSound.WaveFormat, value);
+        }
 
         return flat;
     }
@@ -82,7 +79,7 @@ public static class EffectProcessor
     
     
     
-    private static void ReverseFrames(float[] data, int channels)
+    internal static void ReverseFrames(float[] data, int channels)
     {
         if (channels <= 0) return;
         int frames = data.Length / channels;
@@ -100,7 +97,7 @@ public static class EffectProcessor
     
     
     
-    private static void NormalizeInPlace(float[] data)
+    internal static void NormalizeInPlace(float[] data)
     {
         float peak = 0f;
         for (int i = 0; i < data.Length; i++)
@@ -121,7 +118,7 @@ public static class EffectProcessor
     
     
     
-    private static float[] ResampleForSpeed(float[] data, WaveFormat fmt, double speed)
+    internal static float[] ResampleForSpeed(float[] data, WaveFormat fmt, double speed)
     {
         int targetRate = fmt.SampleRate;
         int inputRate  = (int)Math.Round(targetRate * speed);

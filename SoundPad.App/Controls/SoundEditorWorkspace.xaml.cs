@@ -128,11 +128,15 @@ public partial class SoundEditorWorkspace : UserControl, IDisposable
     public SoundEditorWorkspace(
         IReadOnlyDictionary<Guid, CachedSound> cachedSounds,
         IReadOnlyList<SoundItem> deckSounds,
-        Func<AudioPlaybackEngine?> engineProvider)
+        Func<AudioPlaybackEngine?> engineProvider,
+        string? draftPath = null)
     {
+        _draftPath = draftPath ?? SoundEditorProjectService.DraftPath;
         _engineProvider = engineProvider;
         _waveformCache = new WaveformCache(() => { if (!_isDragging && !_disposed) RebuildTimeline(); });
         InitializeComponent();
+        ClipEffectsPanel.Changed += ClipEffects_Changed;
+        ClipEffectsPanel.GestureCompleted += (_, _) => _effectGestureClip = Guid.Empty;
         UpdateSources(cachedSounds, deckSounds);
         InitializeDraft();
         Loaded += (_, _) => { RebuildTimeline(); SetToolVisual(); Focus(); };
@@ -242,6 +246,7 @@ public partial class SoundEditorWorkspace : UserControl, IDisposable
                     Volume                = c.Volume,
                     FadeInSeconds         = c.FadeInSeconds,
                     FadeOutSeconds        = c.FadeOutSeconds,
+                    Effects = c.Effects is null ? null : new(c.Effects),
                 });
             copy.Add(tc);
         }
@@ -275,7 +280,7 @@ public partial class SoundEditorWorkspace : UserControl, IDisposable
             double e = item.TrimEndSeconds   ?? sound.Duration.TotalSeconds;
             d = Math.Max(0.01, e - s);
         }
-        return Math.Max(MinClipDuration, d / Math.Max(0.01, item.PlaybackSpeed));
+        return Math.Max(MinClipDuration, AudioEffectCatalog.Duration(d, AudioEffectCatalog.Resolve(item, clip.Effects)));
     }
 
     private double GetClipEffectiveDuration(MixClip clip)
@@ -315,6 +320,7 @@ public partial class SoundEditorWorkspace : UserControl, IDisposable
 
     private void RebuildTimeline()
     {
+        _clipFullDurations.Clear();
         _clipBlocks.Clear();
         TrackLabelPanel.Children.Clear();
         TimelineCanvas.Children.Clear();
@@ -1149,6 +1155,7 @@ public partial class SoundEditorWorkspace : UserControl, IDisposable
             Volume                = clip.Volume,
             FadeInSeconds         = clip.FadeInSeconds,
             FadeOutSeconds        = 0,                      
+            Effects = clip.Effects is null ? null : new(clip.Effects),
         };
         var clipB = new MixClip
         {
@@ -1159,6 +1166,7 @@ public partial class SoundEditorWorkspace : UserControl, IDisposable
             Volume                = clip.Volume,
             FadeInSeconds         = 0,                      
             FadeOutSeconds        = clip.FadeOutSeconds,
+            Effects = clip.Effects is null ? null : new(clip.Effects),
         };
 
         var clips = _tracks[trackIdx].Clips;
@@ -1323,6 +1331,7 @@ public partial class SoundEditorWorkspace : UserControl, IDisposable
             Volume                = clip.Volume,
             FadeInSeconds         = clip.FadeInSeconds,
             FadeOutSeconds        = 0,                      
+            Effects = clip.Effects is null ? null : new(clip.Effects),
         };
         var clipB = new MixClip
         {
@@ -1333,6 +1342,7 @@ public partial class SoundEditorWorkspace : UserControl, IDisposable
             Volume                = clip.Volume,
             FadeInSeconds         = 0,                      
             FadeOutSeconds        = clip.FadeOutSeconds,
+            Effects = clip.Effects is null ? null : new(clip.Effects),
         };
 
         var clips = _tracks[trackIdx].Clips;
@@ -1365,6 +1375,7 @@ public partial class SoundEditorWorkspace : UserControl, IDisposable
             Volume                = clip.Volume,
             FadeInSeconds         = clip.FadeInSeconds,
             FadeOutSeconds        = clip.FadeOutSeconds,
+            Effects = clip.Effects is null ? null : new(clip.Effects),
         };
         _clipboardSourceTrackIndex = trackIdx;
         StatusText.Text = "Clip copied.";
@@ -1389,6 +1400,7 @@ public partial class SoundEditorWorkspace : UserControl, IDisposable
             Volume                = _clipboard.Volume,
             FadeInSeconds         = _clipboard.FadeInSeconds,
             FadeOutSeconds        = _clipboard.FadeOutSeconds,
+            Effects = _clipboard.Effects is null ? null : new(_clipboard.Effects),
         };
         _tracks[targetTrack].Clips.Add(pasted);
         _selectedClipId = pasted.Id;
@@ -1413,6 +1425,7 @@ public partial class SoundEditorWorkspace : UserControl, IDisposable
             Volume                = clip.Volume,
             FadeInSeconds         = clip.FadeInSeconds,
             FadeOutSeconds        = clip.FadeOutSeconds,
+            Effects = clip.Effects is null ? null : new(clip.Effects),
         };
         _tracks[trackIdx].Clips.Add(dup);
         _selectedClipId = dup.Id;
@@ -1863,6 +1876,35 @@ public partial class SoundEditorWorkspace : UserControl, IDisposable
             System.Globalization.CultureInfo.InvariantCulture);
         PanelFadeOutBox.Text = clip.FadeOutSeconds.ToString("0.##",
             System.Globalization.CultureInfo.InvariantCulture);
+        var source = FindSoundItem(clip.SoundItemId);
+        if (source is not null) ClipEffectsPanel.SetValues(AudioEffectCatalog.Resolve(source, clip.Effects));
+    }
+
+    private Guid _effectGestureClip;
+
+    private void ClipEffects_Changed(object? sender, EffectValueChangedEventArgs e)
+    {
+        if (!TryGetSelectedClip(out _, out var clip)) return;
+        var source = FindSoundItem(clip.SoundItemId);
+        if (source is null) return;
+        var oldValues = AudioEffectCatalog.Resolve(source, clip.Effects);
+        var newValues = ClipEffectsPanel.Values;
+        StopAll();
+        if (!ClipEffectsPanel.IsInGesture || _effectGestureClip != clip.Id) PushUndo();
+        _effectGestureClip = ClipEffectsPanel.IsInGesture ? clip.Id : Guid.Empty;
+        double oldDuration = AudioEffectCatalog.BodyDuration(1, oldValues);
+        double newDuration = AudioEffectCatalog.BodyDuration(1, newValues);
+        double scale = newDuration / Math.Max(.0001, oldDuration);
+        if (clip.LocalTrimStartSeconds.HasValue) clip.LocalTrimStartSeconds *= scale;
+        if (clip.LocalTrimEndSeconds.HasValue) clip.LocalTrimEndSeconds *= scale;
+        clip.Effects = newValues;
+        double duration = ComputeClipFullDuration(clip);
+        double audibleDuration = (clip.LocalTrimEndSeconds ?? duration) - (clip.LocalTrimStartSeconds ?? 0);
+        clip.FadeInSeconds = Math.Clamp(clip.FadeInSeconds, 0, Math.Max(0, audibleDuration / 2));
+        clip.FadeOutSeconds = Math.Clamp(clip.FadeOutSeconds, 0, Math.Max(0, audibleDuration / 2));
+        RebuildTimeline();
+        string name = AudioEffectCatalog.Definitions.First(effect => effect.Id == e.Id).Name;
+        StatusText.Text = $"{name} updated for this clip. Undo to restore the previous effects.";
     }
 
     private void PanelVolumeSlider_ValueChanged(object sender,

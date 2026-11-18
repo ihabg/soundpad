@@ -26,6 +26,8 @@ Equal(RecordingSamples.MixRecent(null, [.1f, .2f, .3f, .4f]), [.1f, .2f, .3f, .4
 Check(RecordingSamples.MixRecent([1, 1, 1, 1], null, 3).Length == 2, "Clip cuts preserve complete stereo frames");
 Equal(RecordingSamples.Peaks([-.2f, .8f, -.9f, .1f], 2), [.8f, .9f], "Waveform peaks reflect the captured samples");
 MemoryChecks.Run(Check);
+CreativeEffectChecks.Run(Check);
+EditorSpeedChecks.Run(Check);
 var manager = new FakeHotkeyManager();
 var hotkeys = new HotkeyService(manager);
 HotkeyBinding Binding(uint key) => new() { Modifiers = 6, Key = key, DisplayText = $"Ctrl+Alt+{key}" };

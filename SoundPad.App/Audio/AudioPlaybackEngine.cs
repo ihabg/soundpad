@@ -19,7 +19,7 @@ public sealed record PlaybackHandle(
 
 public class AudioPlaybackEngine : IDisposable
 {
-    private readonly WaveOutEvent          _outputDevice;
+    private readonly IWavePlayer           _outputDevice;
     private readonly MixingSampleProvider  _mixer;
 
     
@@ -39,6 +39,16 @@ public class AudioPlaybackEngine : IDisposable
     public AudioPlaybackEngine(int deviceNumber    = AudioDevice.DefaultDeviceNumber,
                                 int desiredLatency  = 300,
                                 int numberOfBuffers = 3)
+        : this(new WaveOutEvent
+        {
+            DeviceNumber = deviceNumber,
+            DesiredLatency = desiredLatency,
+            NumberOfBuffers = numberOfBuffers
+        })
+    {
+    }
+
+    internal AudioPlaybackEngine(IWavePlayer outputDevice)
     {
         
         
@@ -49,12 +59,7 @@ public class AudioPlaybackEngine : IDisposable
         _mixer.MixerInputEnded += (sender, e) => _active.TryRemove(e.SampleProvider, out _);
 
         
-        _outputDevice = new WaveOutEvent
-        {
-            DeviceNumber    = deviceNumber,
-            DesiredLatency  = desiredLatency,
-            NumberOfBuffers = numberOfBuffers
-        };
+        _outputDevice = outputDevice;
         _outputDevice.Init(_mixer);
         _outputDevice.Play(); 
     }

@@ -46,4 +46,5 @@ public class SoundItem
     public bool   ReverseAudio  { get; set; } = false;
     public bool   NormalizeAudio { get; set; } = false;
     public double PlaybackSpeed  { get; set; } = 1.0;
+    public Dictionary<string, double>? Effects { get; set; }
 }

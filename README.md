@@ -33,7 +33,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 - **Settings persistence** — devices, volume, window position, and all hotkeys survive restarts
 - **Perceptual volume curve** — the volume slider feels natural (power-2 curve: 50 % UI = −12 dB)
 - **Pro Sound Editor** — CapCut-style block timeline; Select (A) and Cut (C) tools; cut splits a block without removing audio; remove blocks to ripple remaining audio together; drag block edges to trim; drag blocks to reorder; Undo (Ctrl+Z) and Redo (Ctrl+Y / Ctrl+Shift+Z); Copy (Ctrl+C) and Paste (Ctrl+V) blocks; time ruler above waveform; selected block info; Spacebar preview play/pause; zoom slider (1×–10×); draggable playhead arrow; snap cut to playhead; Fade In / Fade Out applied to the joined output; non-destructive — original files never modified; segments saved in decks.json and backups; Instant Replay clips use the same editor
-- **Audio Effects** — per-sound non-destructive effects applied at playback time: **Reverse** the audio, **Normalize** to peak volume, and **Playback Speed** (0.5×–2.0×, vinyl-style — pitch shifts with speed); effects stack with trim, fade, volume, and block segments; changes are saved per-sound in decks.json and preserved in backups; processed audio is cached after first render for instant replays; effects apply identically during library playback, in-editor preview, and Export as MP3; Reset Effects button restores all three to defaults; true pitch-shifting without speed change is planned for a future release
+- **Audio Effects** — shared controls in Edit Sound and the Sound Editor: Reverse, Normalize, Pitch shift, Echo / delay, Reverb, Radio / telephone filter, and Distortion. Choose an effect from the dropdown; Speed (0.5–2×) stays separate with its own Reset. Editor effects are per clip, support Undo/Redo, and persist in drafts. Library effects persist in backups and apply to playback and exports.
 - **Category Manager** — create, rename, and delete custom sound categories; deleting a category with sounds prompts where to move them; chained operations resolve correctly
 - **Sound row context menu** — right-click any sound row or pad card: Edit, Favourite/Unfavourite, Duplicate (same audio file, same trim/fade/volume/effects, no hotkey), Color… (opens Color Picker dialog), Reveal in Folder, Remove
 
@@ -41,7 +41,7 @@ Play sounds to any output device, route them through Discord via VB-CABLE, and a
 
 ## Installation
 
-1. Download **SoundPad-Setup-1.18.1.exe** from the Releases page.
+1. Download **SoundPad-Setup-1.18.3.exe** from the Releases page.
 2. Run the installer. No administrator password is needed — it installs per-user to  
    `%LocalAppData%\Programs\SoundPad`.
 3. Optionally tick **Create a Desktop shortcut** during setup.
@@ -333,7 +333,7 @@ Export renders the version you actually hear in SoundPad — not just a copy of 
 
 - **Block segments (v1.10+)** — only the kept blocks are included; removed blocks are skipped entirely
 - **Trim Start / Trim End** — only the trimmed region is exported (for sounds without block data)
-- **Audio Effects (v1.14+)** — Reverse, Normalize, and Playback Speed are applied before the fade and volume stages
+- **Audio Effects** — the shared effects pipeline and Speed are applied before the fade and volume stages
 - **Fade In / Fade Out** — volume ramps are baked into the exported audio
 - **Volume** — per-sound volume (including the perceptual power-2 curve) is applied
 
@@ -579,7 +579,7 @@ Click **Play Preview** (or press **Spacebar**) to hear all kept blocks joined to
 
 ## Audio Effects
 
-Click **Edit** on any sound to open the Sound Editor. The **EFFECTS** section at the bottom of the dialog lets you apply non-destructive per-sound effects.
+Click **Edit** on a sound, or select a clip in the **Sound Editor** tab. The shared **Effects** dropdown exposes the same controls in both places. Speed is a separate, always-visible control.
 
 ### Available effects
 
@@ -587,16 +587,21 @@ Click **Edit** on any sound to open the Sound Editor. The **EFFECTS** section at
 |---|---|
 | **Reverse** | Plays the audio backwards. Stereo L/R pairing is preserved correctly. |
 | **Normalize** | Boosts (or reduces) volume so the loudest peak reaches 0 dB. Useful for quiet recordings. |
+| **Pitch shift** | Changes pitch by −12 to +12 semitones while preserving duration. |
+| **Echo / delay** | Four decaying repeats, 250 ms apart, with a one-second tail. |
+| **Reverb** | Room ambience with a 1.5-second decay tail. |
+| **Radio / telephone** | Blends in a speech-band filter. |
+| **Distortion** | Adds soft-clipped crunch and grit. |
 | **Playback Speed** | Adjusts speed from 0.5× (half speed) to 2.0× (double speed). Pitch shifts with speed — slower sounds lower, faster sounds higher (vinyl-style). |
 
 ### How effects work
 
 - Effects are **non-destructive** — the original audio file is never modified.
-- Effects are applied in order: extract block segments → reverse → normalize → speed change.
+- Effects are applied in order: extract block segments → reverse → normalize → speed → pitch shift → radio filter → distortion → echo → reverb.
 - The result is cached after the first render; replaying a sound with effects is instant.
 - The cache is invalidated automatically when you edit and save the sound.
 - Effects **stack** with all other edits: trim, block segments, fade in/out, and per-sound volume all apply on top of the effects output.
-- A **Reset Effects** button in the dialog restores Reverse, Normalize, and Speed to their defaults (off, off, 1.0×).
+- **Reset Effects** disables effects while preserving Speed. Speed has its own Reset button that restores 1.0×.
 
 ### Persistence and portability
 
@@ -706,7 +711,7 @@ Right-click any sound row (List View) or pad card (Grid View) for quick actions:
 |---|---|
 | **Edit** | Opens the Sound Editor for that sound |
 | **Favourite / Unfavourite** | Toggles the favourite star |
-| **Duplicate** | Creates a copy with the same audio file, trim/fade, volume, effects (Reverse/Normalize/Speed), color, and tags — no hotkey assigned |
+| **Duplicate** | Creates a copy with the same audio file, trim/fade, volume, effects and Speed, color, and tags — no hotkey assigned |
 | **Color…** | Opens the Color Picker dialog — choose a preset, enter a custom HEX or adjust RGB sliders, preview live, then Apply; Default removes the color |
 | **Reveal in Folder** | Opens File Explorer with the source audio file selected |
 | **Remove** | Removes the sound from the library; the audio file is not deleted |

@@ -185,7 +185,7 @@ public partial class MiniWindow : Window
 
         card.MouseLeftButtonUp += (_, _) =>
         {
-            if (_owner.IsActivePlayback(capturedItem.Id))
+            if (_owner.InterruptPreviousSounds && _owner.IsActivePlayback(capturedItem.Id))
                 _owner.StopSoundById(capturedItem.Id);
             else
                 _owner.PlayLibraryItem(capturedItem);
